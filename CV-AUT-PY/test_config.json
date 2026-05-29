@@ -1,0 +1,47 @@
+{
+  "target_data_threshold": {
+    "gold": 300000,
+    "elixir": 300000,
+    "dark_elixir": 0
+  },
+  "element_state_automation": {
+    "upgrade_enabled": true,
+    "target_level": 12,
+    "min_retained_gold": 5000000,
+    "min_retained_elixir": 5000000
+  },
+  "interaction_simulation": {
+    "jitter_standard_deviation_px": 5.0,
+    "min_delay_ms": 150,
+    "max_delay_ms": 450
+  },
+  "enable_stats": true,
+  "device_connection": {
+    "host": "127.0.0.1",
+    "port": 5556
+  },
+  "farming_thresholds": {
+    "gold_threshold": 300000,
+    "elixir_threshold": 300000,
+    "dark_elixir_threshold": 0
+  },
+  "multi_account": {
+    "enable_multi_account": false,
+    "multi_interval_mins": 60,
+    "selected_villages": [
+      1,
+      2
+    ]
+  },
+  "attack": "Dragon_Attack",
+  "train_mode": "smart",
+  "quick_slot": 1,
+  "upgrade_wall": false,
+  "wall_level": 12,
+  "wall_gold_threshold": 9000000,
+  "wall_elixir_threshold": 9000000,
+  "request_troops": false,
+  "enable_clan_games": false,
+  "enable_clan_capital": false,
+  "capital_hall_level": 9
+}
