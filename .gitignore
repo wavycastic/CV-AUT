@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Diagnostic and temporary files
+debug_army_roi.png
+toAttack.png
+screen.png
+Validate_Upgrade/
+
+# Local ADB Binaries
+adb/
+
+# Local User Profiles & Statistics
+profiles/Stats_*.json
+profiles/accounts.txt
+
+# Local Executables
+AutoHotkey64.exe
+
+# C# Build Artifacts
+bin/
+obj/
+.vs/
+*.user
