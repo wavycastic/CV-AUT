@@ -49,4 +49,4 @@ obj/
 *.user
 
 # Local WPF UI gallery reference
-.zed-context/wpfui-gallery/
+docs/wpf-ui/gallery/
