@@ -30,9 +30,7 @@ Validate_Upgrade/
 Diagnostics/Logs/
 logs/
 scratch/
-simplicity_extract/
-simplicity_fix_extract/
-Simplicity v3.50.1-February FIX/
+Legacy/Simplicity/
 
 # Local ADB Binaries
 adb/
