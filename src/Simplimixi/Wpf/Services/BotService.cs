@@ -13,23 +13,60 @@ using CvAut.WpfApp.Services.Logging;
 
 namespace CvAut.WpfApp.Services
 {
+    /// <summary>
+    /// Lớp dịch vụ quản lý trạng thái hoạt động của bot, chuyển đổi/lưu cấu hình,
+    /// định tuyến và lọc các bản ghi nhật ký (log) hiển thị lên giao diện WPF,
+    /// đồng thời tính toán các thông số thống kê hiệu suất (Uptime, Tài nguyên thu được, Tỷ lệ thắng, v.v.).
+    /// </summary>
     public class BotService : IBotService
     {
+        // Đường dẫn đến tệp cấu hình kiểm thử chính của bot
         private static readonly string ConfigPath = Path.Combine(AppContext.BaseDirectory, "Config", "test_config.json");
+        
+        // Đối tượng Engine tự động hóa lõi điều khiển game
         private CVAutomationFramework? _framework;
+        
+        // Lưu trữ luồng xuất Standard Output gốc của Console trước khi chuyển hướng
         private TextWriter? _originalOut;
+        
+        // Bộ ghi log tùy biến giúp định tuyến Console.WriteLine lên giao diện WPF
         private UiLogTextWriter? _uiWriter;
+        
+        // Bộ hẹn giờ DispatcherTimer định kỳ cập nhật thời gian chạy và thống kê lên UI
         private readonly DispatcherTimer _statsTimer;
+        
+        // Mốc thời gian bắt đầu chạy bot
         private DateTime? _runStartTime;
+        
+        // Trạng thái tạm dừng của bot
         private bool _isPaused;
+        
+        // ID làng hiện tại đang được chọn điều khiển (mặc định là Làng 1)
         private int _currentVillage = 1;
+        
+        // Chuỗi văn bản trạng thái hiển thị trên giao diện (ví dụ: RUNNING, PAUSED, IDLE)
         private string _statusText = "IDLE";
 
         // Properties
+        /// <summary>
+        /// Xác định xem luồng xử lý bot có đang chạy hay không.
+        /// </summary>
         public bool IsRunning => _framework != null;
+
+        /// <summary>
+        /// Xác định xem bot có đang ở trạng thái tạm dừng hay không.
+        /// </summary>
         public bool IsPaused => _isPaused;
+
+        /// <summary>
+        /// Trạng thái hoạt động dưới dạng chuỗi văn bản của bot (IDLE, RUNNING, PAUSED).
+        /// </summary>
         public string StatusText => _statusText;
 
+        /// <summary>
+        /// Làng hiện tại bot đang xử lý hoặc cấu hình hiển thị.
+        /// Khi thay đổi sẽ tự động làm mới số liệu thống kê tương ứng.
+        /// </summary>
         public int CurrentVillage
         {
             get => _currentVillage;
@@ -45,25 +82,94 @@ namespace CvAut.WpfApp.Services
         }
 
         // Stats
+        /// <summary>
+        /// Thời gian hoạt động liên tục của bot dưới dạng HH:mm:ss.
+        /// </summary>
         public string UptimeText { get; private set; } = "00:00:00";
+
+        /// <summary>
+        /// Dung lượng bộ nhớ RAM (Working Set) đang sử dụng bởi ứng dụng (MB).
+        /// </summary>
         public string MemoryUsageText { get; private set; } = "0.0 MB";
+
+        /// <summary>
+        /// Tỷ lệ tấn công thành công (tấn công được từ 1 sao trở lên).
+        /// </summary>
         public string SuccessRateText { get; private set; } = "100%";
+
+        /// <summary>
+        /// Tổng số trận tấn công đã thực hiện trong phiên hiện tại.
+        /// </summary>
         public int AttacksCount { get; private set; }
+
+        /// <summary>
+        /// Tổng lượng Vàng (Gold) cướp được.
+        /// </summary>
         public long GoldGained { get; private set; }
+
+        /// <summary>
+        /// Tổng lượng Dầu hồng (Elixir) cướp được.
+        /// </summary>
         public long ElixirGained { get; private set; }
+
+        /// <summary>
+        /// Tổng lượng Dầu đen (Dark Elixir) cướp được.
+        /// </summary>
         public long DarkElixirGained { get; private set; }
+
+        /// <summary>
+        /// Tốc độ cướp Vàng trung bình mỗi giờ.
+        /// </summary>
         public long AvgGoldPerHour { get; private set; }
+
+        /// <summary>
+        /// Tốc độ cướp Dầu hồng trung bình mỗi giờ.
+        /// </summary>
         public long AvgElixirPerHour { get; private set; }
+
+        /// <summary>
+        /// Tốc độ cướp Dầu đen trung bình mỗi giờ.
+        /// </summary>
         public long AvgDarkElixirPerHour { get; private set; }
+
+        /// <summary>
+        /// Số trận kết thúc với 0 Sao (Thất bại).
+        /// </summary>
         public int Star0Count { get; private set; }
+
+        /// <summary>
+        /// Số trận kết thúc với 1 Sao.
+        /// </summary>
         public int Star1Count { get; private set; }
+
+        /// <summary>
+        /// Số trận kết thúc với 2 Sao.
+        /// </summary>
         public int Star2Count { get; private set; }
+
+        /// <summary>
+        /// Số trận kết thúc với 3 Sao (Thắng tuyệt đối).
+        /// </summary>
         public int Star3Count { get; private set; }
 
+        /// <summary>
+        /// Sự kiện xảy ra khi nhận được một dòng nhật ký mới (được định dạng lại).
+        /// </summary>
         public event Action<string>? LogReceived;
+
+        /// <summary>
+        /// Sự kiện xảy ra khi trạng thái của bot thay đổi (Start/Stop/Pause).
+        /// </summary>
         public event Action? StatusChanged;
+
+        /// <summary>
+        /// Sự kiện xảy ra khi các chỉ số thống kê hiệu suất được cập nhật.
+        /// </summary>
         public event Action? StatsUpdated;
 
+        /// <summary>
+        /// Khởi tạo dịch vụ BotService, thiết lập timer chạy chu kỳ 5 giây để cập nhật Uptime và chỉ số thống kê.
+        /// </summary>
         public BotService()
         {
             _statsTimer = new DispatcherTimer
@@ -79,18 +185,25 @@ namespace CvAut.WpfApp.Services
             RefreshStats();
         }
 
+        /// <summary>
+        /// Bắt đầu chạy bot: chuyển hướng đầu ra Console, khởi tạo và kích hoạt máy trạng thái CVAutomationFramework.
+        /// </summary>
         public void StartBot()
         {
             if (_framework != null) return;
 
+            // Lưu trữ TextWriter Console gốc
             _originalOut = Console.Out;
+            // Chuyển hướng Console qua bộ ghi nhận diện và lọc tiếng Anh
             _uiWriter = new UiLogTextWriter(_originalOut, AppendLog, ShouldIgnoreLog, TranslateLogToEnglish);
             Console.SetOut(_uiWriter);
 
             try
             {
+                // Khởi tạo framework tự động hóa với đường dẫn cấu hình
                 _framework = new CVAutomationFramework(ConfigPath);
                 _framework.Start();
+                
                 _runStartTime = DateTime.Now;
                 _isPaused = false;
                 _statusText = "RUNNING";
@@ -107,6 +220,9 @@ namespace CvAut.WpfApp.Services
             }
         }
 
+        /// <summary>
+        /// Dừng bot: kết thúc luồng chạy CVAutomationFramework, phục hồi lại Console tiêu chuẩn và khôi phục các biến trạng thái.
+        /// </summary>
         public void StopBot()
         {
             if (_framework == null) return;
@@ -132,6 +248,9 @@ namespace CvAut.WpfApp.Services
             }
         }
 
+        /// <summary>
+        /// Chuyển đổi trạng thái Tạm dừng (Pause) hoặc Tiếp tục chạy (Resume) đối với bot.
+        /// </summary>
         public void TogglePause()
         {
             if (_framework == null) return;
@@ -153,34 +272,51 @@ namespace CvAut.WpfApp.Services
             OnStatusChanged();
         }
 
+        /// <summary>
+        /// Tải nội dung tệp cấu hình kiểm thử chính của bot dưới dạng JsonObject.
+        /// </summary>
         public JsonObject LoadMainConfig()
         {
             return ReadJsonObject(ConfigPath);
         }
 
+        /// <summary>
+        /// Lưu cấu hình chính của bot xuống tệp cấu hình kiểm thử.
+        /// </summary>
         public void SaveMainConfig(JsonObject root)
         {
             Directory.CreateDirectory("profiles");
             WriteJson(ConfigPath, root);
         }
 
+        /// <summary>
+        /// Tải tệp cấu hình cấu hình riêng biệt của một làng cụ thể theo ID làng.
+        /// </summary>
         public JsonObject LoadProfile(int villageId)
         {
             return ReadJsonObject(ProfilePath(villageId));
         }
 
+        /// <summary>
+        /// Lưu tệp cấu hình của một làng cụ thể xuống tệp tin tương ứng.
+        /// </summary>
         public void SaveProfile(int villageId, JsonObject profile)
         {
             Directory.CreateDirectory("profiles");
             WriteJson(ProfilePath(villageId), profile);
         }
 
+        /// <summary>
+        /// Đẩy thông tin log ra ngoài cho các bên đăng ký sự kiện LogReceived (thường là để hiển thị trên UI RichTextBox).
+        /// </summary>
         private void AppendLog(string message)
         {
-            // Invoke LogReceived on GUI thread if needed, or bubble it up
             LogReceived?.Invoke(message);
         }
 
+        /// <summary>
+        /// Khôi phục lại Standard Output cho Console hệ thống và hủy bỏ bộ chuyển hướng log.
+        /// </summary>
         private void RestoreConsole()
         {
             if (_originalOut != null)
@@ -192,6 +328,9 @@ namespace CvAut.WpfApp.Services
             _uiWriter = null;
         }
 
+        /// <summary>
+        /// Cập nhật chuỗi hiển thị thời gian hoạt động của bot kể từ lúc bắt đầu chạy.
+        /// </summary>
         private void UpdateUptime()
         {
             if (_runStartTime != null)
@@ -204,11 +343,16 @@ namespace CvAut.WpfApp.Services
             }
         }
 
+        /// <summary>
+        /// Đọc tệp thống kê của làng hiện tại (`profiles/Stats_{villageId}.json`),
+        /// thực hiện tính toán tài nguyên thu được, tỷ lệ thắng (từ số Sao đạt được), 
+        /// tốc độ cướp trung bình mỗi giờ và dung lượng bộ nhớ RAM ứng dụng đang tiêu thụ.
+        /// </summary>
         private void RefreshStats()
         {
             try
             {
-                // Dynamic memory usage
+                // Đo lường động dung lượng RAM đang chiếm dụng của tiến trình hiện tại
                 try
                 {
                     long memBytes = Process.GetCurrentProcess().WorkingSet64;
@@ -219,6 +363,7 @@ namespace CvAut.WpfApp.Services
                     MemoryUsageText = "0.0 MB";
                 }
 
+                // Đọc dữ liệu thống kê từ tệp JSON tương ứng với ID làng hiện tại
                 string statsFile = Path.Combine("profiles", $"Stats_{_currentVillage}.json");
                 JsonObject stats = ReadJsonObject(statsFile);
 
@@ -232,7 +377,7 @@ namespace CvAut.WpfApp.Services
                 DarkElixirGained = de;
                 AttacksCount = attacks;
 
-                // Success rate calculation from stars
+                // Tính toán tỷ lệ tấn công thành công (đạt 1/2/3 sao) dựa trên thống kê số sao thu được
                 JsonObject starsObj = GetObject(stats, "stars");
                 int s0 = GetInt(starsObj, "0", 0);
                 int s1 = GetInt(starsObj, "1", 0);
@@ -256,7 +401,7 @@ namespace CvAut.WpfApp.Services
                     SuccessRateText = "100%";
                 }
 
-                // Average calculation
+                // Tính toán lượng tài nguyên trung bình cướp được mỗi giờ (Gold/Elixir/DE per Hour)
                 long lastUpdateTs = GetInt(stats, "last_update_ts", 0);
                 double hours = Math.Max(1.0 / 60.0, (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - lastUpdateTs) / 3600.0);
                 if (lastUpdateTs <= 0)
@@ -268,22 +413,33 @@ namespace CvAut.WpfApp.Services
                 AvgElixirPerHour = (long)Math.Round(elixir / hours);
                 AvgDarkElixirPerHour = (long)Math.Round(de / hours);
 
+                // Kích hoạt sự kiện thông báo cập nhật số liệu
                 StatsUpdated?.Invoke();
             }
             catch
             {
-                // Ignore stats file read collisions
+                // Bỏ qua các lỗi xung đột truy cập tệp khi tệp đang bị ghi đồng thời bởi luồng FSM
             }
         }
 
+        /// <summary>
+        /// Kích hoạt sự kiện thay đổi trạng thái hoạt động của bot.
+        /// </summary>
         private void OnStatusChanged()
         {
             StatusChanged?.Invoke();
         }
 
-        // Configuration utility methods
+        // Các phương thức tiện ích hỗ trợ thao tác tệp cấu hình JSON
+        
+        /// <summary>
+        /// Trả về đường dẫn tệp cấu hình lưu trữ thông tin cấu hình cho một làng cụ thể.
+        /// </summary>
         private static string ProfilePath(int village) => Path.Combine("profiles", $"Village_{village}.json");
 
+        /// <summary>
+        /// Đọc nội dung tệp tin JSON và chuyển đổi thành một đối tượng JsonObject.
+        /// </summary>
         private static JsonObject ReadJsonObject(string path)
         {
             if (!File.Exists(path))
@@ -303,6 +459,9 @@ namespace CvAut.WpfApp.Services
             }
         }
 
+        /// <summary>
+        /// Ghi nội dung của đối tượng JsonObject xuống tệp tin dưới dạng chuỗi JSON có canh lề thụt đầu dòng (indent).
+        /// </summary>
         private static void WriteJson(string path, JsonObject obj)
         {
             try
@@ -313,10 +472,13 @@ namespace CvAut.WpfApp.Services
             }
             catch
             {
-                // Fail silently
+                // Bỏ qua lỗi âm thầm khi không ghi được tệp tin
             }
         }
 
+        /// <summary>
+        /// Lấy giá trị số nguyên nguyên từ một khóa trong đối tượng JsonObject, trả về giá trị mặc định nếu thất bại hoặc không tồn tại.
+        /// </summary>
         private static int GetInt(JsonObject obj, string key, int defaultValue)
         {
             if (obj.TryGetPropertyValue(key, out var val) && val != null)
@@ -326,6 +488,9 @@ namespace CvAut.WpfApp.Services
             return defaultValue;
         }
 
+        /// <summary>
+        /// Lấy một đối tượng JsonObject con nằm trong đối tượng cha bằng khóa tương ứng.
+        /// </summary>
         private static JsonObject GetObject(JsonObject obj, string key)
         {
             if (obj.TryGetPropertyValue(key, out var val) && val is JsonObject o)
@@ -335,7 +500,14 @@ namespace CvAut.WpfApp.Services
             return new JsonObject();
         }
 
-        // CAPTURED TRANSLATIONS
+        // CƠ CHẾ LỌC VÀ DỊCH NHẬT KÝ LOG
+
+        /// <summary>
+        /// Xác định xem một dòng nhật ký chi tiết từ nhân (Core) có nên được ẩn đi trên giao diện UI hay không.
+        /// Giúp người dùng tránh bị ngợp bởi các log kỹ thuật tần suất cao như kiểm tra tọa độ, so khớp mẫu màu, kích thước ảnh.
+        /// </summary>
+        /// <param name="line">Dòng thông tin log đầu vào.</param>
+        /// <returns>True nếu dòng log đó là log nhiễu/kỹ thuật cần bỏ qua; ngược lại là False.</returns>
         private bool ShouldIgnoreLog(string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return true;
@@ -385,10 +557,16 @@ namespace CvAut.WpfApp.Services
             return false;
         }
 
+        /// <summary>
+        /// Dịch dòng nhật ký từ tiếng Việt sang tiếng Anh và chuẩn hóa thẻ phân loại (Tag) trước khi hiển thị lên giao diện UI.
+        /// </summary>
+        /// <param name="line">Dòng log đầu vào gốc từ phía Core Engine.</param>
+        /// <returns>Dòng log đã được chuyển ngữ kèm nhãn phân loại và mốc thời gian.</returns>
         private string TranslateLogToEnglish(string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return "";
 
+            // Trích xuất hoặc khởi tạo mốc thời gian của log
             string timestamp = $"[{DateTime.Now:HH:mm:ss}]";
             var timeMatch = Regex.Match(line, @"^\[\d{2}:\d{2}:\d{2}\]\s*");
             if (timeMatch.Success)
@@ -398,8 +576,9 @@ namespace CvAut.WpfApp.Services
             }
 
             string cleanLine = line.Trim();
-            string tag = "[BOT]";
+            string tag = "[BOT]"; // Thẻ phân loại mặc định
 
+            // Phân loại nguồn sinh log dựa vào các thẻ đánh dấu đặc trưng
             if (cleanLine.StartsWith("[FSM-CS]", StringComparison.OrdinalIgnoreCase))
             {
                 cleanLine = cleanLine.Substring(8).Trim();
@@ -471,9 +650,11 @@ namespace CvAut.WpfApp.Services
                 tag = "[MATCH ERROR]";
             }
 
+            // Gọi hàm dịch nội dung văn bản cụ thể
             string translated = TranslateText(cleanLine, ref tag);
             if (string.IsNullOrWhiteSpace(translated)) return "";
 
+            // Việt-Anh hóa một số chuỗi tài nguyên chung có thể còn sót lại
             translated = translated
                 .Replace("Vàng:", "Gold:", StringComparison.OrdinalIgnoreCase)
                 .Replace("Dầu hồng:", "Elixir:", StringComparison.OrdinalIgnoreCase)
@@ -485,6 +666,10 @@ namespace CvAut.WpfApp.Services
             return $"{timestamp} {tag} {translated}";
         }
 
+        /// <summary>
+        /// Thực hiện dịch các từ khóa và ngữ cảnh tiếng Việt quen thuộc từ lõi sang chuỗi tương ứng trong tiếng Anh,
+        /// sử dụng biểu thức chính quy (Regex) để trích xuất các tham số linh hoạt như lượng tài nguyên, tên thẻ, số lượt bấm.
+        /// </summary>
         private string TranslateText(string text, ref string tag)
         {
             text = text.Trim();
@@ -617,6 +802,7 @@ namespace CvAut.WpfApp.Services
                 return "Failed to capture screenshot or image is blank.";
             }
 
+            // Từ điển khớp chuỗi tĩnh để dịch nhanh các thông báo cố định
             var dict = new Dictionary<string, (string newText, string newTag)>(StringComparer.OrdinalIgnoreCase)
             {
                 { "Phân hệ lõi Máy trạng thái đã khởi tạo thành công.", ("State machine initialized successfully.", "[BOT]") },

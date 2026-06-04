@@ -4,32 +4,46 @@ using OpenCvSharp;
 
 namespace CvAut
 {
+    /// <summary>
+    /// Lớp tiện ích cung cấp các toạ độ và chức năng để quét, phân tích tài nguyên (Vàng, Dầu hồng, Dầu đen)
+    /// từ các màn hình của Clash of Clans. Được thiết kế tối ưu cho độ phân giải giả lập chuẩn 1600x900px.
+    /// </summary>
     public static class IsTarget
     {
-        // Tọa độ vùng quét tài nguyên chuẩn độ phân giải 1600x900px
+        // Tọa độ vùng quét tài nguyên đối thủ khi đang đi tìm trận (Scout Screen)
+        // Dựa trên chuẩn giao diện độ phân giải 1600x900px
         private static readonly Dictionary<string, Rect> Coords = new()
         {
-            { "Gold", new Rect(55, 117, 196, 44) },        // w = 251-55 = 196, h = 161-117 = 44
-            { "Elixir", new Rect(60, 167, 201, 41) },      // w = 261-60 = 201, h = 208-167 = 41
-            { "Dark Elixir", new Rect(73, 214, 110, 34) }  // w = 183-73 = 110, h = 248-214 = 34
+            { "Gold", new Rect(55, 117, 196, 44) },        // Vàng: x=55, y=117, rộng=196, cao=44 (Vùng hiển thị số lượng vàng cướp được)
+            { "Elixir", new Rect(60, 167, 201, 41) },      // Dầu hồng: x=60, y=167, rộng=201, cao=41
+            { "Dark Elixir", new Rect(73, 214, 110, 34) }  // Dầu đen: x=73, y=214, rộng=110, cao=34
         };
 
-        // Lề cắt rộng bù trừ margin
+        // Lề cắt rộng bù trừ margin để đảm bảo lấy trọn chữ số, tránh bị mất viền của ký tự đầu hoặc cuối
         private static readonly Dictionary<string, Padding> Margins = new()
         {
-            { "Gold", new Padding { L = 60, R = 15, T = 5, B = 5 } },
+            { "Gold", new Padding { L = 60, R = 15, T = 5, B = 5 } }, // Thêm lề trái rộng do số vàng có thể dài
             { "Elixir", new Padding { L = 15, R = 15, T = 5, B = 5 } },
             { "Dark Elixir", new Padding { L = 15, R = 15, T = 5, B = 5 } }
         };
 
+        /// <summary>
+        /// Cấu trúc lưu trữ khoảng lề bù trừ xung quanh vùng quét.
+        /// </summary>
         private struct Padding
         {
-            public int L { get; set; }
-            public int R { get; set; }
-            public int T { get; set; }
-            public int B { get; set; }
+            public int L { get; set; } // Left (Lề Trái)
+            public int R { get; set; } // Right (Lề Phải)
+            public int T { get; set; } // Top (Lề Trên)
+            public int B { get; set; } // Bottom (Lề Dưới)
         }
 
+        /// <summary>
+        /// Thực hiện chụp ảnh màn hình giả lập và trích xuất các chỉ số tài nguyên hiện tại của nhà đối thủ (khi tìm trận).
+        /// </summary>
+        /// <param name="adb">Đối tượng ADBHelper để thực hiện giao tiếp với thiết bị.</param>
+        /// <param name="vision">Đối tượng VisionEngine chứa thuật toán OCR.</param>
+        /// <returns>Bộ ba số nguyên biểu thị lượng (Vàng, Dầu hồng, Dầu đen) nhận diện được.</returns>
         public static (int Gold, int Elixir, int DarkElixir) ExtractResources(ADBHelper adb, VisionEngine vision)
         {
             Console.WriteLine("[SCOUT-CS] Đang chụp màn hình giả lập để quét tài nguyên...");
@@ -50,7 +64,7 @@ namespace CvAut
                 Rect r = kvp.Value;
                 Padding p = Margins[label];
 
-                // Tính toán tọa độ cắt bù trừ an toàn chống lỗi tràn biên
+                // Tính toán tọa độ cắt bù trừ an toàn chống lỗi tràn biên (Out of bounds)
                 int x1p = Math.Max(0, r.X - p.L);
                 int y1p = Math.Max(0, r.Y - p.T);
                 int x2p = Math.Min(wImg, r.X + r.Width + p.R);
@@ -58,6 +72,7 @@ namespace CvAut
 
                 Rect roi = new Rect(x1p, y1p, x2p - x1p, y2p - y1p);
 
+                // Gọi bộ phân tích OCR của VisionEngine để đọc số trong vùng chọn (ROI)
                 int val = vision.ExtractNumericalMetrics(screenshot, roi);
                 results[label] = val;
             }
@@ -70,14 +85,21 @@ namespace CvAut
             return (gold, elixir, darkElixir);
         }
 
-        // Tọa độ vùng quét tài nguyên Làng chính (Home Base) chuẩn độ phân giải 1600x900px
+        // Tọa độ vùng quét tài nguyên Làng chính (Home Base) chuẩn độ phân giải 1600x900px ở góc trên cùng bên phải màn hình
         private static readonly Dictionary<string, Rect> HomeCoords = new()
         {
-            { "Gold", new Rect(1310, 30, 200, 36) },
-            { "Elixir", new Rect(1310, 115, 200, 36) },
-            { "Dark Elixir", new Rect(1310, 200, 200, 32) }
+            { "Gold", new Rect(1310, 30, 200, 36) },       // Vùng chứa thông số Vàng của Làng chính
+            { "Elixir", new Rect(1310, 115, 200, 36) },     // Vùng chứa thông số Dầu hồng của Làng chính
+            { "Dark Elixir", new Rect(1310, 200, 200, 32) } // Vùng chứa thông số Dầu đen của Làng chính
         };
 
+        /// <summary>
+        /// Thực hiện chụp ảnh màn hình giả lập và trích xuất chỉ số tài nguyên hiện có ở Làng chính (Home Base).
+        /// Dùng để phục vụ các quyết định nâng cấp tường hoặc công trình.
+        /// </summary>
+        /// <param name="adb">Đối tượng ADBHelper.</param>
+        /// <param name="vision">Đối tượng VisionEngine.</param>
+        /// <returns>Bộ ba số nguyên biểu thị lượng tài nguyên làng chính.</returns>
         public static (int Gold, int Elixir, int DarkElixir) ExtractHomeResources(ADBHelper adb, VisionEngine vision)
         {
             Console.WriteLine("[SCOUT-CS] Đang chụp màn hình giả lập để quét tài nguyên LÀNG CHÍNH...");
@@ -95,7 +117,8 @@ namespace CvAut
                 string label = kvp.Key;
                 Rect roi = kvp.Value;
 
-                // Sử dụng RGB thresholding (useRgbThresh: true) để loại bỏ nền vàng/hồng sáng màu của thanh chứa tài nguyên Làng chính
+                // Sử dụng RGB thresholding (useRgbThresh: true) để loại bỏ nền vàng/hồng sáng màu của thanh chứa tài nguyên Làng chính,
+                // chỉ giữ lại phần màu chữ số trắng/đen để chạy OCR chính xác hơn.
                 int val = vision.ExtractNumericalMetrics(screenshot, roi, isOffline: false, useRgbThresh: true);
                 results[label] = val;
             }

@@ -2,8 +2,15 @@ using System.Windows.Controls;
 
 namespace CvAut.WpfApp.Views
 {
-    public partial class MultiVillageView : System.Windows.Controls.UserControl
+    /// <summary>
+    /// Logic xử lý (Code-Behind) của MultiVillageView.xaml.
+    /// Quản lý giao diện điều khiển cấu hình nhiều tài khoản làng.
+    /// </summary>
+    public partial class MultiVillageView : UserControl
     {
+        /// <summary>
+        /// Khởi tạo một thực thể mới của MultiVillageView.
+        /// </summary>
         public MultiVillageView()
         {
             InitializeComponent();

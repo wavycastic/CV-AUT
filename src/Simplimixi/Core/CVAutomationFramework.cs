@@ -10,6 +10,15 @@ using Size = OpenCvSharp.Size;
 
 namespace CvAut
 {
+    /// <summary>
+    /// Máy trạng thái tự động hóa CV-AUT (CVAutomationFramework):
+    /// - Quản lý trung tâm toàn bộ luồng tự động hóa Clash of Clans (FSM).
+    /// - Chịu trách nhiệm thực thi Chu kỳ đơn (OneCycle): Xác thực Làng chính, Luyện quân, Thu hoạch mỏ, Nâng cấp tường.
+    /// - Quản lý tiến trình Tìm trận (Farming Matchmaking): Quét nhà đối thủ, Ocr đọc loot, Ra quyết định đánh, Chạy script rải quân.
+    /// - Xử lý các sự kiện ngắt quãng: Mất kết nối mạng (Connection Lost), Popups sự kiện quảng cáo (Treasure Hunt).
+    /// - Hỗ trợ điều khiển Zoom Out ngầm giả lập MEmu qua PostMessage Win32 API hoặc giả lập BlueStacks qua ADB Pinch-In.
+    /// - Hỗ trợ cơ chế chơi luân phiên nhiều tài khoản (Multi-Account) từ cấu hình.
+    /// </summary>
     public class CVAutomationFramework : IDisposable
     {
         private readonly ADBHelper _adb;
@@ -24,9 +33,10 @@ namespace CvAut
         private volatile bool _isRunning;
         private int _cycleCount;
         private int _currentVillageIdx = 1;
-        private volatile bool _fastAttackQueued;
+        private volatile bool _fastAttackQueued; // Kích hoạt bỏ qua bước chuẩn bị nếu vừa đánh xong về thẳng Làng chính
         private bool _disposed;
 
+        // Các vùng ROI giao diện chuẩn 1600x900px phục vụ xác thực
         private static readonly Rect GameSettingHomeRoi = Rect.FromLTRB(1445, 499, 1599, 708);
         private static readonly Rect NextButtonRoi = Rect.FromLTRB(1291, 563, 1592, 721);
         private static readonly Rect ScoutUiRoi = Rect.FromLTRB(2, 612, 222, 724);
@@ -34,11 +44,15 @@ namespace CvAut
         private static readonly Rect ResultYouGotRoi = Rect.FromLTRB(720, 330, 910, 390);
         private static readonly Rect ResultContinueRoi = Rect.FromLTRB(590, 670, 1020, 860);
         private static readonly Rect ConnectionPopupRoi = Rect.FromLTRB(360, 180, 1240, 720);
+        
+        // Vùng ROI cho sự kiện rương báu (Treasure Hunt) xuất hiện gây nghẽn màn hình
         private static readonly Rect TreasureHuntRoi = Rect.FromLTRB(940, 80, 1450, 830);
         private static readonly Rect TreasureHuntChestTemplateRoi = Rect.FromLTRB(105, 65, 210, 145);
         private static readonly Rect TreasureHuntTextTemplateRoi = Rect.FromLTRB(15, 210, 300, 275);
         private static readonly Point TreasureHuntOpenedChestTapPoint = new(800, 455);
         private static readonly Point TreasureHuntRewardContinueTapPoint = new(800, 750);
+        
+        // Ngưỡng tin cậy khớp mẫu
         private const double HomeTemplateThreshold = 0.70;
         private const double ConnectionPopupThreshold = 0.88;
         private const double ConnIconPopupThreshold = 0.94;
@@ -49,9 +63,11 @@ namespace CvAut
         private const double ResultContinueThreshold = 0.38;
         private const double ResultYouGotThreshold = 0.55;
         private const int ResultScreenStableMatches = 2;
-        private const int MaxWaitBattleSeconds = 170;
+        private const int MaxWaitBattleSeconds = 170; // Thời gian tối đa chờ trận đấu tự động kết thúc (hết giờ 3 phút)
         private const int NormalCycleDelayMs = 10000;
         private const int FastAttackCycleDelayMs = 500;
+        
+        // Tên các template popup lỗi mạng thường thấy cần giải tỏa
         private static readonly string[] ConnectionPopupTemplates =
         {
             "Another_device.png",
@@ -63,11 +79,14 @@ namespace CvAut
 
         public JsonElement Config { get; private set; }
 
+        /// <summary>
+        /// Khởi tạo khung tự động hóa FSM với tệp cấu hình chỉ định.
+        /// </summary>
         public CVAutomationFramework(string configPath = "Config/test_config.json")
         {
             LoadConfig(configPath);
 
-            // Khởi tạo các phân hệ lõi
+            // Đọc kết nối cổng của giả lập cấu hình
             var devConfig = Config.GetProperty("device_connection");
             string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
             int port = devConfig.GetProperty("port").GetInt32();
@@ -83,6 +102,9 @@ namespace CvAut
             Console.WriteLine("[FSM-CS] Phân hệ lõi Máy trạng thái đã khởi tạo thành công.");
         }
 
+        /// <summary>
+        /// Đọc cấu hình JSON từ đĩa, nếu lỗi sẽ sử dụng cấu hình mặc định an toàn.
+        /// </summary>
         private void LoadConfig(string path)
         {
             try
@@ -100,7 +122,7 @@ namespace CvAut
                 Console.WriteLine($"[FSM-CS WARNING] Lỗi đọc cấu hình: {ex.Message}. Sử dụng cấu hình mặc định.");
             }
 
-            // Cấu hình mặc định nếu không có tệp
+            // Gán cấu hình mặc định dự phòng
             string defaultJson = @"{
                 ""device_connection"": {""host"": ""127.0.0.1"", ""port"": 5556},
                 ""farming_thresholds"": {""gold_threshold"": 650000, ""elixir_threshold"": 650000, ""dark_elixir_threshold"": 0},
@@ -113,6 +135,9 @@ namespace CvAut
             Config = defaultDoc.RootElement.Clone();
         }
 
+        /// <summary>
+        /// Khởi chạy chu kỳ chạy bot ngầm.
+        /// </summary>
         public void Start()
         {
             if (_isRunning) return;
@@ -120,12 +145,15 @@ namespace CvAut
             _isRunning = true;
             _fastAttackQueued = false;
             _cts = new CancellationTokenSource();
-            _pauseEvent.Set(); // Đảm bảo không bị pause lúc khởi động
+            _pauseEvent.Set(); // Mở khoá luồng để bot bắt đầu chạy
 
             Task.Run(() => StartWorker(_cts.Token));
             Console.WriteLine("[FSM-CS] Vòng lặp tự động hóa đã bắt đầu chạy ngầm...");
         }
 
+        /// <summary>
+        /// Thực hiện chuẩn bị giả lập và đi vào vòng lặp Bot chính.
+        /// </summary>
         private void StartWorker(CancellationToken token)
         {
             try
@@ -134,6 +162,7 @@ namespace CvAut
                 string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
                 int port = devConfig.GetProperty("port").GetInt32();
 
+                // Đảm bảo BlueStacks đã được bật và mở CoC
                 if (!EmulatorBootstrapper.EnsureReady(_adb, host, port, token))
                 {
                     _isRunning = false;
@@ -150,6 +179,9 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Dừng bot và giải phóng Task.
+        /// </summary>
         public void Stop()
         {
             if (!_isRunning) return;
@@ -160,12 +192,18 @@ namespace CvAut
             Console.WriteLine("[FSM-CS] Đã gửi lệnh dừng khẩn cấp Máy trạng thái.");
         }
 
+        /// <summary>
+        /// Tạm dừng tạm thời luồng chạy bot.
+        /// </summary>
         public void Pause()
         {
             _pauseEvent.Reset();
             Console.WriteLine("[FSM-CS] Đã tạm dừng luồng chạy bot.");
         }
 
+        /// <summary>
+        /// Tiếp tục luồng chạy bot đã tạm dừng.
+        /// </summary>
         public void Resume()
         {
             _pauseEvent.Set();
@@ -177,6 +215,9 @@ namespace CvAut
             RunCyclesForTest(1, token);
         }
 
+        /// <summary>
+        /// Phương thức hỗ trợ chạy thử nghiệm một số lượng chu kỳ cố định (dành cho chế độ offline mock/test).
+        /// </summary>
         public void RunCyclesForTest(int cycleLimit, CancellationToken token)
         {
             bool wasRunning = _isRunning;
@@ -208,6 +249,9 @@ namespace CvAut
             return token.IsCancellationRequested || !_isRunning;
         }
 
+        /// <summary>
+        /// Dừng luồng nếu giao diện người dùng yêu cầu Pause (tạm dừng).
+        /// </summary>
         private void WaitIfPaused(CancellationToken token)
         {
             while (!_pauseEvent.WaitOne(100))
@@ -216,6 +260,20 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Thực thi 1 chu kỳ máy trạng thái đầy đủ (One Cycle) của một tài khoản:
+        /// 1. Xác thực giao diện Làng chính (Home Base). Nếu kẹt, thực hiện khôi phục (Boot Recovery).
+        /// 2. Bấm giải tỏa quảng cáo, kiểm tra lỗi kết nối mạng.
+        /// 3. Zoom Out rộng bản đồ để quan sát.
+        /// 4. Huấn luyện quân lính (Smart Train / Quick Train) tùy cài đặt.
+        /// 5. Nâng cấp tường (Wall Update) bằng lượng tài nguyên dư thừa.
+        /// 6. Thu hoạch tài nguyên mỏ.
+        /// 7. Bấm tìm trận đánh cướp (Farming Matchmaking loop):
+        ///    - Quét chỉ số tài nguyên đối thủ.
+        ///    - So sánh với cấu hình mục tiêu.
+        ///    - Nếu đạt tiêu chuẩn: Triển khai rải quân đánh, chờ trận kết thúc, lưu số liệu thống kê (Stats), bấm quay về Làng chính.
+        ///    - Nếu chưa đạt: Bấm tiếp tục tìm kiếm nhà khác (Search Next).
+        /// </summary>
         public void OneCycle(JsonElement cfg, CancellationToken token)
         {
             WaitIfPaused(token);
@@ -241,11 +299,9 @@ namespace CvAut
                 return;
             }
 
-
-
             if (!fastAttackOnly)
             {
-                // 2. Click giải tỏa popup cản trở (Tọa độ center: 140, 606)
+                // 2. Click giải tỏa các popup linh tinh cản trở ở tâm màn hình
                 _adb.Tap(140, 606);
                 Thread.Sleep(1000);
 
@@ -297,14 +353,14 @@ namespace CvAut
                         wallConfig.ElixirThreshold);
                 }
 
-                // 6. Thu hoạch các mỏ vàng/dầu hồng định kỳ
+                // 6. Thu hoạch tài nguyên mỏ
                 WaitIfPaused(token);
                 if (CheckStop(token)) return;
                 Console.WriteLine("[FSM-CS] Bước 5: Tự động thu hoạch tài nguyên tại các mỏ sản xuất...");
                 CollectResourcesPlaceholder();
             }
 
-            // 7. Tìm kiếm tài nguyên (Farming Matchmaking scouting loop)
+            // 7. Tìm kiếm tài nguyên (Scouting loop)
             WaitIfPaused(token);
             if (CheckStop(token)) return;
 
@@ -314,10 +370,11 @@ namespace CvAut
             Console.WriteLine($"[FSM-CS] TÌM TRẬN ĐẤU (Yêu cầu: Vàng >= {goldReq:N0} | Dầu hồng >= {elixirReq:N0})");
             Console.WriteLine($"==============================================");
 
+            // Bấm nút Tấn công (Attack) để mở giao diện tìm kiếm
             SearchAttack();
 
             int searchCount = 1;
-            int maxSearches = 50;
+            int maxSearches = 50; // Thử tìm tối đa 50 nhà đối thủ khác nhau
             bool battleExecuted = false;
 
             while (searchCount <= maxSearches && !CheckStop(token))
@@ -332,6 +389,7 @@ namespace CvAut
                     return;
                 }
 
+                // Đợi cho đến khi giao diện tìm kiếm của đối thủ được tải xong (Scouting UI)
                 if (!WaitForScoutScreen())
                 {
                     Console.WriteLine("[WARN] Scouting UI not detected → recovering");
@@ -339,6 +397,7 @@ namespace CvAut
                     return;
                 }
 
+                // Đảm bảo nút "Next" tìm kiếm nhà khác hiển thị đầy đủ
                 bool nextButtonFound = false;
                 for (int attempt = 1; attempt <= 2; attempt++)
                 {
@@ -363,9 +422,10 @@ namespace CvAut
                     return;
                 }
 
-                // Quét tài nguyên qua bộ đọc số nhị phân siêu nhẹ
+                // Quét tài nguyên hiển thị ở góc trên bên trái của nhà đối thủ
                 var resources = IsTarget.ExtractResources(_adb, _vision);
 
+                // Kiểm tra xem lượng tài nguyên có đạt tiêu chí cấu hình hay không
                 if (resources.Gold >= goldReq && resources.Elixir >= elixirReq && resources.DarkElixir >= deReq)
                 {
                     Console.WriteLine($"🔥 [FSM-CS] ĐÃ ĐẠT TIÊU CHÍ! Gold={resources.Gold:N0} >= {goldReq:N0} | Elixir={resources.Elixir:N0} >= {elixirReq:N0}");
@@ -373,6 +433,7 @@ namespace CvAut
                     Thread.Sleep(1500);
                     if (CheckStop(token)) break;
 
+                    // Chạy script tự động rải quân tấn công
                     string attackStrategy = GetStringOrDefault(cfg, "attack", "Dragon_Attack");
                     _attacks.Run(attackStrategy);
                     battleExecuted = true;
@@ -380,16 +441,19 @@ namespace CvAut
                     WaitIfPaused(token);
                     if (CheckStop(token)) break;
 
+                    // Chờ trận đấu tự động kết thúc hoặc hết giờ
                     bool battleWaitOk = WaitBattleEnd(token);
                     if (!battleWaitOk)
                     {
                         return;
                     }
 
+                    // Quét số sao đạt được và lượng tài nguyên thực tế nhận về
                     int starsGot = GetStarsFromScreen();
                     var gained = GainResources(starsGot);
                     Console.WriteLine($"[STATS] Battle result: {starsGot} star(s), gained Gold={gained.Gold:N0} Elixir={gained.Elixir:N0} Dark={gained.DarkElixir:N0}");
 
+                    // Cập nhật số liệu thống kê phiên chơi
                     if (GetBoolOrDefault(cfg, "enable_stats", false))
                     {
                         UpdateStats(_currentVillageIdx, starsGot, gained);
@@ -399,18 +463,20 @@ namespace CvAut
                         Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [WORKER] ENABLE_STATS=False, skipping stats update");
                     }
 
+                    // Bấm nút quay trở về Làng chính
                     _fastAttackQueued = ReturnHome();
                     break;
                 }
                 else
                 {
                     Console.WriteLine("[FSM-CS] Tài nguyên thấp. Bỏ qua nhà này.");
-
+                    // Bấm tìm kiếm đối thủ tiếp theo
                     SearchNext();
                     searchCount++;
                 }
             }
 
+            // Đầu hàng nếu quá 50 lần tìm kiếm không đạt yêu cầu
             if (!battleExecuted && !CheckStop(token))
             {
                 Console.WriteLine("[FSM-CS WARN] Đã tìm kiếm 50 lần không thấy nhà phù hợp. Surrendering...");
@@ -426,6 +492,10 @@ namespace CvAut
             Console.WriteLine($"--- [FSM-CS] Kết thúc Chu kỳ đơn (Làng_{_currentVillageIdx}) ---\n");
         }
 
+        /// <summary>
+        /// Vòng lặp chính xử lý luồng bot chạy vô hạn.
+        /// Hỗ trợ luân chuyển chơi giữa nhiều tài khoản khác nhau định kỳ (Switch Account) nếu cấu hình multi-account bật.
+        /// </summary>
         private void BotLoop(CancellationToken token)
         {
             Console.WriteLine("[FSM-CS] Vòng lặp bất đồng bộ bắt đầu xử lý...");
@@ -440,12 +510,13 @@ namespace CvAut
                 while (!CheckStop(token))
                 {
                     OneCycle(Config, token);
+                    // Nghỉ ngắt quãng giữa các chu kỳ. Nếu vừa đánh xong, delay ngắn hơn để đánh tiếp ngay
                     Thread.Sleep(_fastAttackQueued ? FastAttackCycleDelayMs : NormalCycleDelayMs);
                 }
                 return;
             }
 
-            // Chế độ nhiều tài khoản (Multi Account Mode)
+            // Chế độ chạy nhiều tài khoản (Multi Account)
             int intervalSecs = GetIntOrDefault(multiConfig, "multi_interval_mins", 60) * 60;
 
             while (!CheckStop(token))
@@ -461,12 +532,13 @@ namespace CvAut
                     _fastAttackQueued = false;
                     Console.WriteLine($"[FSM-CS] Đang thực hiện chuyển sang Làng_{idx}...");
 
-                    // Giả lập click nút Settings -> Switch Account
+                    // Thực hiện thay đổi tài khoản tương ứng
                     SwitchToVillagePlaceholder(idx);
 
                     DateTime slotStart = DateTime.Now;
                     _cycleCount = 0;
 
+                    // Chơi tài khoản này cho đến khi hết thời lượng phân bổ (mặc định 60 phút)
                     while ((DateTime.Now - slotStart).TotalSeconds < intervalSecs && !CheckStop(token))
                     {
                         WaitIfPaused(token);
@@ -483,7 +555,10 @@ namespace CvAut
             Console.WriteLine("[FSM-CS] Vòng lặp chạy ngầm đã dừng hoàn toàn.");
         }
 
-        // --- Các hàm hỗ trợ mô phỏng CV-AUT ---
+        /// <summary>
+        /// Đảm bảo giao diện hiện tại là Làng chính (Home Base) bằng cách dò tìm icon Settings hoặc nút Shop.
+        /// Chờ đợi tối đa maxWaitSeconds, nếu không thấy sẽ thử chạy luồng BootRecovery.
+        /// </summary>
         private bool EnsureHomeBase(int maxWaitSeconds = 50, bool allowBootRecovery = true)
         {
             Console.WriteLine("[BASE] Checking if we're on the home base screen...");
@@ -512,6 +587,9 @@ namespace CvAut
             return EnsureHomeBase(maxWaitSeconds: 20, allowBootRecovery: false);
         }
 
+        /// <summary>
+        /// Dò tìm giao diện Làng chính trên ảnh chụp màn hình hiện tại.
+        /// </summary>
         private bool DetectHomeBase(out string reason)
         {
             reason = "not found";
@@ -522,12 +600,14 @@ namespace CvAut
                 return false;
             }
 
+            // Thử dò tìm bánh răng cài đặt
             if (TryMatchTemplate(screenshot, "game_setting.png", GameSettingHomeRoi, HomeTemplateThreshold, out _, out double settingScore))
             {
                 reason = $"game_setting score={settingScore:F3}";
                 return true;
             }
 
+            // Thử dò tìm biểu tượng nút Cửa hàng (Shop) ở góc dưới phải
             if (TryMatchTemplate(screenshot, "shop.png", null, HomeTemplateThreshold, out Point shopCenter, out double shopScore))
             {
                 reason = $"shop template at ({shopCenter.X},{shopCenter.Y}) score={shopScore:F3}";
@@ -538,6 +618,12 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// Chạy quy trình Khôi phục cưỡng bức (Boot Recovery):
+        /// - Gửi lệnh dừng khẩn cấp Clash of Clans: am force-stop.
+        /// - Chạy khởi động lại game.
+        /// - Đợi game tải xong và tắt các popup chào mừng bằng chạm giải tỏa.
+        /// </summary>
         public void BootRecovery()
         {
             Console.WriteLine("[RECOVERY] Restarting Clash of Clans...");
@@ -549,17 +635,21 @@ namespace CvAut
             Thread.Sleep(10000);
 
             Console.WriteLine("[RECOVERY] Dismissing pop-ups...");
-            _adb.Tap(146, 487);
+            _adb.Tap(146, 487); // Chạm góc dưới bên trái để giải tỏa nhanh các hộp thoại sự kiện
         }
 
+        /// <summary>
+        /// Bấm chọn nút Tấn công ngoài Làng chính và chuẩn bị tìm trận.
+        /// Đồng thời xử lý popup sự kiện cản trở nếu có (Treasure Hunt).
+        /// </summary>
         private void SearchAttack()
         {
-            _adb.Tap(113, 797);
+            _adb.Tap(113, 797); // Nút Tấn công chính
             Thread.Sleep(700);
             HandleTreasureHuntIfPresent();
-            _adb.Tap(272, 659);
+            _adb.Tap(272, 659); // Chọn Tìm trận đối thủ (Find Match)
             Thread.Sleep(700);
-            _adb.Tap(1445, 804);
+            _adb.Tap(1445, 804); // Chấp nhận phí tìm trận ban đầu
         }
 
         private bool HandleTreasureHuntIfPresent(bool verboseNotFound = true)
@@ -574,6 +664,10 @@ namespace CvAut
             return HandleTreasureHuntIfPresent(screenshot, verboseNotFound);
         }
 
+        /// <summary>
+        /// Giải quyết popup sự kiện săn rương kho báu (Treasure Hunt) xuất hiện cản trở thao tác bot.
+        /// Bấm click liên tục để dọn giải tỏa rương báu.
+        /// </summary>
         private bool HandleTreasureHuntIfPresent(Mat screenshot, bool verboseNotFound = true)
         {
             if (!TryFindTreasureHuntPopup(screenshot, out Point center, out double score))
@@ -597,6 +691,9 @@ namespace CvAut
             return true;
         }
 
+        /// <summary>
+        /// Mở rương báu thu được trong game và bấm xác nhận liên tục để nhận thưởng.
+        /// </summary>
         private bool HandleOpenedTreasureChest()
         {
             Console.WriteLine($"[TREASURE] Possible opened Treasure Hunt chest screen. Tapping chest at ({TreasureHuntOpenedChestTapPoint.X},{TreasureHuntOpenedChestTapPoint.Y}) 5 times...");
@@ -617,6 +714,9 @@ namespace CvAut
             return true;
         }
 
+        /// <summary>
+        /// Đợi nút Tiếp tục hiển thị và bấm để thoát màn hình nhận thưởng rương báu.
+        /// </summary>
         private bool TapTreasureRewardContinue()
         {
             DateTime start = DateTime.Now;
@@ -637,6 +737,9 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// So khớp đa tỷ lệ tìm kiếm xem có sự xuất hiện của popup Treasure Hunt không.
+        /// </summary>
         private bool TryFindTreasureHuntPopup(Mat screenshot, out Point center, out double score)
         {
             if (TryMatchTemplate(screenshot, "treasure_hunt.png", TreasureHuntRoi, TreasureHuntThreshold, out center, out score)
@@ -693,11 +796,17 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// Chạm nút Next trong giao diện tìm trận để đổi sang nhà đối thủ khác.
+        /// </summary>
         private void SearchNext()
         {
             _adb.Tap(1432, 637);
         }
 
+        /// <summary>
+        /// Kiểm tra nút Next màu vàng có hiển thị ở góc dưới bên phải màn hình không.
+        /// </summary>
         private bool IsNextButtonPresent()
         {
             using Mat? screenshot = _adb.TakeScreenshot();
@@ -712,6 +821,9 @@ namespace CvAut
             return found;
         }
 
+        /// <summary>
+        /// Đợi giao diện tìm trận (chứa thanh lính và nút đầu hàng dưới đáy) xuất hiện thành công.
+        /// </summary>
         private bool WaitForScoutScreen(int timeoutSeconds = 12, int intervalMs = 500)
         {
             Console.WriteLine("[WAIT] Scouting UI loading…");
@@ -729,12 +841,14 @@ namespace CvAut
                     continue;
                 }
 
+                // Dò biểu tượng thanh thả lính chiến trận
                 if (TryMatchTemplate(screenshot, "end_battle.png", ScoutUiRoi, ScoutUiThreshold, out _, out _))
                 {
                     Console.WriteLine("[OK] Scouting UI detected.");
                     return true;
                 }
 
+                // Giải tỏa nhanh popup sự kiện săn rương nếu vô tình xuất hiện cản màn hình
                 if (HandleTreasureHuntIfPresent(screenshot, verboseNotFound: false))
                 {
                     continue;
@@ -747,6 +861,9 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// Kiểm tra sự xuất hiện của popup mất kết nối mạng. Nếu có, thực hiện khởi động lại game.
+        /// </summary>
         private bool RecoverIfConnectionPopup(string warningMessage)
         {
             if (!ConnectionPopupVisible(out string matchInfo))
@@ -759,6 +876,9 @@ namespace CvAut
             return true;
         }
 
+        /// <summary>
+        /// Kiểm tra xem có bất kỳ popup báo lỗi kết nối mạng nào đang cản màn hình không.
+        /// </summary>
         private bool ConnectionPopupVisible(out string matchInfo)
         {
             matchInfo = "none";
@@ -788,6 +908,9 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// Phương thức so khớp mẫu ảnh OpenCV thang xám cơ bản.
+        /// </summary>
         private bool TryMatchTemplate(Mat source, string templateFileName, Rect? roi, double threshold, out Point center, out double score)
         {
             center = default;
@@ -833,8 +956,6 @@ namespace CvAut
 
             return score >= threshold;
         }
-
-
 
         private static string GetStringOrDefault(JsonElement element, string propertyName, string fallback)
         {
@@ -905,11 +1026,13 @@ namespace CvAut
             );
         }
 
+        /// <summary>
+        /// Nạp thông tin cấu hình nâng cấp tường của tài khoản tương ứng từ Village profile.
+        /// </summary>
         private static WallUpgradeConfig GetWallUpgradeConfig(JsonElement cfg, int villageIdx)
         {
             JsonElement profile = LoadVillageProfile(villageIdx);
 
-            // If village profile exists, use its upgrade_wall value as authoritative
             if (profile.ValueKind == JsonValueKind.Object)
             {
                 bool enabled = GetBoolOrDefault(profile, "upgrade_wall", false);
@@ -920,7 +1043,7 @@ namespace CvAut
                     ElixirThreshold: GetIntOrDefault(profile, "wall_elixir_threshold", 5_000_000));
             }
 
-            // Fallback: only check legacy element_state_automation if NO village profile exists
+            // Dự phòng: Nạp cấu hình từ legacy element_state_automation
             JsonElement wall = GetObjectOrDefault(cfg, "element_state_automation");
             if (wall.ValueKind != JsonValueKind.Object || !GetBoolOrDefault(wall, "upgrade_enabled", false))
             {
@@ -978,6 +1101,8 @@ namespace CvAut
             return new[] { 1, 2 };
         }
 
+        // --- Liên kết thư viện ngoài (DLL Import) của hệ điều hành Windows ---
+        // Phục vụ gửi phím ngầm (PostMessage) và gắn kết tiến trình (AttachThreadInput)
         [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
         private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
@@ -994,6 +1119,9 @@ namespace CvAut
         [System.Runtime.InteropServices.DllImport("kernel32.dll")]
         private static extern uint GetCurrentThreadId();
 
+        /// <summary>
+        /// Tìm Handle cửa sổ chính (MainWindowHandle) của Windows dựa trên danh sách các tên tiến trình (Process) ứng viên.
+        /// </summary>
         private static IntPtr FindMainWindowByProcessName(params string[] processNames)
         {
             foreach (string processName in processNames)
@@ -1010,13 +1138,17 @@ namespace CvAut
                 }
                 catch
                 {
-                    // Process enumeration can race with emulator startup/shutdown.
+                    // Quản lý ngoại lệ nếu tiến trình bị tắt đột ngột
                 }
             }
 
             return IntPtr.Zero;
         }
 
+        /// <summary>
+        /// Gửi phím tắt ngầm đến cửa sổ Handle mà không cần kích hoạt cửa sổ đó lên hàng trước (Background Key Send).
+        /// Hỗ trợ gắn kết luồng dữ liệu đầu vào (AttachThreadInput) để nâng cao độ chính xác gửi phím ngầm của Win32.
+        /// </summary>
         private static void SendKeyToWindow(IntPtr hWnd, IntPtr virtualKey, int repetitions, int gapMs)
         {
             const uint WM_KEYDOWN = 0x0100;
@@ -1030,6 +1162,7 @@ namespace CvAut
                 bool attached = false;
                 if (targetThreadId != 0 && targetThreadId != currentThreadId)
                 {
+                    // Gắn kết luồng nhập dữ liệu của bot với tiến trình giả lập để Windows cho phép PostMessage phím hệ thống
                     attached = AttachThreadInput(currentThreadId, targetThreadId, true);
                 }
 
@@ -1051,6 +1184,10 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Vòng lặp chờ đợi trận đánh kết thúc.
+        /// Quét nhận diện liên tục nút Tiếp tục (Continue) hoặc vạch hiển thị kết quả chiến tích cướp tài nguyên.
+        /// </summary>
         private bool WaitBattleEnd(CancellationToken token)
         {
             Console.WriteLine("⏳ Waiting for battle to finish…");
@@ -1098,6 +1235,9 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// Dò tìm xem màn hình kết quả trận đấu đã hiển thị chưa bằng cách tìm cả nút Continue và icon tài nguyên thu về.
+        /// </summary>
         private bool BattleEnded(out string matchInfo)
         {
             matchInfo = "continue score=0.00, result-marker score=0.00";
@@ -1195,6 +1335,10 @@ namespace CvAut
             return score >= threshold;
         }
 
+        /// <summary>
+        /// Khớp mẫu ảnh vùng chọn nâng cao hỗ trợ quét đa tỷ lệ (Multi-Scale) từ 1.0 đến 1.25 lần.
+        /// Dành cho các dòng giả lập hiển thị tỷ lệ rương báu (Treasure Hunt) co giãn nhẹ.
+        /// </summary>
         private bool TryMatchTemplateRegionMultiScale(
             Mat source,
             string templateFileName,
@@ -1268,6 +1412,10 @@ namespace CvAut
             return score >= threshold;
         }
 
+        /// <summary>
+        /// Thực hiện quét đếm số sao đạt được từ màn hình kết thúc trận đấu.
+        /// Thử dò tìm các template one_star, two_star, three_star tương ứng.
+        /// </summary>
         private int GetStarsFromScreen()
         {
             Thread.Sleep(500);
@@ -1295,6 +1443,10 @@ namespace CvAut
                 : 2;
         }
 
+        /// <summary>
+        /// Thực hiện đọc số lượng tài nguyên (Vàng, Elixir, Hắc dầu) cướp được từ màn hình kết thúc trận đấu.
+        /// Tổng tài nguyên = Lượng cướp được từ kho chứa đối thủ (Left ROI) + Lượng thưởng thêm theo số sao (Right ROI).
+        /// </summary>
         private (int Gold, int Elixir, int DarkElixir) GainResources(int stars)
         {
             Thread.Sleep(500);
@@ -1310,6 +1462,7 @@ namespace CvAut
             Directory.CreateDirectory("logs");
             Cv2.ImWrite(Path.Combine("logs", "debug_stats_result.png"), screenshot);
 
+            // Đọc số lượng cướp được bên trái (Left Side)
             int goldLeft = OcrResourceSum(screenshot, Rect.FromLTRB(586, 372, 825, 420), "gold_loot", 1000);
             int elixirLeft = OcrResourceSum(screenshot, Rect.FromLTRB(590, 431, 827, 482), "elixir_loot", 1000);
             int deLeft = OcrResourceSum(screenshot, Rect.FromLTRB(643, 489, 826, 539), "dark_loot", 100);
@@ -1318,6 +1471,7 @@ namespace CvAut
             int elixirRight = 0;
             int deRight = 0;
 
+            // Nếu đạt tối thiểu 1 sao, đọc thêm lượng thưởng bonus liên minh bên phải (Right Side)
             if (stars > 0)
             {
                 goldRight = OcrResourceSum(screenshot, Rect.FromLTRB(1012, 444, 1176, 490), "gold_bonus", 1000);
@@ -1332,6 +1486,7 @@ namespace CvAut
         {
             SaveStatsCrop(screenshot, roi, label);
 
+            // Thử dùng RGB Thresh trước
             if (_vision.TryExtractNumericalMetrics(screenshot, roi, out int value, out double confidence, useRgbThresh: true))
             {
                 if (IsPlausibleResourceValue(value, confidence, minValidValue, label, "rgb"))
@@ -1340,6 +1495,7 @@ namespace CvAut
                 }
             }
 
+            // Thử nhị phân xám dự phòng
             if (_vision.TryExtractNumericalMetrics(screenshot, roi, out value, out confidence))
             {
                 if (IsPlausibleResourceValue(value, confidence, minValidValue, label, "gray"))
@@ -1390,6 +1546,10 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Bấm quay trở về Làng chính sau khi trận đánh kết thúc.
+        /// Giải tỏa rương báu hoặc bấm Back hệ thống Android nếu bị kẹt.
+        /// </summary>
         private bool ReturnHome()
         {
             Console.WriteLine("[FSM-CS] Quay trở về làng chính...");
@@ -1409,6 +1569,7 @@ namespace CvAut
             Thread.Sleep(3000);
             if (!DetectHomeBase(out _))
             {
+                // Giải quyết rương báu nếu xuất hiện đột ngột cản trở
                 if (!HandleTreasureHuntIfPresent(verboseNotFound: false))
                 {
                     HandleOpenedTreasureChest();
@@ -1417,7 +1578,7 @@ namespace CvAut
                 if (!DetectHomeBase(out _))
                 {
                     Console.WriteLine("[FSM-CS] Still not on home base after Treasure handling. Sending one BACK.");
-                    _adb.ExecuteShell("input keyevent KEYCODE_BACK");
+                    _adb.ExecuteShell("input keyevent KEYCODE_BACK"); // Gửi lệnh phím Back của Android để giải tỏa nhanh các popup xếp chồng
                     Thread.Sleep(1500);
                 }
             }
@@ -1425,6 +1586,9 @@ namespace CvAut
             return EnsureHomeBase(maxWaitSeconds: 20);
         }
 
+        /// <summary>
+        /// Lưu trữ thông số tài nguyên cướp được lũy kế vào tệp JSON trên đĩa cứng để WPF UI hiển thị thống kê.
+        /// </summary>
         private void UpdateStats(int villageIdx, int starsGot, (int Gold, int Elixir, int DarkElixir) gained)
         {
             string path = StatsFilePath(villageIdx);
@@ -1509,16 +1673,23 @@ namespace CvAut
                 : 0;
         }
 
+        /// <summary>
+        /// Thực hiện cử chỉ thu nhỏ góc nhìn bản đồ (Zoom Out):
+        /// - Đối với MEmu: Gắn kết luồng và gửi phím F3 ngầm qua PostMessage WM_KEYDOWN Win32 API.
+        /// - Đối với BlueStacks: Gửi cử chỉ PinchIn đa điểm qua ADB UIAutomator2.
+        /// </summary>
         public void ZoomOut()
         {
             Console.WriteLine("[FSM-CS] Đang thực hiện thu nhỏ góc nhìn bản đồ (Zoom Out)...");
 
+            // Kiểm tra xem giả lập MEmu có đang mở không
             IntPtr memuParent = FindMainWindowByProcessName("MEmu");
             if (memuParent == IntPtr.Zero)
             {
                 memuParent = FindWindow(null, "MEmu");
             }
 
+            // Kiểm tra xem giả lập BlueStacks có đang mở không
             IntPtr bsParent = FindMainWindowByProcessName("HD-Player", "BlueStacks");
             if (bsParent == IntPtr.Zero)
             {
@@ -1528,20 +1699,16 @@ namespace CvAut
             if (memuParent != IntPtr.Zero)
             {
                 Console.WriteLine($"[FSM-CS] Phát hiện giả lập MEmu HWND: {memuParent}. Gửi F3 theo cơ chế Simplicity...");
-
-                // Port từ Simplicity AutoHotkey/v2/zoom_out.ahk:
-                // attach input thread rồi post F3 4 lần, không cần focus cửa sổ.
+                
+                // Gửi mã phím F3 (Virtual Key Code = 0x72) 4 lần ngầm vào MEmu để thực hiện thu nhỏ camera
                 SendKeyToWindow(memuParent, (IntPtr)0x72, repetitions: 4, gapMs: 1000);
-
                 Console.WriteLine("[FSM-CS] Gửi lệnh Zoom Out ngầm tới MEmu hoàn tất.");
             }
             else if (bsParent != IntPtr.Zero)
             {
                 Console.WriteLine($"[FSM-CS] Phát hiện giả lập BlueStacks HWND: {bsParent}. Gửi pinch-in zoom-out qua ADB...");
-
-                // Dịch từ Simplicity zoom_out.pyc: UIAutomator2 gọi pinch_in
-                // percent=100, steps=20, count=5, interval=0.35s. ADBHelper sẽ
-                // gọi JSON-RPC pinchIn thật, chỉ fallback swipe nếu UIAutomator2 lỗi.
+                
+                // Gửi JSON-RPC pinchIn zoom out đa điểm qua ADB
                 bool ok = _adb.PinchInZoomOut(count: 5, durationMs: 450, intervalMs: 350);
                 if (ok)
                 {
@@ -1558,10 +1725,12 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Thu hoạch mỏ tài nguyên (Gold/Elixir/Dark Elixir Collector) trên màn hình Làng chính.
+        /// Dò tìm các bong bóng icon tài nguyên lơ lửng trên mỏ và thực hiện chạm (Tap).
+        /// </summary>
         private void CollectResourcesPlaceholder()
         {
-            // Port từ Simplicity Tap_Collectors.py:
-            // match mỗi template mỏ tài nguyên trên một screenshot rồi tap tâm match tốt nhất.
             string[] collectorTemplates =
             {
                 "elixir_collector.png",
@@ -1599,6 +1768,7 @@ namespace CvAut
                 Cv2.MatchTemplate(grayScreenshot, template, result, TemplateMatchModes.CCoeffNormed);
                 Cv2.MinMaxLoc(result, out _, out double maxVal, out _, out Point maxLoc);
 
+                // Ngưỡng tin cậy thu hoạch từ 65% trở lên
                 if (maxVal < 0.65)
                 {
                     Console.WriteLine($"[FSM-CS] Bỏ qua {templateName}: confidence {maxVal:F2} < 0.65.");
@@ -1615,10 +1785,11 @@ namespace CvAut
 
         private void SwitchToVillagePlaceholder(int villageIdx)
         {
-            // Giả lập trình quản lý switch tài khoản
+            // Placeholder cho chức năng luân chuyển tài khoản trong tương lai
             Console.WriteLine($"[FSM-CS-SWITCH] Bấm Settings -> Đăng nhập tài khoản Làng_{villageIdx}...");
             Thread.Sleep(3000);
         }
+
         public void Dispose()
         {
             if (_disposed) return;

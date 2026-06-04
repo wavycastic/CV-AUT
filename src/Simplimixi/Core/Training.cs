@@ -9,34 +9,52 @@ using Point = OpenCvSharp.Point;
 
 namespace CvAut
 {
+    /// <summary>
+    /// Phân hệ Huấn luyện lính (Training):
+    /// - Quản lý quy trình huấn luyện lính nhanh (Quick Train) thông qua Đội hình mẫu mẫu lưu sẵn.
+    /// - Huấn luyện lính thông minh (Smart Train): Quét nhận diện số lượng lính/phép/xe hiện tại trên giao diện quân đội,
+    ///   so sánh với mẫu yêu cầu, tự động xóa hàng chờ cũ (Trash queue) và bấm thêm số lượng lính/phép còn thiếu.
+    /// - Trích xuất kiểm tra dung lượng sức chứa tối đa của doanh trại.
+    /// </summary>
     public class Training
     {
         private readonly ADBHelper _adb;
         private readonly VisionEngine _vision;
         private readonly string _templateRoot;
 
+        // Các điểm chạm điều khiển trên giao diện thông tin Quân đội (Army Window)
         private static readonly Point OpenArmyWindow = new(62, 658);
         private static readonly Point CloseArmyWindow = new(1545, 81);
         private static readonly Point ArmyRecipePane = new(777, 90);
         private static readonly Point ConfirmRecipeUse = new(972, 584);
 
+        // Vùng ROI dùng để xác thực cửa sổ Quân đội đang mở thành công
         private static readonly Rect ArmyWindowRoi = new(76, 57, 489, 99);
+        
+        // Vùng ROI của nút Sử dụng Đội hình mẫu 1 và 2 (Quick Slot 1 & 2)
         private static readonly Rect QuickSlot1Roi = Rect.FromLTRB(1364, 189, 1574, 425);
         private static readonly Rect QuickSlot2Roi = Rect.FromLTRB(1368, 486, 1572, 735);
 
+        // Vùng ROI hiển thị lính, phép, xe hiện có trong quân đội
         private static readonly Rect ArmyRoi = Rect.FromLTRB(682, 228, 1573, 383);
         private static readonly Rect SpellRoi = Rect.FromLTRB(689, 461, 1250, 600);
         private static readonly Rect SiegeRoi = Rect.FromLTRB(1256, 457, 1554, 608);
+        
+        // Vùng ROI hiển thị chỉ số sức chứa lính hiện tại (ví dụ: "240/240")
         private static readonly Rect SpaceRoi = Rect.FromLTRB(750, 195, 826, 225);
         private static readonly Rect ArmySpaceSecondaryRoi = Rect.FromLTRB(751, 183, 858, 230);
+        
+        // Vùng ROI hiển thị sức chứa phép hiện tại
         private static readonly Rect SpellSpaceRoi = Rect.FromLTRB(731, 398, 810, 464);
 
+        // Vùng ROI dò tìm nút Thùng rác (Xóa toàn bộ hàng chờ huấn luyện)
         private static readonly Rect TrashArmyRoi = Rect.FromLTRB(1519, 184, 1570, 231);
         private static readonly Rect TrashSpellRoi = Rect.FromLTRB(1197, 408, 1250, 455);
         private static readonly Rect TrashSiegeRoi = Rect.FromLTRB(1511, 406, 1577, 458);
 
         private const double ValidationIconThreshold = 0.70;
 
+        // Tọa độ chạm nút xóa hàng chờ
         private static readonly Point TapClearArmy = new(1546, 209);
         private static readonly Point TapClearSpell = new(1225, 429);
         private static readonly Point TapClearSiege = new(1545, 427);
@@ -44,6 +62,7 @@ namespace CvAut
         private static readonly Point ConfirmTapSpell = new(978, 583);
         private static readonly Point ConfirmTapSiege = new(966, 581);
 
+        // Các nút chuyển tab huấn luyện lính, phép, xe trong giao diện nhà lính
         private static readonly Point OpenArmyTab = new(1063, 305);
         private static readonly Point CloseArmyTab = new(47, 85);
         private static readonly Point OpenSpellTab = new(1008, 531);
@@ -51,13 +70,15 @@ namespace CvAut
         private static readonly Point OpenSiegeTab = new(1398, 533);
         private static readonly Point CloseSiegeTab = new(27, 85);
 
+        // Trọng số sức chứa (Housing Space) của từng loại lính cụ thể để tính toán số lượng huấn luyện
         private static readonly Dictionary<string, int> SpaceCost = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["dragon"] = 20,
-            ["electro_dragon"] = 30,
-            ["balloon"] = 5
+            ["dragon"] = 20,            // Rồng thường chiếm 20 chỗ
+            ["electro_dragon"] = 30,    // Rồng điện chiếm 30 chỗ
+            ["balloon"] = 5             // Balloon chiếm 5 chỗ
         };
 
+        // Danh sách định nghĩa đội hình tiêu chuẩn cho từng kịch bản chiến thuật
         private static readonly Dictionary<string, ArmySpec> ArmySets = new(StringComparer.OrdinalIgnoreCase)
         {
             ["Dragon_Attack"] = new("dragon", new[] { "dragon", "balloon" }, new[] { "rage", "freeze" }, "slammer"),
@@ -66,6 +87,12 @@ namespace CvAut
             ["Electro Dragon attack"] = new("electro_dragon", new[] { "electro_dragon", "balloon" }, new[] { "rage", "freeze" }, "slammer")
         };
 
+        /// <summary>
+        /// Khởi tạo đối tượng Training quản lý nhà lính.
+        /// </summary>
+        /// <param name="adb">Đối tượng ADBHelper.</param>
+        /// <param name="templatesPath">Đường dẫn chứa thư mục các template.</param>
+        /// <param name="vision">Đối tượng VisionEngine xử lý ảnh.</param>
         public Training(ADBHelper adb, string templatesPath, VisionEngine vision)
         {
             _adb = adb;
@@ -73,6 +100,11 @@ namespace CvAut
             _templateRoot = Path.Combine(templatesPath, "Smart_Auto_train");
         }
 
+        /// <summary>
+        /// Thực hiện luyện quân nhanh (Quick Train) thông qua giao diện Đội hình mẫu đã lưu sẵn của game.
+        /// </summary>
+        /// <param name="quickSlot">Số thứ tự slot đội hình mẫu cần luyện (1 hoặc 2).</param>
+        /// <returns>True nếu thực hiện thành công, ngược lại False.</returns>
         public bool QuickTrain(int quickSlot = 1)
         {
             Console.WriteLine($"[quick_train] Bắt đầu dùng Army Recipe slot {quickSlot}...");
@@ -95,6 +127,7 @@ namespace CvAut
             }
 
             Rect slotRoi = quickSlot == 1 ? QuickSlot1Roi : QuickSlot2Roi;
+            // Tìm nút 'Train' (use_button) trong slot chỉ định
             if (!TryFindTemplate(shot, "use_button.png", slotRoi, out Point useButton, out double useScore))
             {
                 Console.WriteLine("[quick_train] use_button template missing or invalid");
@@ -108,6 +141,7 @@ namespace CvAut
                 _adb.Tap(useButton.X, useButton.Y);
                 Thread.Sleep(600);
 
+                // Xác nhận lại việc ghi đè/luyện quân nếu xuất hiện popup yêu cầu
                 using Mat? confirmShot = _adb.TakeScreenshot();
                 if (confirmShot != null && !confirmShot.Empty()
                     && TryFindTemplate(confirmShot, "use_army_recipe_window.png", null, out _, out double confirmScore))
@@ -126,6 +160,14 @@ namespace CvAut
             return true;
         }
 
+        /// <summary>
+        /// Thực hiện quy trình luyện quân thông minh (Smart Train):
+        /// 1. Mở giao diện thông tin Quân đội.
+        /// 2. So khớp các icon lính, phép, xe xem đã đủ đội hình chiến đấu chưa.
+        /// 3. Nếu còn thiếu, tự động mở tab tương ứng để xóa hàng chờ cũ và bấm thêm lính/phép/xe thiếu.
+        /// 4. Đóng giao diện thông tin Quân đội.
+        /// </summary>
+        /// <param name="cfg">Tài liệu JSON chứa cấu hình chiến thuật đang chạy.</param>
         public void SmartTrain(JsonElement cfg)
         {
             Console.WriteLine("\n--- [SMART] Starting Smart Train Sequence ---");
@@ -138,6 +180,7 @@ namespace CvAut
 
             Console.WriteLine("Army window detected");
 
+            // Xác thực tính sẵn sàng của đội hình
             bool armyOk = ValidateTroops(cfg);
             bool spellOk = ValidateSpells();
             bool siegeOk = ValidateSiege();
@@ -150,16 +193,19 @@ namespace CvAut
                 return;
             }
 
+            // Nếu lính chưa đủ, thực hiện luyện lính
             if (!armyOk)
             {
                 TrainTroops(cfg);
             }
 
+            // Nếu phép chưa đủ, thực hiện chế tạo phép
             if (!spellOk)
             {
                 TrainSpells();
             }
 
+            // Nếu thiếu xe công thành, thực hiện chế tạo xe
             if (!siegeOk)
             {
                 TrainSlammer();
@@ -170,6 +216,9 @@ namespace CvAut
             Thread.Sleep(1000);
         }
 
+        /// <summary>
+        /// Mở và xác thực xem cửa sổ Quân đội có hiển thị thành công hay không bằng MatchTemplate.
+        /// </summary>
         private bool ValidateArmyWindow()
         {
             _adb.Tap(OpenArmyWindow.X, OpenArmyWindow.Y);
@@ -192,11 +241,17 @@ namespace CvAut
             return score >= 0.60;
         }
 
+        /// <summary>
+        /// Tắt cửa sổ thông tin Quân đội.
+        /// </summary>
         private void CloseArmyWindowIfPossible()
         {
             _adb.Tap(CloseArmyWindow.X, CloseArmyWindow.Y);
         }
 
+        /// <summary>
+        /// Kiểm tra xem số lượng và chủng loại lính trong doanh trại hiện tại có khớp với chiến thuật cấu hình hay không.
+        /// </summary>
         private bool ValidateTroops(JsonElement cfg)
         {
             Console.WriteLine("[SMART] Validating current troops...");
@@ -211,6 +266,7 @@ namespace CvAut
             using Mat army = Crop(shot, ArmyRoi);
             foreach (string troop in spec.Troops)
             {
+                // Thư mục chứa template lính (Rồng điện nằm ở s_troops, Rồng thường/Balloon ở Army Troops)
                 string subdir = troop.Equals("electro_dragon", StringComparison.OrdinalIgnoreCase) ? "s_troops" : "Army Troops";
                 if (!TryMatch(subdir, troop, army, 0.86, out Point center, out double score))
                 {
@@ -225,6 +281,9 @@ namespace CvAut
             return true;
         }
 
+        /// <summary>
+        /// Kiểm tra xem lượng phép Cuồng nộ và Đóng băng trong nhà phép có đủ để đánh trận không.
+        /// </summary>
         private bool ValidateSpells()
         {
             Console.WriteLine("[SMART] Validating spells...");
@@ -251,6 +310,9 @@ namespace CvAut
             return true;
         }
 
+        /// <summary>
+        /// Kiểm tra xem xe công thành Stone Slammer có sẵn sàng hay không.
+        /// </summary>
         private bool ValidateSiege()
         {
             Console.WriteLine("[SMART] Validating siege machines...");
@@ -273,6 +335,9 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// Chẩn đoán hiển thị ảnh lưu sẵn của Quân đội để kiểm tra tính chính xác của các mẫu template khớp ảnh.
+        /// </summary>
         public static void DiagnoseSavedArmyWindow(string imagePath, string templatesPath)
         {
             string templateRoot = Path.Combine(templatesPath, "Smart_Auto_train");
@@ -301,6 +366,13 @@ namespace CvAut
             DiagnoseTemplate(shot, templateRoot, vision, SiegeRoi, "Siege Machines", "slammer", ValidationIconThreshold);
         }
 
+        /// <summary>
+        /// Thực hiện quy trình xếp hàng huấn luyện lính mới:
+        /// 1. Dọn dẹp hàng chờ cũ (Clear queue) để tránh lính bị kẹt hàng chờ sai cấu hình.
+        /// 2. Quét đọc dung lượng sức chứa tối đa của doanh trại.
+        /// 3. Tính toán số lượng Rồng/Rồng điện và Balloon tối ưu nhất cho dung lượng đó (theo tỉ lệ 80% lính chính).
+        /// 4. Click liên tục các icon lính tương ứng để xếp hàng huấn luyện.
+        /// </summary>
         private void TrainTroops(JsonElement cfg)
         {
             ArmySpec spec = GetArmySpec(cfg);
@@ -312,6 +384,7 @@ namespace CvAut
             Thread.Sleep(1000);
 
             using Mat? shot = _adb.TakeScreenshot();
+            // Đọc sức chứa tối đa doanh trại, mặc định 260 nếu không quét được
             int limit = shot == null || shot.Empty() ? 260 : MeasureArmySpace(shot) ?? 260;
             (int mainCount, int balloonCount) = GetExpectedTroopCounts(spec, limit);
 
@@ -324,6 +397,13 @@ namespace CvAut
             Console.WriteLine("[TRAIN] Troops queued successfully.");
         }
 
+        /// <summary>
+        /// Thực hiện quy trình chế tạo phép mới:
+        /// 1. Dọn dẹp hàng chờ phép cũ.
+        /// 2. Đo sức chứa nhà phép.
+        /// 3. Tính toán số lượng phép Cuồng nộ và Đóng băng.
+        /// 4. Click chế tạo phép tương ứng.
+        /// </summary>
         private void TrainSpells()
         {
             Console.WriteLine("[TRAIN] Initiating spell production load...");
@@ -345,6 +425,9 @@ namespace CvAut
             Console.WriteLine("[TRAIN] Spells queued successfully.");
         }
 
+        /// <summary>
+        /// Thực hiện chế tạo xe công thành Stone Slammer.
+        /// </summary>
         private void TrainSlammer()
         {
             Console.WriteLine("[TRAIN] Queuing Stone Slammer production...");
@@ -355,6 +438,7 @@ namespace CvAut
             Thread.Sleep(1000);
 
             Console.WriteLine("[TRAIN] 3xslammer");
+            // Xếp hàng chế tạo tối đa 3 xe
             TapIconInTab("slammer", 3);
 
             _adb.Tap(CloseSiegeTab.X, CloseSiegeTab.Y);
@@ -362,13 +446,14 @@ namespace CvAut
             Console.WriteLine("[TRAIN] Stone Slammer queued.");
         }
 
-
-
         private void ClearQueue(Rect roi, Point tapCoord, Point confirmCoord)
         {
             ClearIfTrash(roi, tapCoord, confirmCoord);
         }
 
+        /// <summary>
+        /// Phát hiện xem nút dọn hàng chờ (Trash Icon) có tồn tại hay không. Nếu có, thực hiện nhấp xóa và xác nhận.
+        /// </summary>
         private void ClearIfTrash(Rect roi, Point tapCoord, Point confirmCoord)
         {
             using Mat? shot = _adb.TakeScreenshot();
@@ -378,6 +463,7 @@ namespace CvAut
             }
 
             using Mat crop = Crop(shot, roi);
+            // Tìm kiếm nút sọt rác màu đỏ
             if (!TryMatch("to_train", "trash_icon", crop, 0.80, out _, out _))
             {
                 return;
@@ -390,6 +476,9 @@ namespace CvAut
             Thread.Sleep(1000);
         }
 
+        /// <summary>
+        /// Thực hiện nhấp liên tục vào icon lính/phép trong tab huấn luyện.
+        /// </summary>
         private void TapIconInTab(string name, int count)
         {
             if (count <= 0)
@@ -403,6 +492,7 @@ namespace CvAut
                 return;
             }
 
+            // Dò tìm vị trí của icon lính/phép để chạm chính xác
             if (!TryMatch("to_train", name, shot, 0.70, out Point center, out double score))
             {
                 Console.WriteLine($"[TRAIN] {name}.png not found in tab (score={score:F3})");
@@ -414,12 +504,18 @@ namespace CvAut
             {
                 Console.WriteLine($"[TRAIN] tap {i + 1}/{count} -> ({center.X},{center.Y}) score={score:F3}");
                 _adb.Tap(center.X, center.Y);
-                Thread.Sleep(100);
+                Thread.Sleep(100); // Tránh chạm quá nhanh khiến hệ thống game phản hồi không kịp
             }
         }
 
+        /// <summary>
+        /// Đo đạc dung lượng tối đa của doanh trại.
+        /// Thử chạy OCR phân tích văn bản ở vùng hiển thị sức chứa lính.
+        /// Nếu thất bại, chuyển sang cơ chế so khớp mẫu dự phòng (MeasureArmySpaceSecondary).
+        /// </summary>
         private int? MeasureArmySpace(Mat shot)
         {
+            // Trích xuất số lượng bằng bộ nhị phân OCR
             if (_vision.TryExtractNumericalMetrics(shot, SpaceRoi, out int limit, out double confidence, useRgbThresh: true)
                 && limit >= 120)
             {
@@ -431,6 +527,10 @@ namespace CvAut
             return MeasureArmySpaceSecondary(shot);
         }
 
+        /// <summary>
+        /// Cơ chế dự phòng đo sức chứa doanh trại bằng cách so khớp mẫu ảnh cứng (e.g. 220, 240, 260, 280, 310, 320, 300, 340).
+        /// Dành cho trường hợp OCR đọc số lượng bị mờ/lỗi.
+        /// </summary>
         private int? MeasureArmySpaceSecondary(Mat shot)
         {
             using Mat region = Crop(shot, ArmySpaceSecondaryRoi);
@@ -488,6 +588,9 @@ namespace CvAut
             return MeasureSpellSpaceFromShot(shot);
         }
 
+        /// <summary>
+        /// Đo sức chứa tối đa của nhà phép bằng cách so khớp các template ảnh tương ứng với các sức chứa chuẩn (6, 9, 11).
+        /// </summary>
         private int? MeasureSpellSpaceFromShot(Mat shot)
         {
             using Mat spaceImage = Crop(shot, SpellSpaceRoi);
@@ -528,6 +631,10 @@ namespace CvAut
             return bestLimit.Value;
         }
 
+        /// <summary>
+        /// Xác thực số lượng lính cụ thể trên ô lính của giao diện thông tin Quân đội.
+        /// Chạy OCR đọc nhãn số lượng nằm ở góc của thẻ, tự động chuẩn hóa số đọc được chống nhận diện sai.
+        /// </summary>
         private bool ValidateIconCount(Mat shot, Rect sectionRoi, string label, Point centerInSection, int expected)
         {
             if (expected <= 0)
@@ -542,6 +649,7 @@ namespace CvAut
                 return true;
             }
 
+            // Chuẩn hóa chống OCR đọc nhầm ghép số (ví dụ đọc 20 thành 200 hoặc ngược lại)
             int normalized = NormalizeBadgeCount(actual, expected);
             if (normalized != actual)
             {
@@ -566,6 +674,9 @@ namespace CvAut
             return true;
         }
 
+        /// <summary>
+        /// Tính toán tọa độ vùng hiển thị số đếm (Badge) của một icon cụ thể dựa trên tọa độ tâm của icon đó.
+        /// </summary>
         private static Rect CountRoiForIcon(Mat shot, Rect sectionRoi, Point centerInSection)
         {
             int iconLeft = sectionRoi.X + centerInSection.X - 62;
@@ -574,6 +685,10 @@ namespace CvAut
             return ImageUtils.ClampRect(rough, shot.Width, shot.Height);
         }
 
+        /// <summary>
+        /// Sửa lỗi đọc số OCR nhầm của chữ số ở góc thẻ lính (Ví dụ: Số lính thực tế 24 nhưng đọc nhầm sang 240).
+        /// Thuật toán kiểm tra giới hạn nghi ngờ và cắt bỏ các chữ số dư thừa nếu cần.
+        /// </summary>
         private static int NormalizeBadgeCount(int actual, int expected)
         {
             int normalized = actual;
@@ -588,6 +703,10 @@ namespace CvAut
             return normalized == 0 ? actual : normalized;
         }
 
+        /// <summary>
+        /// Tính toán phân chia số lượng lính chính (Rồng/Rồng điện) và lính phụ Balloon dựa trên tổng sức chứa tối đa.
+        /// Công thức: Lính chính chiếm khoảng 80% sức chứa tối đa, phần dư còn lại được lấp đầy bằng Balloon.
+        /// </summary>
         private static (int MainCount, int BalloonCount) GetExpectedTroopCounts(ArmySpec spec, int limit)
         {
             int mainCost = SpaceCost[spec.Main];
@@ -597,6 +716,9 @@ namespace CvAut
             return (mainCount, balloonCount);
         }
 
+        /// <summary>
+        /// Tính toán phân chia số lượng phép Cuồng nộ và Đóng băng dựa trên sức chứa tối đa của nhà phép.
+        /// </summary>
         private static (int RageCount, int FreezeCount) GetExpectedSpellCounts(int limit)
         {
             int primarySpace = ((limit * 80 / 100) / 2) * 2;
@@ -808,8 +930,6 @@ namespace CvAut
                 ? spec
                 : ArmySets["Dragon_Attack"];
         }
-
-
 
         private sealed record ArmySpec(string Main, string[] Troops, string[] Spells, string Siege);
     }
