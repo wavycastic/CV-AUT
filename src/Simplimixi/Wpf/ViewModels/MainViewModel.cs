@@ -6,95 +6,224 @@ using CvAut.WpfApp.Services;
 
 namespace CvAut.WpfApp.ViewModels
 {
+    /// <summary>
+    /// ViewModel chính (Shell ViewModel) cho giao diện WPF của Simplimixi.
+    /// Quản lý việc chuyển hướng giữa các View con, trạng thái hoạt động của bot,
+    /// liên kết dữ liệu (Data Binding) với các thành phần điều khiển trên Window chính và đồng bộ với BotService.
+    /// </summary>
     public class MainViewModel : ViewModelBase
     {
+        // Dịch vụ quản lý bot
         private readonly IBotService _botService;
+        
+        // ViewModel con đang được hiển thị hiện tại trên vùng nội dung chính
         private ViewModelBase _currentViewModel;
+        
+        // Chuỗi văn bản hiển thị trạng thái bot (RUNNING, PAUSED, IDLE)
         private string _statusPillText = "IDLE";
+        
+        // Màu sắc đại diện cho trạng thái bot trên UI (ví dụ: Xanh lá cho RUNNING, Vàng cho PAUSED)
         private System.Windows.Media.Brush _statusPillBrush;
+        
+        // Thời gian bot đã chạy liên tục
         private string _uptimeText = "00:00:00";
+        
+        // Lượng RAM hệ thống tiến trình đang chiếm dụng
         private string _memoryUsageText = "0.0 MB";
+        
+        // Tỷ lệ tấn công thành công
         private string _successRateText = "100%";
+        
+        // Số trận cướp đã thực hiện
         private int _attacksCount;
+        
+        // Nhãn văn bản trên nút Tạm dừng (PAUSE / RESUME)
         private string _pauseButtonText = "PAUSE";
+        
+        // ID làng hiện tại đang chọn (từ 1 đến 5)
         private int _currentVillage = 1;
 
-        // Sub ViewModels
+        // Sub ViewModels (Các ViewModel con quản lý các Tab/Trang giao diện tương ứng)
+        
+        /// <summary>
+        /// ViewModel quản lý Cài đặt Chung (General settings).
+        /// </summary>
         public GeneralViewModel GeneralVM { get; }
+
+        /// <summary>
+        /// ViewModel quản lý Cấu hình Quân đội/Thả quân (Army settings).
+        /// </summary>
         public ArmyViewModel ArmyVM { get; }
+
+        /// <summary>
+        /// ViewModel quản lý chế độ chơi nhiều làng (Multi-Village).
+        /// </summary>
         public MultiVillageViewModel MultiVillageVM { get; }
+
+        /// <summary>
+        /// ViewModel quản lý tự động sự kiện Clan Games.
+        /// </summary>
         public ClanGamesViewModel ClanGamesVM { get; }
+
+        /// <summary>
+        /// ViewModel quản lý tự động Clan Capital (Thủ đô Clan).
+        /// </summary>
         public ClanCapitalViewModel ClanCapitalVM { get; }
+
+        /// <summary>
+        /// ViewModel hiển thị Biểu đồ/Số liệu Thống kê hiệu suất cướp.
+        /// </summary>
         public StatisticsViewModel StatisticsVM { get; }
+
+        /// <summary>
+        /// ViewModel quản lý giao diện hiển thị Log thời gian thực.
+        /// </summary>
         public LogsViewModel LogsVM { get; }
 
-        // Navigation Commands
+        // Navigation Commands (Lệnh chuyển đổi giữa các màn hình con)
+        
+        /// <summary>
+        /// Lệnh chuyển sang màn hình Cài đặt Chung.
+        /// </summary>
         public ICommand NavigateGeneralCommand { get; }
+
+        /// <summary>
+        /// Lệnh chuyển sang màn hình Cấu hình Quân đội.
+        /// </summary>
         public ICommand NavigateArmyCommand { get; }
+
+        /// <summary>
+        /// Lệnh chuyển sang màn hình Cấu hình Nhiều Làng.
+        /// </summary>
         public ICommand NavigateMultiVillageCommand { get; }
+
+        /// <summary>
+        /// Lệnh chuyển sang màn hình Clan Games.
+        /// </summary>
         public ICommand NavigateClanGamesCommand { get; }
+
+        /// <summary>
+        /// Lệnh chuyển sang màn hình Clan Capital.
+        /// </summary>
         public ICommand NavigateClanCapitalCommand { get; }
+
+        /// <summary>
+        /// Lệnh chuyển sang màn hình Thống kê.
+        /// </summary>
         public ICommand NavigateStatisticsCommand { get; }
+
+        /// <summary>
+        /// Lệnh chuyển sang màn hình Xem Logs.
+        /// </summary>
         public ICommand NavigateLogsCommand { get; }
 
-        // Bot Control Commands
+        // Bot Control Commands (Lệnh điều khiển hoạt động của Bot)
+        
+        /// <summary>
+        /// Lệnh kích hoạt chạy Bot.
+        /// </summary>
         public ICommand StartCommand { get; }
+
+        /// <summary>
+        /// Lệnh dừng Bot.
+        /// </summary>
         public ICommand StopCommand { get; }
+
+        /// <summary>
+        /// Lệnh tạm dừng hoặc tiếp tục chạy Bot.
+        /// </summary>
         public ICommand TogglePauseCommand { get; }
 
-        // Village switching commands
+        // Village switching commands (Lệnh chuyển đổi qua lại giữa 5 cấu hình làng)
+        
+        /// <summary>
+        /// Lệnh chuyển về làng phía trước.
+        /// </summary>
         public ICommand PrevVillageCommand { get; }
+
+        /// <summary>
+        /// Lệnh chuyển đến làng tiếp theo.
+        /// </summary>
         public ICommand NextVillageCommand { get; }
 
-        // Properties
+        // Properties (Thuộc tính Data Binding)
+        
+        /// <summary>
+        /// ViewModel con hiện tại đang được hiển thị trong NavigationView của MainWindow.
+        /// </summary>
         public ViewModelBase CurrentViewModel
         {
             get => _currentViewModel;
             set => SetProperty(ref _currentViewModel, value);
         }
 
+        /// <summary>
+        /// Văn bản trạng thái bot (IDLE, RUNNING, PAUSED).
+        /// </summary>
         public string StatusPillText
         {
             get => _statusPillText;
             set => SetProperty(ref _statusPillText, value);
         }
 
+        /// <summary>
+        /// Màu sắc của hình tròn/nền trạng thái tương ứng trên giao diện.
+        /// </summary>
         public System.Windows.Media.Brush StatusPillBrush
         {
             get => _statusPillBrush;
             set => SetProperty(ref _statusPillBrush, value);
         }
 
+        /// <summary>
+        /// Thời gian hoạt động liên tục dạng chuỗi.
+        /// </summary>
         public string UptimeText
         {
             get => _uptimeText;
             set => SetProperty(ref _uptimeText, value);
         }
 
+        /// <summary>
+        /// Lượng RAM tiêu thụ dạng chuỗi.
+        /// </summary>
         public string MemoryUsageText
         {
             get => _memoryUsageText;
             set => SetProperty(ref _memoryUsageText, value);
         }
 
+        /// <summary>
+        /// Tỷ lệ tấn công thành công dạng chuỗi.
+        /// </summary>
         public string SuccessRateText
         {
             get => _successRateText;
             set => SetProperty(ref _successRateText, value);
         }
 
+        /// <summary>
+        /// Số trận cướp đã thực hiện.
+        /// </summary>
         public int AttacksCount
         {
             get => _attacksCount;
             set => SetProperty(ref _attacksCount, value);
         }
 
+        /// <summary>
+        /// Văn bản hiển thị trên nút tạm dừng (PAUSE hoặc RESUME).
+        /// </summary>
         public string PauseButtonText
         {
             get => _pauseButtonText;
             set => SetProperty(ref _pauseButtonText, value);
         }
 
+        /// <summary>
+        /// Chỉ số ID làng hiện tại (1-5). Khi thay đổi sẽ đồng bộ sang BotService
+        /// và yêu cầu các ViewModel con (GeneralVM, ArmyVM) tự động tải lại cấu hình tương ứng.
+        /// </summary>
         public int CurrentVillage
         {
             get => _currentVillage;
@@ -104,24 +233,42 @@ namespace CvAut.WpfApp.ViewModels
                 {
                     _botService.CurrentVillage = value;
                     OnPropertyChanged(nameof(CurrentVillageName));
-                    // Reload configs for the selected village
+                    // Tải lại cấu hình của làng vừa được chọn
                     GeneralVM.LoadConfig();
                     ArmyVM.LoadConfig();
                 }
             }
         }
 
+        /// <summary>
+        /// Chuỗi tên hiển thị của làng hiện tại (ví dụ: "Village 1").
+        /// </summary>
         public string CurrentVillageName => $"Village {CurrentVillage}";
 
+        /// <summary>
+        /// Điều kiện để kích hoạt nút Khởi chạy Bot (chỉ khi bot đang không chạy).
+        /// </summary>
         public bool IsStartButtonEnabled => !_botService.IsRunning;
+
+        /// <summary>
+        /// Điều kiện để kích hoạt nút Dừng Bot (khi bot đang chạy).
+        /// </summary>
         public bool IsEndButtonEnabled => _botService.IsRunning;
+
+        /// <summary>
+        /// Điều kiện để kích hoạt nút Tạm dừng Bot (khi bot đang chạy).
+        /// </summary>
         public bool IsPauseButtonEnabled => _botService.IsRunning;
 
+        /// <summary>
+        /// Khởi tạo MainViewModel, liên kết dịch vụ BotService, khởi tạo các ViewModel con và thiết lập các Command.
+        /// </summary>
+        /// <param name="botService">Dịch vụ điều khiển bot.</param>
         public MainViewModel(IBotService botService)
         {
             _botService = botService;
 
-            // Instantiation
+            // Khởi tạo các trang ViewModel con
             GeneralVM = new GeneralViewModel(_botService);
             ArmyVM = new ArmyViewModel(_botService);
             MultiVillageVM = new MultiVillageViewModel(_botService);
@@ -130,17 +277,17 @@ namespace CvAut.WpfApp.ViewModels
             StatisticsVM = new StatisticsViewModel(_botService);
             LogsVM = new LogsViewModel(_botService);
 
-            // Default Page
+            // Trang mặc định khi mở app là Cài đặt Chung
             _currentViewModel = GeneralVM;
 
-            // Colors
-            _statusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(132, 153, 184)); // Muted gray
+            // Màu mặc định cho trạng thái IDLE (Xám nhạt)
+            _statusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(132, 153, 184));
 
-            // Wire up events
+            // Đăng ký nhận sự kiện thay đổi trạng thái và cập nhật số liệu từ BotService
             _botService.StatusChanged += OnBotStatusChanged;
             _botService.StatsUpdated += OnBotStatsUpdated;
 
-            // Command Wiring
+            // Đăng ký các lệnh chuyển trang (Navigation)
             NavigateGeneralCommand = new RelayCommand(() => CurrentViewModel = GeneralVM);
             NavigateArmyCommand = new RelayCommand(() => CurrentViewModel = ArmyVM);
             NavigateMultiVillageCommand = new RelayCommand(() => CurrentViewModel = MultiVillageVM);
@@ -149,10 +296,12 @@ namespace CvAut.WpfApp.ViewModels
             NavigateStatisticsCommand = new RelayCommand(() => CurrentViewModel = StatisticsVM);
             NavigateLogsCommand = new RelayCommand(() => CurrentViewModel = LogsVM);
 
+            // Đăng ký các lệnh điều khiển bot
             StartCommand = new RelayCommand(StartBot);
             StopCommand = new RelayCommand(StopBot);
             TogglePauseCommand = new RelayCommand(TogglePause);
 
+            // Đăng ký lệnh chuyển đổi giữa 5 tài khoản làng vòng lặp (1 -> 5 -> 1)
             PrevVillageCommand = new RelayCommand(() =>
             {
                 if (CurrentVillage > 1) CurrentVillage--;
@@ -164,56 +313,71 @@ namespace CvAut.WpfApp.ViewModels
                 else CurrentVillage = 1;
             });
 
+            // Cập nhật trạng thái và thống kê ban đầu
             OnBotStatusChanged();
             OnBotStatsUpdated();
         }
 
+        /// <summary>
+        /// Thực hiện lưu cấu hình hiện tại ở các Tab xuống tệp tin trước khi bắt đầu khởi chạy bot.
+        /// </summary>
         private void StartBot()
         {
-            // Save configuration first
             GeneralVM.SaveConfig();
             ArmyVM.SaveConfig();
 
             _botService.StartBot();
         }
 
+        /// <summary>
+        /// Yêu cầu dừng bot thông qua BotService.
+        /// </summary>
         private void StopBot()
         {
             _botService.StopBot();
         }
 
+        /// <summary>
+        /// Yêu cầu tạm dừng hoặc tiếp tục chạy bot thông qua BotService.
+        /// </summary>
         private void TogglePause()
         {
             _botService.TogglePause();
         }
 
+        /// <summary>
+        /// Cập nhật màu sắc trạng thái và nhãn hiển thị khi trạng thái bot thay đổi.
+        /// </summary>
         private void OnBotStatusChanged()
         {
             StatusPillText = _botService.StatusText;
             
-            // Neon Green for running, Yellow/Amber for paused, Muted Blue-gray for idle
+            // Xanh neon lá cây cho RUNNING, Cam cho PAUSED, Xám nhạt cho IDLE
             if (StatusPillText == "RUNNING")
             {
-                StatusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(74, 222, 128)); // #4ADE80 Emerald status
+                StatusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(74, 222, 128)); // #4ADE80
                 PauseButtonText = "PAUSE";
             }
             else if (StatusPillText == "PAUSED")
             {
-                StatusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 204, 21)); // #FACC15 Amber warning
+                StatusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 204, 21)); // #FACC15
                 PauseButtonText = "RESUME";
             }
             else // IDLE
             {
-                StatusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(148, 163, 184)); // #94A3B8 Muted text
+                StatusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(148, 163, 184)); // #94A3B8
                 PauseButtonText = "PAUSE";
             }
 
-            // Trigger updates of control button enabled states
+            // Phát sự kiện thay đổi trạng thái kích hoạt của các nút điều khiển để UI cập nhật
             OnPropertyChanged(nameof(IsStartButtonEnabled));
             OnPropertyChanged(nameof(IsEndButtonEnabled));
             OnPropertyChanged(nameof(IsPauseButtonEnabled));
         }
 
+        /// <summary>
+        /// Đồng bộ các chỉ số thống kê từ BotService lên các thuộc tính giao diện của MainViewModel.
+        /// </summary>
         private void OnBotStatsUpdated()
         {
             UptimeText = _botService.UptimeText;

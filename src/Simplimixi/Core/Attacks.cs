@@ -7,12 +7,22 @@ using Point = OpenCvSharp.Point;
 
 namespace CvAut
 {
+    /// <summary>
+    /// Thông tin tọa độ thả của một vị tướng (Hero) trong game.
+    /// </summary>
     public class HeroInfo
     {
         public string Name { get; set; } = "";
         public Point Coord { get; set; }
     }
 
+    /// <summary>
+    /// Phân hệ Tấn công (Attacks):
+    /// - Quản lý tọa độ rải quân mặc định theo cánh trái/phải đối xứng.
+    /// - Dò tìm các thẻ quân, phép, tướng hiện có trên giao diện chiến trận dưới đáy màn hình.
+    /// - Thực hiện kịch bản rải quân (tạp biến ngẫu nhiên chống chống-bot), rải phép đóng băng/cuồng nộ.
+    /// - Quét số lượng lính còn dư để tiến hành rải bù.
+    /// </summary>
     public class Attacks
     {
         private readonly ADBHelper _adb;
@@ -27,9 +37,11 @@ namespace CvAut
         private const int MaxRemainingDeployPasses = 3;
         private const int SpellTabMinSeparationPx = 45;
         private const double SpellTabAmbiguityScoreDelta = 0.06;
+        
+        // Vùng ROI của thanh thả quân dưới đáy màn hình (chứa thẻ lính, phép, tướng)
         private static readonly Rect DeployBarRoi = Rect.FromLTRB(70, 720, 1180, 890);
 
-        // Coordinate presets for troop/spell deployment (Left-side)
+        // Tọa độ rải quân mẫu của Rồng ở cánh TRÁI (Left-side)
         private static readonly List<Point> DragonL = new()
         {
             new(170, 384), new(214, 348), new(246, 327), new(270, 306), new(305, 285), new(345, 255),
@@ -37,6 +49,7 @@ namespace CvAut
             new(640, 35),  new(442, 182)
         };
 
+        // Tọa độ rải Balloon ở cánh TRÁI
         private static readonly List<Point> BalloonL = new()
         {
             new(170, 384), new(214, 348), new(246, 327), new(270, 306), new(305, 285), new(345, 255),
@@ -44,6 +57,7 @@ namespace CvAut
             new(345, 255), new(444, 183), new(368, 238), new(246, 327), new(417, 201)
         };
 
+        // Tọa độ rải quân mẫu của Rồng ở cánh PHẢI (Right-side)
         private static readonly List<Point> DragonR = new()
         {
             new(1344, 346), new(1272, 295), new(1234, 261), new(1191, 229), new(1150, 200), new(1116, 173),
@@ -51,6 +65,7 @@ namespace CvAut
             new(1091, 152), new(1109, 172)
         };
 
+        // Tọa độ rải quân Rồng dự phòng ở cánh TRÁI (dùng khi rải bù lính bị kẹt)
         private static readonly List<Point> DragonFallbackL = new()
         {
             new(145, 420), new(171, 384), new(214, 348), new(246, 327), new(270, 306), new(305, 285),
@@ -58,6 +73,7 @@ namespace CvAut
             new(185, 500), new(238, 562), new(304, 616), new(374, 670)
         };
 
+        // Tọa độ rải Balloon dự phòng ở cánh TRÁI
         private static readonly List<Point> BalloonFallbackL = new()
         {
             new(145, 420), new(170, 384), new(214, 348), new(246, 327), new(270, 306), new(305, 285),
@@ -65,6 +81,7 @@ namespace CvAut
             new(534, 122), new(185, 500), new(238, 562), new(304, 616), new(374, 670)
         };
 
+        // Tọa độ rải Balloon ở cánh PHẢI
         private static readonly List<Point> BalloonR = new()
         {
             new(1344, 346), new(1272, 295), new(1234, 261), new(1191, 229), new(1150, 200), new(1116, 173),
@@ -72,16 +89,19 @@ namespace CvAut
             new(1091, 152), new(1109, 172), new(1207, 209), new(1296, 273), new(1311, 256)
         };
 
+        // Tọa độ thả phép Cuồng nộ (Rage Spell) cánh TRÁI
         private static readonly List<Point> RageL = new()
         {
             new(549, 353), new(674, 247), new(797, 317), new(690, 439), new(777, 403)
         };
 
+        // Tọa độ thả phép Đóng băng (Freeze Spell) cánh TRÁI
         private static readonly List<Point> FreezeL = new()
         {
             new(614, 371), new(769, 276), new(770, 363), new(704, 494), new(798, 405), new(874, 405)
         };
 
+        // Tọa độ thả Tướng (Heroes) ở cánh TRÁI
         private static readonly List<HeroInfo> HeroL = new()
         {
             new() { Name = "siege_machine", Coord = new Point(364, 236) },
@@ -96,22 +116,31 @@ namespace CvAut
         private Dictionary<string, List<Point>> _fallbackDeployCoords = new();
         private List<HeroInfo> _heroCoords = new();
         private Dictionary<string, Point> _tabs = new();
-        private string _side = "left";
+        private string _side = "left"; // Cánh tấn công ("left" hoặc "right")
         private readonly HashSet<string> _requiredTabs = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// Khởi tạo đối tượng Attacks điều khiển trận đánh.
+        /// </summary>
         public Attacks(ADBHelper adb, VisionEngine vision)
         {
             _adb = adb;
             _vision = vision;
         }
 
+        /// <summary>
+        /// Thêm độ lệch ngẫu nhiên (Jitter) vào tọa độ chạm ban đầu.
+        /// Việc này giúp tạo mô phỏng thao tác của con người, tránh các thuật toán phát hiện bot (Anti-Cheat) của nhà phát hành game.
+        /// </summary>
+        /// <param name="pt">Tọa độ đích ban đầu.</param>
+        /// <returns>Tọa độ mới đã được thêm độ lệch ngẫu nhiên nhỏ.</returns>
         private Point JitterCoord(Point pt)
         {
             int dx, dy;
             if (_side == "left")
             {
-                dx = _rand.Next(0, 40);       // [0, 39]
-                dy = _rand.Next(-27, 1);      // [-27, 0]
+                dx = _rand.Next(0, 40);       // Độ lệch X ngẫu nhiên [0, 39]
+                dy = _rand.Next(-27, 1);      // Độ lệch Y ngẫu nhiên [-27, 0]
             }
             else if (_side == "right")
             {
@@ -126,6 +155,9 @@ namespace CvAut
             return new Point(pt.X + dx, pt.Y + dy);
         }
 
+        /// <summary>
+        /// Khởi tạo các mẫu rải quân. Nếu chọn tấn công cánh PHẢI, tự động quy đổi đối xứng tọa độ (mirror) theo chiều ngang của màn hình 1600px.
+        /// </summary>
         private void InitializePatterns()
         {
             _deployCoords.Clear();
@@ -150,6 +182,7 @@ namespace CvAut
             }
             else
             {
+                // Quy đổi đối xứng tọa độ từ trái qua phải (1600 - x)
                 Converter<Point, Point> mirror = pt => new Point(ScreenWidth - 1 - pt.X, pt.Y);
 
                 _deployCoords["dragon"] = DragonR;
@@ -168,6 +201,10 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Thực hiện quét và dò tìm vị trí tọa độ của tất cả các thẻ quân đang có trên DeployBar ở đáy màn hình.
+        /// Lưu tọa độ vào Dictionary _tabs để bot có thể bấm chọn lính/phép chính xác.
+        /// </summary>
         public void UpdateTabs()
         {
             Console.WriteLine("[ATTACK-CS] Đang dò tìm các thẻ lính/phép ở dưới màn hình...");
@@ -207,6 +244,7 @@ namespace CvAut
                     Console.WriteLine($"[TPL] {kvp.Key} primary scan: template='{kvp.Value}', threshold={threshold:F2}, score={score:F2}, found={(coord != null ? coord.Value.ToString() : "null")}");
                 }
 
+                // Dò tìm dự phòng cho phép Đóng băng (Freeze) nếu tìm kiếm chính thất bại
                 if (coord == null && kvp.Key == "freeze")
                 {
                     double fallbackThreshold = 0.40;
@@ -232,6 +270,7 @@ namespace CvAut
 
                 if (coord != null)
                 {
+                    // Lọc trùng lặp để tránh gán nhầm sang thẻ bên cạnh do khoảng cách quá gần
                     if (IsDuplicateTab(coord.Value, out string existingName))
                     {
                         Console.WriteLine($"[TPL] {kvp.Key} duplicate of {existingName} at {coord.Value} (score={score:F2}) -> skipped");
@@ -245,11 +284,10 @@ namespace CvAut
                 if (coord == null && _requiredTabs.Contains(kvp.Key))
                 {
                     Console.WriteLine($"[TPL] {kvp.Key} not found (score={score:F2}, threshold={threshold:F2})");
-
                 }
             }
 
-            // Dò xe công thành
+            // Dò tìm xe công thành (Siege Machine) - có 2 trường hợp: Có quân (siege_with_troops) hoặc rỗng (empty_siege)
             Point? swt = _vision.FindElement(screenshot, "troops/siege_with_troops", MatchThreshold, DeployBarRoi, out double swtScore);
             Point? es = _vision.FindElement(screenshot, "troops/empty_siege", MatchThreshold, DeployBarRoi, out double esScore);
             Console.WriteLine($"[DEBUG] siege_with_troops: max match = {swtScore:F3}");
@@ -271,6 +309,9 @@ namespace CvAut
             return Math.Abs(a.X - b.X) <= SpellTabMinSeparationPx && Math.Abs(a.Y - b.Y) <= SpellTabMinSeparationPx;
         }
 
+        /// <summary>
+        /// Kiểm tra xem tọa độ thẻ quân mới quét được có bị trùng lặp với tọa độ thẻ đã ghi nhận hay không.
+        /// </summary>
         private bool IsDuplicateTab(Point candidate, out string existingName)
         {
             foreach (var kvp in _tabs)
@@ -288,6 +329,9 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// Bấm chọn thẻ và thả nhanh một số lượng quân chỉ định (như goblin sự kiện) theo tọa độ rải rác nhanh.
+        /// </summary>
         private void DeployOptionalQuickDrop(string troopKey, int limit = 10)
         {
             Console.WriteLine($"[ATTACK-CS] Làm mới vị trí thẻ '{troopKey}' trước khi thả nhanh...");
@@ -318,6 +362,9 @@ namespace CvAut
             _adb.TapSequence(quickTaps);
         }
 
+        /// <summary>
+        /// Thả một loại quân chỉ định. Bấm chọn thẻ quân và nhấp thả một chuỗi tọa độ (TapSequence).
+        /// </summary>
         public void DeployTroops(string troopKey)
         {
             string key = troopKey.ToLower();
@@ -353,6 +400,10 @@ namespace CvAut
             Console.WriteLine($"[ATTACK-CS DEBUG] '{troopKey}' deploy elapsed={sw.ElapsedMilliseconds}ms.");
         }
 
+        /// <summary>
+        /// Đảm bảo quân lính được thả hoàn toàn (rải bù nếu đọc thấy số lượng lính còn thừa trên giao diện thẻ).
+        /// Chạy tối đa 3 chu kỳ quét số dư và rải bù bằng tọa độ dự phòng (Fallback).
+        /// </summary>
         public void EnsureTroopFullyDeployed(string troopKey)
         {
             string key = troopKey.ToLower();
@@ -410,6 +461,10 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Thực hiện đọc số lượng lính còn thừa hiển thị ở góc trên cùng bên phải của thẻ quân.
+        /// Chạy thử 3 vùng ROI khác nhau để tìm vùng đọc đạt độ tin cậy cao nhất.
+        /// </summary>
         private int ReadRemainingTroopCount(string troopKey, out double confidence)
         {
             confidence = 0;
@@ -424,18 +479,21 @@ namespace CvAut
                 return -1;
             }
 
+            // Thử vùng ROI số 1
             Rect countRoi = Rect.FromLTRB(tab.X - 5, tab.Y - 94, tab.X + 72, tab.Y - 42);
             if (TryReadCountFromRoi(screenshot, countRoi, out int value, out confidence))
             {
                 return value;
             }
 
+            // Thử vùng ROI số 2 (chỉ lấy phần chữ số)
             Rect digitOnlyRoi = Rect.FromLTRB(tab.X + 22, tab.Y - 96, tab.X + 78, tab.Y - 50);
             if (TryReadCountFromRoi(screenshot, digitOnlyRoi, out value, out confidence))
             {
                 return value;
             }
 
+            // Thử vùng ROI số 3 (rộng hơn)
             Rect widerCountRoi = Rect.FromLTRB(tab.X - 20, tab.Y - 98, tab.X + 78, tab.Y - 40);
             if (TryReadCountFromRoi(screenshot, widerCountRoi, out value, out confidence))
             {
@@ -445,21 +503,33 @@ namespace CvAut
             return -1;
         }
 
+        /// <summary>
+        /// Chạy OCR trích xuất số lượng lính còn thừa trong ROI.
+        /// </summary>
         private bool TryReadCountFromRoi(Mat screenshot, Rect roi, out int value, out double confidence)
         {
+            // Thử dùng RGB thresholding trước để loại bỏ nền thẻ lính
             if (_vision.TryExtractNumericalMetrics(screenshot, roi, out value, out confidence, useRgbThresh: true) && IsPlausibleTroopCount(value, confidence))
             {
                 return true;
             }
 
+            // Thử dùng Threshold xám thông thường
             return _vision.TryExtractNumericalMetrics(screenshot, roi, out value, out confidence) && IsPlausibleTroopCount(value, confidence);
         }
 
+        /// <summary>
+        /// Kiểm tra xem giá trị số lính đọc được có khả thi hay không (độ tin cậy > 55% và số nằm trong khoảng 0-99).
+        /// </summary>
         private static bool IsPlausibleTroopCount(int value, double confidence)
         {
             return confidence >= 0.55 && value >= 0 && value <= 99;
         }
 
+        /// <summary>
+        /// Thả toàn bộ Tướng (Heroes) hiện có trên DeployBar theo các vị trí thả chỉ định.
+        /// Bỏ qua xe công thành vì xe được kích hoạt riêng qua DeployTroops("siege_machine").
+        /// </summary>
         public void DeployHeroes()
         {
             Console.WriteLine("[ATTACK-CS] Làm mới vị trí thẻ tướng trước khi triển khai...");
@@ -469,8 +539,7 @@ namespace CvAut
             Stopwatch sw = Stopwatch.StartNew();
             foreach (var hero in _heroCoords)
             {
-                // Skip siege_machine — already deployed via DeployTroops("siege_machine").
-                // Re-tapping a deployed siege in CoC triggers self-destruct.
+                // Bỏ qua xe công thành vì nhấp lại xe đã thả sẽ kích hoạt tự hủy (self-destruct) trong game CoC
                 if (hero.Name == "siege_machine") continue;
 
                 if (_tabs.TryGetValue(hero.Name, out Point tab))
@@ -485,6 +554,9 @@ namespace CvAut
             Console.WriteLine($"[ATTACK-CS DEBUG] Heroes deploy elapsed={sw.ElapsedMilliseconds}ms.");
         }
 
+        /// <summary>
+        /// Bấm chọn thẻ và thả phép (Spell) tại các điểm chỉ định, có độ trễ giữa các lần thả để tránh thả chồng chéo.
+        /// </summary>
         public void DeploySpells(string spellKey)
         {
             if (!TryResolveSpellDeployment(spellKey, out Point tab, out List<Point> coords, out int delay))
@@ -507,11 +579,15 @@ namespace CvAut
             Console.WriteLine($"[ATTACK-CS DEBUG] '{spellKey}' spell elapsed={sw.ElapsedMilliseconds}ms.");
         }
 
+        /// <summary>
+        /// Phân tích và nạp các thông tin thẻ phép để chuẩn bị thả.
+        /// </summary>
         private bool TryResolveSpellDeployment(string spellKey, out Point tab, out List<Point> coords, out int delay)
         {
             string key = spellKey.ToLower();
             tab = default;
             coords = new List<Point>();
+            // Phép cuồng nộ thả nhanh hơn (delay 1s), phép băng thả chậm hơn để khống chế (delay 2s)
             delay = key == "rage" ? 1000 : 2000;
 
             Console.WriteLine($"[ATTACK-CS] Làm mới vị trí thẻ phép '{spellKey}' trước khi thả...");
@@ -529,10 +605,12 @@ namespace CvAut
             }
 
             coords = resolvedCoords;
-
             return true;
         }
 
+        /// <summary>
+        /// Nhấp lại liên tục vào các thẻ Tướng để kích hoạt kỹ năng đặc biệt (Special Ability/Iron Fist/Royal Cloak...) của họ.
+        /// </summary>
         public void RetapHeroes()
         {
             Console.WriteLine("[ATTACK-CS] Làm mới vị trí thẻ tướng trước khi kích hoạt kỹ năng...");
@@ -549,8 +627,14 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Chạy toàn bộ kịch bản tấn công (tấn công bằng Rồng hoặc Rồng điện) theo chiến thuật chỉ định.
+        /// Tự động sinh ngẫu nhiên hướng tấn công là cánh Trái hay cánh Phải để đa dạng hóa hành vi.
+        /// </summary>
+        /// <param name="attackStrategy">Chiến thuật tấn công ("Dragon_Attack" hoặc "ElectroDragon_Attack").</param>
         public void Run(string attackStrategy = "Dragon_Attack")
         {
+            // Ngẫu nhiên chọn hướng tấn công trái/phải
             _side = _rand.Next(0, 2) == 0 ? "left" : "right";
             InitializePatterns();
 
@@ -572,22 +656,34 @@ namespace CvAut
                 }
 
                 UpdateTabs();
+                
+                // Kịch bản rải Rồng và kiểm tra thả hết lính
                 DeployTroops("dragon");
                 EnsureTroopFullyDeployed("dragon");
+                
+                // Thả quân hỗ trợ
                 DeployTroops("ice_minion");
                 DeployTroops("ice_golem");
                 DeployTroops("azure_dragon");
 
+                // Thả nhanh quân sự kiện phụ trợ
                 DeployOptionalQuickDrop("event_goblin");
                 DeployOptionalQuickDrop("nguoimay", 50);
                 DeployOptionalQuickDrop("phuthuycuoichoi", 50);
 
+                // Thả Balloon đi kèm để dọn bẫy bay và hút sát thương
                 DeployTroops("balloon");
                 EnsureTroopFullyDeployed("balloon");
+                
+                // Thả xe công thành và Tướng
                 DeployTroops("siege_machine");
                 DeployHeroes();
+                
+                // Thả phép hỗ trợ
                 DeploySpells("rage");
                 DeploySpells("freeze");
+                
+                // Kiểm tra lại lần cuối để rải nốt số lính còn kẹt
                 EnsureTroopFullyDeployed("dragon");
                 EnsureTroopFullyDeployed("balloon");
             }
@@ -605,6 +701,8 @@ namespace CvAut
                 }
 
                 UpdateTabs();
+                
+                // Rải Rồng điện (E-Drag)
                 DeployTroops("e_drag");
                 DeployTroops("ice_minion");
                 DeployTroops("ice_golem");
@@ -614,10 +712,13 @@ namespace CvAut
                 DeployOptionalQuickDrop("nguoimay", 50);
                 DeployOptionalQuickDrop("phuthuycuoichoi", 50);
 
+                // Rải Balloon
                 DeployTroops("balloon");
                 EnsureTroopFullyDeployed("balloon");
+                
                 DeployTroops("siege_machine");
                 DeployHeroes();
+                
                 DeploySpells("rage");
                 DeploySpells("freeze");
             }
@@ -628,6 +729,7 @@ namespace CvAut
                 Console.WriteLine($"[ATTACK-CS ERROR] Chiến thuật không xác định: {attackStrategy}");
             }
 
+            // Kích hoạt kỹ năng đặc biệt của Tướng
             RetapHeroes();
             Console.WriteLine("[ATTACK-CS] Kịch bản cướp trận hoàn tất.");
         }

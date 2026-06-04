@@ -11,6 +11,13 @@ using Point = OpenCvSharp.Point;
 
 namespace CvAut
 {
+    /// <summary>
+    /// Lớp tiện ích quản lý toàn bộ các giao tiếp qua ADB (Android Debug Bridge) với giả lập:
+    /// - Kết nối và quản lý vòng đời Server ADB.
+    /// - Thực hiện các cử chỉ cơ bản ngẫu nhiên: Chạm (Tap), Vuốt (Swipe), Chạm chuỗi (TapSequence).
+    /// - Điều khiển thu phóng nâng cao qua UIAutomator2 Server bằng giao thức JSON-RPC (PinchIn).
+    /// - Chụp ảnh màn hình giả lập tốc độ cao bằng exec-out screencap, kèm cơ chế chống ảnh lỗi/trống.
+    /// </summary>
     public class ADBHelper : IDisposable
     {
         private bool _disposed;
@@ -18,16 +25,26 @@ namespace CvAut
         private readonly DeviceData _device;
         private readonly string _host;
         private readonly int _port;
+        
+        // Đường dẫn tuyệt đối tới công cụ adb.exe đi kèm trong thư mục ứng dụng
         private readonly string _adbExePath = Path.Combine(AppContext.BaseDirectory, "adb", "adb.exe");
+        
+        // Client HTTP dùng để gửi lệnh điều khiển JSON-RPC tới server UIAutomator2 trên thiết bị Android
         private static readonly HttpClient UiAutomatorHttp = new HttpClient();
         private Process? _uiautomatorProcess;
 
+        /// <summary>
+        /// Khởi tạo đối tượng kết nối ADB tới giả lập Android.
+        /// Tự động bật ADB Server và kết nối tới thiết bị mong muốn.
+        /// </summary>
+        /// <param name="host">Địa chỉ IP giả lập (Thường là localhost hoặc 127.0.0.1).</param>
+        /// <param name="port">Cổng ADB (ví dụ: 5556 cho BlueStacks, 5555 cho MEmu).</param>
         public ADBHelper(string host = "127.0.0.1", int port = 5556)
         {
             _host = host;
             _port = port;
 
-            // Initialize ADB Client
+            // Khởi chạy ADB Server cục bộ
             AdbServer server = new AdbServer();
             try
             {
@@ -40,15 +57,14 @@ namespace CvAut
 
             _deviceAddress = $"{host}:{port}";
 
-            // 1. Ưu tiên đúng endpoint trong config. Nếu có nhiều giả lập đang mở,
-            // lấy connectedDevices[0] có thể gửi zoom sang nhầm giả lập.
+            // 1. Ưu tiên đúng địa chỉ cổng cấu hình cụ thể để tránh điều khiển nhầm giả lập khác đang mở.
             if (TryConnectAndSelectDevice(_host, _port, out _device))
             {
                 Console.WriteLine($"[ADB] Đã kết nối đến thiết bị cấu hình: {_deviceAddress}");
                 return;
             }
 
-            // 2. Thử kết nối sang các cổng phổ biến khác của BlueStacks, MEmu, v.v.
+            // 2. Thử kết nối dự phòng sang các cổng phổ biến khác của BlueStacks, MEmu, LDPlayer, v.v.
             int[] fallbackPorts = { 5555, 5556, 5557, 5554, 5565 };
             foreach (int p in fallbackPorts)
             {
@@ -61,7 +77,7 @@ namespace CvAut
                 }
             }
 
-            // 3. Cuối cùng mới dùng thiết bị đã có sẵn trong ADB Server.
+            // 3. Cuối cùng mới lấy thiết bị đã được kích hoạt sẵn đầu tiên trong ADB Server (nếu có).
             try
             {
                 var connectedDevices = AdbClient.Instance.GetDevices();
@@ -78,10 +94,14 @@ namespace CvAut
                 Console.WriteLine("[ADB WARNING] Không thể lấy danh sách thiết bị từ AdbClient.");
             }
 
+            // Mặc định tạo dữ liệu thiết bị trống nếu hoàn toàn không kết nối được (để tránh NullReference)
             _device = new DeviceData { Serial = _deviceAddress };
             Console.WriteLine($"[ADB WARNING] Không có thiết bị nào kết nối. Đã mặc định serial: {_deviceAddress}");
         }
 
+        /// <summary>
+        /// Giải phóng tiến trình UIAutomator2 chạy ngầm trên Windows.
+        /// </summary>
         public void Dispose()
         {
             if (_disposed) return;
@@ -93,6 +113,9 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Thử kết nối ADB tới IP/Port và kiểm tra xem thiết bị đó có trong danh sách thiết bị nhận dạng được không.
+        /// </summary>
         private bool TryConnectAndSelectDevice(string host, int port, out DeviceData device)
         {
             string serial = $"{host}:{port}";
@@ -102,7 +125,7 @@ namespace CvAut
             }
             catch
             {
-                // Có thể thiết bị đã connected sẵn; vẫn thử tìm serial trong danh sách.
+                // Có thể thiết bị đã kết nối sẵn
             }
 
             try
@@ -119,13 +142,19 @@ namespace CvAut
             }
             catch
             {
-                // Fall through to false.
+                // Xử lý lỗi
             }
 
             device = new DeviceData { Serial = serial };
             return false;
         }
 
+        /// <summary>
+        /// Đảm bảo thiết bị đã trực tuyến (online) và trong trạng thái sẵn sàng nhận lệnh "device".
+        /// Chờ đợi tối đa theo thời gian timeout.
+        /// </summary>
+        /// <param name="timeoutSeconds">Thời gian chờ tối đa bằng giây.</param>
+        /// <returns>True nếu sẵn sàng, False nếu hết giờ.</returns>
         public bool EnsureConnectedOnline(int timeoutSeconds = 30)
         {
             DateTime deadline = DateTime.Now.AddSeconds(timeoutSeconds);
@@ -137,7 +166,7 @@ namespace CvAut
                 }
                 catch
                 {
-                    // The device may already be connected; verify state below.
+                    // Thiết bị có thể đã kết nối
                 }
 
                 string state = GetDeviceState();
@@ -152,6 +181,9 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// Truy vấn trạng thái kết nối của thiết bị bằng lệnh "adb get-state".
+        /// </summary>
         public string GetDeviceState()
         {
             try
@@ -179,6 +211,11 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Thực thi một lệnh shell Linux bất kỳ trên thiết bị Android qua ADB và trả về kết quả dạng chuỗi.
+        /// </summary>
+        /// <param name="command">Lệnh shell Android (ví dụ: 'pm list packages', 'input tap 10 20').</param>
+        /// <returns>Kết quả chuỗi đầu ra (stdout) của lệnh.</returns>
         public string ExecuteShell(string command)
         {
             try
@@ -193,11 +230,22 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Thực hiện nhấp chuột (Tap) vào tọa độ chỉ định trên màn hình giả lập.
+        /// </summary>
+        /// <param name="x">Tọa độ x.</param>
+        /// <param name="y">Tọa độ y.</param>
         public void Tap(int x, int y)
         {
             ExecuteShell($"input tap {x} {y}");
         }
 
+        /// <summary>
+        /// Thực hiện một chuỗi nhấp chuột nhanh liên tiếp tại danh sách các tọa độ Point chỉ định.
+        /// Giúp tăng tốc độ thả quân (deploy troop) nhanh trong trận đánh Clash of Clans.
+        /// Gộp lệnh bằng dấu chấm phẩy ';' để giảm thiểu độ trễ giao tiếp mạng ADB.
+        /// </summary>
+        /// <param name="points">Danh sách các tọa độ cần chạm.</param>
         public void TapSequence(IEnumerable<Point> points)
         {
             var commands = new List<string>();
@@ -211,16 +259,30 @@ namespace CvAut
                 return;
             }
 
+            // Gộp tất cả các lệnh tap lại và gửi đi trong 1 phiên làm việc
             ExecuteShell(string.Join("; ", commands));
         }
 
+        /// <summary>
+        /// Thực hiện thao tác vuốt (Swipe) từ tọa độ nguồn đến tọa độ đích với thời gian thực hiện chỉ định.
+        /// </summary>
         public void Swipe(int x1, int y1, int x2, int y2, int durationMs = 300)
         {
             ExecuteShell($"input swipe {x1} {y1} {x2} {y2} {durationMs}");
         }
 
+        /// <summary>
+        /// Thực hiện lệnh thu nhỏ bản đồ (Zoom Out / Pinch-In).
+        /// - Ưu tiên sử dụng máy chủ UIAutomator2 RPC để gửi cử chỉ hai ngón chính xác.
+        /// - Fallback sang gửi đồng thời 2 luồng vuốt ngược chiều nhau trong shell ADB nếu UIAutomator2 gặp lỗi.
+        /// </summary>
+        /// <param name="count">Số lần thực hiện zoom out liên tiếp.</param>
+        /// <param name="durationMs">Thời gian vuốt của mỗi lần zoom (dành cho fallback swipe).</param>
+        /// <param name="intervalMs">Khoảng thời gian nghỉ giữa các lần zoom.</param>
+        /// <returns>True nếu thực hiện thành công ít nhất một cử chỉ zoom.</returns>
         public bool PinchInZoomOut(int count = 5, int durationMs = 450, int intervalMs = 350)
         {
+            // 1. Thử dùng cơ chế UIAutomator2 pinchIn
             if (TryUiAutomatorPinchIn(count, percent: 100, steps: 20, intervalMs))
             {
                 return true;
@@ -229,10 +291,10 @@ namespace CvAut
             Console.WriteLine("[ADB WARNING] UIAutomator2 pinch-in không chạy được. Thử fallback ADB swipe đồng thời...");
             bool anySuccess = false;
 
+            // 2. Chạy fallback vuốt song song ngầm bằng lệnh sh
             for (int i = 0; i < count; i++)
             {
-                // Simulate a two-finger pinch-in. Android's input tool has no direct
-                // multi-touch primitive, so run two swipes concurrently in the shell.
+                // Gửi đồng thời lệnh vuốt hướng tâm từ trái và phải để mô phỏng bóp 2 ngón tay thu nhỏ bản đồ
                 string result = ExecuteShell(
                     "sh -c \"input swipe 360 450 790 450 " + durationMs +
                     " & input swipe 1240 450 810 450 " + durationMs +
@@ -250,6 +312,9 @@ namespace CvAut
             return anySuccess;
         }
 
+        /// <summary>
+        /// Gửi gói JSON-RPC cử chỉ pinchIn tới máy chủ UIAutomator2 trên thiết bị.
+        /// </summary>
         private bool TryUiAutomatorPinchIn(int count, int percent, int steps, int intervalMs)
         {
             if (!EnsureUiAutomator2Server())
@@ -278,7 +343,7 @@ namespace CvAut
                 }
                 else
                 {
-                    // Simplicity cũng tap nhẹ rồi retry khi UIAutomator2 gặp lỗi INJECT_EVENTS.
+                    // Giải quyết lỗi ném sự kiện INJECT_EVENTS của Android bằng cách tap nhẹ và thử lại
                     ExecuteShell("input tap 5 5");
                     Thread.Sleep(500);
                     ok = SendUiAutomatorJsonRpc("pinchIn", new object[]
@@ -304,8 +369,13 @@ namespace CvAut
             return anySuccess;
         }
 
+        /// <summary>
+        /// Đảm bảo máy chủ UIAutomator2 đã được cài đặt và đang chạy trên thiết bị để thực hiện đa điểm.
+        /// Tự động tìm kiếm file u2.jar trong thư mục hệ thống, đẩy lên thiết bị và thiết lập chuyển tiếp cổng (forward 9008).
+        /// </summary>
         private bool EnsureUiAutomator2Server()
         {
+            // Thiết lập chuyển tiếp cổng cổng mạng local 9008 tới cổng 9008 trên giả lập Android
             RunAdb($"-s {_deviceAddress} forward tcp:9008 tcp:9008", waitForExit: true);
             if (PingUiAutomator2Server())
             {
@@ -319,7 +389,7 @@ namespace CvAut
                 return false;
             }
 
-            // Cache it locally so we don't have to scan the disk again
+            // Cache cục bộ file jar để các phiên khởi động sau diễn ra nhanh hơn
             string destJar = Path.Combine(AppContext.BaseDirectory, "adb", "u2.jar");
             if (!File.Exists(destJar))
             {
@@ -339,14 +409,17 @@ namespace CvAut
                 try { File.Copy(jarPath, rootJar, overwrite: true); } catch { }
             }
 
+            // Đẩy tệp .jar lên thư mục tạm của hệ điều hành Android
             RunAdb($"-s {_deviceAddress} push \"{jarPath}\" /data/local/tmp/u2.jar", waitForExit: true);
             RunAdb($"-s {_deviceAddress} forward tcp:9008 tcp:9008", waitForExit: true);
 
+            // Khởi động Main class của UIAutomator2 server ngầm trên thiết bị Android
             _uiautomatorProcess ??= RunAdb(
                 $"-s {_deviceAddress} shell \"CLASSPATH=/data/local/tmp/u2.jar app_process / com.wetest.uia2.Main\"",
                 waitForExit: false
             );
 
+            // Đợi server phản hồi ping trạng thái online
             DateTime deadline = DateTime.Now.AddSeconds(10);
             while (DateTime.Now < deadline)
             {
@@ -361,6 +434,9 @@ namespace CvAut
             return false;
         }
 
+        /// <summary>
+        /// Ping thử dịch vụ HTTP của UIAutomator2 Server trên thiết bị qua endpoint /ping.
+        /// </summary>
         private bool PingUiAutomator2Server()
         {
             try
@@ -377,6 +453,9 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Gửi yêu cầu JSON-RPC 2.0 tới UIAutomator2 trên thiết bị.
+        /// </summary>
         private bool SendUiAutomatorJsonRpc(string method, object[] parameters)
         {
             try
@@ -421,6 +500,9 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Tìm tệp tin u2.jar của dịch vụ UIAutomator2 bằng cách tìm kiếm trong các thư mục Downloads thường thấy.
+        /// </summary>
         private string? FindUiAutomatorJar()
         {
             string localJar = Path.Combine(AppContext.BaseDirectory, "adb", "u2.jar");
@@ -429,7 +511,7 @@ namespace CvAut
             localJar = Path.Combine(Directory.GetCurrentDirectory(), "adb", "u2.jar");
             if (File.Exists(localJar)) return localJar;
 
-            // Search E:\Download first (primary) and fall back to system Downloads folder
+            // Tìm kiếm ưu tiên trong thư mục E:\Download hoặc thư mục Downloads hệ thống
             string[] searchRoots = {
                 @"E:\Download",
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")
@@ -452,13 +534,16 @@ namespace CvAut
                 }
                 catch
                 {
-                    // Ignore inaccessible folders under Download.
+                    // Bỏ qua thư mục lỗi quyền truy cập
                 }
             }
 
             return null;
         }
 
+        /// <summary>
+        /// Khởi tạo và thực thi trực tiếp tiến trình adb.exe trên hệ điều hành Windows.
+        /// </summary>
         private Process? RunAdb(string arguments, bool waitForExit)
         {
             try
@@ -492,6 +577,12 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Chụp màn hình giả lập Android ở tốc độ cao và chuyển đổi sang dạng OpenCV Mat.
+        /// Sử dụng kỹ thuật chuyển hướng luồng dữ liệu thô (exec-out screencap -p) của ADB.
+        /// Tự động kiểm thử ảnh rỗng/đen (chuẩn sai lệch tiêu chuẩn stddev thấp) để bắt lỗi và thử lại tối đa 3 lần.
+        /// </summary>
+        /// <returns>Đối tượng Mat ảnh màu (BGR) chụp được, hoặc null nếu lỗi.</returns>
         public Mat? TakeScreenshot()
         {
             const int maxRetries = 3;
@@ -499,8 +590,7 @@ namespace CvAut
             {
                 try
                 {
-                    // Port từ Simplicity screenshot_utils.py:
-                    // exec-out screencap -p, retry nếu ảnh lỗi hoặc blank.
+                    // Chụp định dạng PNG và gửi trực tiếp dạng nhị phân qua stdout tránh lưu tệp trung gian làm xước ổ cứng
                     var processInfo = new ProcessStartInfo
                     {
                         FileName = _adbExePath,
@@ -536,6 +626,7 @@ namespace CvAut
                         continue;
                     }
 
+                    // Giải mã bytes nhị phân PNG thành đối tượng Mat màu
                     using Mat decoded = Cv2.ImDecode(imageBytes, ImreadModes.Color);
                     if (decoded.Empty())
                     {
@@ -544,6 +635,8 @@ namespace CvAut
                         continue;
                     }
 
+                    // Kiểm tra xem ảnh chụp màn hình có bị đen hoàn toàn (blank/freeze màn hình giả lập) hay không.
+                    // Tính độ lệch chuẩn stddev của màu xám, nếu stddev < 3.0 thì chứng tỏ ảnh đơn sắc (chủ yếu là đen thui).
                     using Mat gray = new Mat();
                     Cv2.CvtColor(decoded, gray, ColorConversionCodes.BGR2GRAY);
                     Cv2.MeanStdDev(gray, out _, out Scalar stddev);

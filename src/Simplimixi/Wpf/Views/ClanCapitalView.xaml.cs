@@ -2,8 +2,15 @@ using System.Windows.Controls;
 
 namespace CvAut.WpfApp.Views
 {
-    public partial class ClanCapitalView : System.Windows.Controls.UserControl
+    /// <summary>
+    /// Logic xử lý (Code-Behind) của ClanCapitalView.xaml.
+    /// Quản lý giao diện cấu hình Thủ đô Clan.
+    /// </summary>
+    public partial class ClanCapitalView : UserControl
     {
+        /// <summary>
+        /// Khởi tạo một thực thể mới của ClanCapitalView.
+        /// </summary>
         public ClanCapitalView()
         {
             InitializeComponent();
