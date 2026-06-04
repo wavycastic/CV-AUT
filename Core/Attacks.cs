@@ -25,6 +25,8 @@ namespace CvAut
         private const int DuplicateTabDistancePx = 45;
         private const int RemainingTroopSettleDelayMs = 900;
         private const int MaxRemainingDeployPasses = 3;
+        private const int SpellTabMinSeparationPx = 45;
+        private const double SpellTabAmbiguityScoreDelta = 0.06;
         private static readonly Rect DeployBarRoi = Rect.FromLTRB(70, 720, 1180, 890);
 
         // Coordinate presets for troop/spell deployment (Left-side)
@@ -172,6 +174,7 @@ namespace CvAut
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty()) return;
 
+            Dictionary<string, Point> previousTabs = new(_tabs, StringComparer.OrdinalIgnoreCase);
             _tabs.Clear();
             var categories = new Dictionary<string, string>
             {
@@ -179,6 +182,8 @@ namespace CvAut
                 { "e_drag", "troops/E_Drag" },
                 { "balloon", "troops/balloon" },
                 { "event_goblin", "troops/event_goblin" },
+                { "nguoimay", "troops/nguoimay" },
+                { "phuthuycuoichoi", "troops/phuthuycuoichoi" },
                 { "azure_dragon", "troops/azure_dragon" },
                 { "ice_minion", "troops/ice_minion" },
                 { "ice_golem", "troops/ice_golem" },
@@ -193,7 +198,38 @@ namespace CvAut
 
             foreach (var kvp in categories)
             {
-                Point? coord = _vision.FindElement(screenshot, kvp.Value, MatchThreshold, DeployBarRoi, out double score);
+                bool isSpell = kvp.Key == "rage" || kvp.Key == "freeze";
+                double threshold = isSpell ? 0.45 : MatchThreshold;
+                Point? coord = _vision.FindElement(screenshot, kvp.Value, threshold, DeployBarRoi, out double score);
+
+                if (isSpell)
+                {
+                    Console.WriteLine($"[TPL] {kvp.Key} primary scan: template='{kvp.Value}', threshold={threshold:F2}, score={score:F2}, found={(coord != null ? coord.Value.ToString() : "null")}");
+                }
+
+                if (coord == null && kvp.Key == "freeze")
+                {
+                    double fallbackThreshold = 0.40;
+                    Rect widerRoi = Rect.FromLTRB(0, 680, screenshot.Width, screenshot.Height);
+                    string[] fallbackTemplates =
+                    {
+                        kvp.Value,
+                        "Smart_Auto_train/Spells/freeze",
+                        "Smart_Auto_train/to_train/freeze"
+                    };
+
+                    foreach (string fallbackTemplate in fallbackTemplates)
+                    {
+                        coord = _vision.FindElement(screenshot, fallbackTemplate, fallbackThreshold, widerRoi, out double fallbackScore);
+                        Console.WriteLine($"[TPL] freeze fallback scan: template='{fallbackTemplate}', roi={widerRoi}, threshold={fallbackThreshold:F2}, score={fallbackScore:F2}, found={(coord != null ? coord.Value.ToString() : "null")}");
+                        score = fallbackScore;
+                        if (coord != null)
+                        {
+                            break;
+                        }
+                    }
+                }
+
                 if (coord != null)
                 {
                     if (IsDuplicateTab(coord.Value, out string existingName))
@@ -205,12 +241,11 @@ namespace CvAut
                     _tabs[kvp.Key] = coord.Value;
                     Console.WriteLine($"[ATTACK-CS] Đã phát hiện thẻ '{kvp.Key}' tại: {coord.Value} score={score:F2}");
                 }
-                else
+
+                if (coord == null && _requiredTabs.Contains(kvp.Key))
                 {
-                    if (_requiredTabs.Contains(kvp.Key))
-                    {
-                        Console.WriteLine($"[TPL] {kvp.Key} not found ({score:F2})");
-                    }
+                    Console.WriteLine($"[TPL] {kvp.Key} not found (score={score:F2}, threshold={threshold:F2})");
+
                 }
             }
 
@@ -231,6 +266,11 @@ namespace CvAut
             }
         }
 
+        private bool AreTabsTooClose(Point a, Point b)
+        {
+            return Math.Abs(a.X - b.X) <= SpellTabMinSeparationPx && Math.Abs(a.Y - b.Y) <= SpellTabMinSeparationPx;
+        }
+
         private bool IsDuplicateTab(Point candidate, out string existingName)
         {
             foreach (var kvp in _tabs)
@@ -248,9 +288,42 @@ namespace CvAut
             return false;
         }
 
+        private void DeployOptionalQuickDrop(string troopKey, int limit = 10)
+        {
+            Console.WriteLine($"[ATTACK-CS] Làm mới vị trí thẻ '{troopKey}' trước khi thả nhanh...");
+            UpdateTabs();
+
+            if (!_tabs.TryGetValue(troopKey, out Point troopTab))
+            {
+                return;
+            }
+
+            if (!_deployCoords.TryGetValue("dragon", out List<Point>? dragonCoords) || dragonCoords.Count == 0)
+            {
+                Console.WriteLine($"[ATTACK-CS] Không có tọa độ rải nhanh cho '{troopKey}'.");
+                return;
+            }
+
+            _adb.Tap(troopTab.X, troopTab.Y);
+            Thread.Sleep(TroopTabSelectDelayMs);
+
+            int tapLimit = Math.Max(0, limit);
+            var quickTaps = new List<Point>(tapLimit);
+            for (int i = 0; i < tapLimit; i++)
+            {
+                quickTaps.Add(JitterCoord(dragonCoords[i % dragonCoords.Count]));
+            }
+
+            Console.WriteLine($"[ATTACK-CS] Thả nhanh '{troopKey}' ({tapLimit} taps)...");
+            _adb.TapSequence(quickTaps);
+        }
+
         public void DeployTroops(string troopKey)
         {
             string key = troopKey.ToLower();
+            Console.WriteLine($"[ATTACK-CS] Làm mới vị trí thẻ '{troopKey}' trước khi thả quân...");
+            UpdateTabs();
+
             if (!_tabs.TryGetValue(key, out Point tab))
             {
                 Console.WriteLine($"[ATTACK-CS] Bỏ qua: Thẻ '{troopKey}' không tìm thấy.");
@@ -389,6 +462,9 @@ namespace CvAut
 
         public void DeployHeroes()
         {
+            Console.WriteLine("[ATTACK-CS] Làm mới vị trí thẻ tướng trước khi triển khai...");
+            UpdateTabs();
+
             Console.WriteLine("[ATTACK-CS] Đang triển khai quân tướng...");
             Stopwatch sw = Stopwatch.StartNew();
             foreach (var hero in _heroCoords)
@@ -411,14 +487,7 @@ namespace CvAut
 
         public void DeploySpells(string spellKey)
         {
-            string key = spellKey.ToLower();
-            if (!_tabs.TryGetValue(key, out Point tab))
-            {
-                Console.WriteLine($"[ATTACK-CS] Bỏ qua: Thẻ phép '{spellKey}' không tìm thấy.");
-                return;
-            }
-
-            if (!_deployCoords.TryGetValue(key, out List<Point>? coords) || coords.Count == 0)
+            if (!TryResolveSpellDeployment(spellKey, out Point tab, out List<Point> coords, out int delay))
             {
                 return;
             }
@@ -427,7 +496,6 @@ namespace CvAut
             Stopwatch sw = Stopwatch.StartNew();
             _adb.Tap(tab.X, tab.Y);
 
-            int delay = key == "rage" ? 1000 : 2000;
             foreach (var pt in coords)
             {
                 Thread.Sleep(delay);
@@ -439,8 +507,37 @@ namespace CvAut
             Console.WriteLine($"[ATTACK-CS DEBUG] '{spellKey}' spell elapsed={sw.ElapsedMilliseconds}ms.");
         }
 
+        private bool TryResolveSpellDeployment(string spellKey, out Point tab, out List<Point> coords, out int delay)
+        {
+            string key = spellKey.ToLower();
+            tab = default;
+            coords = new List<Point>();
+            delay = key == "rage" ? 1000 : 2000;
+
+            Console.WriteLine($"[ATTACK-CS] Làm mới vị trí thẻ phép '{spellKey}' trước khi thả...");
+            UpdateTabs();
+
+            if (!_tabs.TryGetValue(key, out tab))
+            {
+                Console.WriteLine($"[ATTACK-CS] Bỏ qua: Thẻ phép '{spellKey}' không tìm thấy.");
+                return false;
+            }
+
+            if (!_deployCoords.TryGetValue(key, out List<Point>? resolvedCoords) || resolvedCoords == null || resolvedCoords.Count == 0)
+            {
+                return false;
+            }
+
+            coords = resolvedCoords;
+
+            return true;
+        }
+
         public void RetapHeroes()
         {
+            Console.WriteLine("[ATTACK-CS] Làm mới vị trí thẻ tướng trước khi kích hoạt kỹ năng...");
+            UpdateTabs();
+
             Console.WriteLine("[ATTACK-CS] Đang kích hoạt kỹ năng đặc biệt của Tướng...");
             string[] tags = { "warden", "queen", "bk", "prince", "rc" };
             foreach (var tag in tags)
@@ -477,33 +574,52 @@ namespace CvAut
                 UpdateTabs();
                 DeployTroops("dragon");
                 EnsureTroopFullyDeployed("dragon");
+                DeployTroops("ice_minion");
+                DeployTroops("ice_golem");
+                DeployTroops("azure_dragon");
 
-                if (_tabs.ContainsKey("event_goblin"))
-                {
-                    Point goblinTab = _tabs["event_goblin"];
-                    _adb.Tap(goblinTab.X, goblinTab.Y);
-                    
-                    // Thả tối đa 10 goblin cướp nhanh
-                    var dragonCoords = _deployCoords["dragon"];
-                    int limit = Math.Min(10, dragonCoords.Count);
-                    var goblinTaps = new List<Point>(limit);
-                    for (int i = 0; i < limit; i++)
-                    {
-                        goblinTaps.Add(JitterCoord(dragonCoords[i]));
-                    }
-
-                    _adb.TapSequence(goblinTaps);
-                }
+                DeployOptionalQuickDrop("event_goblin");
+                DeployOptionalQuickDrop("nguoimay", 50);
+                DeployOptionalQuickDrop("phuthuycuoichoi", 50);
 
                 DeployTroops("balloon");
                 EnsureTroopFullyDeployed("balloon");
                 DeployTroops("siege_machine");
                 DeployHeroes();
                 DeploySpells("rage");
-                Console.WriteLine("[ATTACK-CS] Chờ thả phép đóng băng (Freeze)...");
                 DeploySpells("freeze");
                 EnsureTroopFullyDeployed("dragon");
                 EnsureTroopFullyDeployed("balloon");
+            }
+            else if (attackStrategy == "ElectroDragon_Attack")
+            {
+                _requiredTabs.Clear();
+                foreach (string key in new[] { "e_drag", "balloon", "rage", "freeze" })
+                {
+                    _requiredTabs.Add(key);
+                }
+
+                if (_deployCoords.ContainsKey("siege_machine"))
+                {
+                    _requiredTabs.Add("siege_machine");
+                }
+
+                UpdateTabs();
+                DeployTroops("e_drag");
+                DeployTroops("ice_minion");
+                DeployTroops("ice_golem");
+                DeployTroops("azure_dragon");
+
+                DeployOptionalQuickDrop("event_goblin");
+                DeployOptionalQuickDrop("nguoimay", 50);
+                DeployOptionalQuickDrop("phuthuycuoichoi", 50);
+
+                DeployTroops("balloon");
+                EnsureTroopFullyDeployed("balloon");
+                DeployTroops("siege_machine");
+                DeployHeroes();
+                DeploySpells("rage");
+                DeploySpells("freeze");
             }
             else
             {

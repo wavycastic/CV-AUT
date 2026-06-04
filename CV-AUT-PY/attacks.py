@@ -128,6 +128,8 @@ class AttackExecutor:
             "e_drag":        "troops/E_Drag",
             "balloon":       "troops/balloon",
             "event_goblin":  "troops/event_goblin",
+            "nguoimay":      "troops/nguoimay",
+            "phuthuycuoichoi":"troops/phuthuycuoichoi",
             "azure_dragon":  "troops/azure_dragon",
             "ice_minion":    "troops/ice_minion",
             "ice_golem":     "troops/ice_golem",
@@ -225,6 +227,27 @@ class AttackExecutor:
             jx, jy = self._jitter_coord(x, y)
             self.executor.click(jx, jy)
 
+    def deploy_optional_quick_drop(self, troop_key: str, limit: int = 10):
+        """Deploys optional troops quickly using the dragon line as a fallback spread pattern."""
+        tab = self.tabs.get(troop_key.lower())
+        if not tab:
+            return
+
+        dragon_coords = self.deploy_coords.get("dragon", [])
+        if not dragon_coords:
+            print(f"[ATTACK] Skip quick-drop: No dragon coordinates for '{troop_key}'.")
+            return
+
+        self.executor.click(tab[0], tab[1])
+        time.sleep(0.5)
+        tap_limit = max(0, limit)
+        quick_coords = [
+            self._jitter_coord(*dragon_coords[i % len(dragon_coords)])
+            for i in range(tap_limit)
+        ]
+        print(f"[ATTACK] Quick deploy '{troop_key}' ({len(quick_coords)} taps)...")
+        self.executor.execute_sequence(quick_coords)
+
     def retap_heroes(self):
         """Continuously retaps hero abilities to trigger active skills during fight."""
         print("[ATTACK] Activating hero abilities...")
@@ -239,12 +262,9 @@ class AttackExecutor:
         self.deploy_troops("ice_minion")
         self.deploy_troops("ice_golem")
         self.deploy_troops("azure_dragon")
-        
-        if "event_goblin" in self.tabs:
-            tab = self.tabs["event_goblin"]
-            self.executor.click(tab[0], tab[1])
-            goblin_coords = self.deploy_coords.get("dragon", [])[:10]
-            self.executor.execute_sequence(goblin_coords)
+        self.deploy_optional_quick_drop("event_goblin")
+        self.deploy_optional_quick_drop("nguoimay", 50)
+        self.deploy_optional_quick_drop("phuthuycuoichoi", 50)
 
         self.deploy_troops("balloon")
         self.deploy_troops("siege_machine")
@@ -259,12 +279,9 @@ class AttackExecutor:
         self.deploy_troops("ice_minion")
         self.deploy_troops("ice_golem")
         self.deploy_troops("azure_dragon")
-        
-        if "event_goblin" in self.tabs:
-            tab = self.tabs["event_goblin"]
-            self.executor.click(tab[0], tab[1])
-            goblin_coords = self.deploy_coords.get("dragon", [])[:10]
-            self.executor.execute_sequence(goblin_coords)
+        self.deploy_optional_quick_drop("event_goblin")
+        self.deploy_optional_quick_drop("nguoimay", 50)
+        self.deploy_optional_quick_drop("phuthuycuoichoi", 50)
 
         self.deploy_troops("balloon")
         self.deploy_troops("siege_machine")

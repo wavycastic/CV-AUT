@@ -122,8 +122,32 @@ namespace CvAut
             _cts = new CancellationTokenSource();
             _pauseEvent.Set(); // Đảm bảo không bị pause lúc khởi động
 
-            Task.Run(() => BotLoop(_cts.Token));
+            Task.Run(() => StartWorker(_cts.Token));
             Console.WriteLine("[FSM-CS] Vòng lặp tự động hóa đã bắt đầu chạy ngầm...");
+        }
+
+        private void StartWorker(CancellationToken token)
+        {
+            try
+            {
+                var devConfig = Config.GetProperty("device_connection");
+                string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
+                int port = devConfig.GetProperty("port").GetInt32();
+
+                if (!EmulatorBootstrapper.EnsureReady(_adb, host, port, token))
+                {
+                    _isRunning = false;
+                    return;
+                }
+
+                Console.WriteLine("🧠 Checking if we're on the home base screen...");
+                BotLoop(token);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[FSM-CS ERROR] Lỗi khởi động bot: {ex.Message}");
+                _isRunning = false;
+            }
         }
 
         public void Stop()
@@ -240,7 +264,7 @@ namespace CvAut
                 WaitIfPaused(token);
                 if (CheckStop(token)) return;
 
-                string trainMode = GetStringOrDefault(cfg, "train_mode", "quick");
+                string trainMode = GetStringOrDefault(cfg, "train_mode", "smart");
                 int quickSlot = GetIntOrDefault(cfg, "quick_slot", 1);
 
                 if (trainMode.Equals("quick", StringComparison.OrdinalIgnoreCase) && _cycleCount % 5 == 0)

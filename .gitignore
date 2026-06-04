@@ -27,6 +27,12 @@ debug_army_roi.png
 toAttack.png
 screen.png
 Validate_Upgrade/
+Diagnostics/Logs/
+logs/
+scratch/
+simplicity_extract/
+simplicity_fix_extract/
+Simplicity v3.50.1-February FIX/
 
 # Local ADB Binaries
 adb/
@@ -43,3 +49,6 @@ bin/
 obj/
 .vs/
 *.user
+
+# Local WPF UI gallery reference
+.zed-context/wpfui-gallery/
