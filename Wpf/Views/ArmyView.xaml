@@ -1,0 +1,245 @@
+<UserControl x:Class="CvAut.WpfApp.Views.ArmyView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             mc:Ignorable="d"
+             d:DesignHeight="700"
+             d:DesignWidth="520">
+    <Grid Margin="12,8,12,8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="16,8,16,12">
+            <ui:TextBlock FontTypography="Title" Text="Army" />
+            <ui:TextBlock Margin="0,2,0,0"
+                          Appearance="Secondary"
+                          FontTypography="Caption"
+                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                          Text="Simplicity-style army, spell and attack setup." />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="16,4,16,16" MaxWidth="430" HorizontalAlignment="Stretch">
+                <!-- Army deck preview -->
+                <Border Style="{StaticResource GamingCardStyle}" Margin="0,0,0,16" Padding="14">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <ui:TextBlock FontTypography="Caption"
+                                              Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}"
+                                              Text="ARMY DECK" />
+                                <ui:TextBlock Margin="0,2,0,0"
+                                              Appearance="Secondary"
+                                              FontTypography="Caption"
+                                              Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                              Text="Main troops detected from Templates." />
+                            </StackPanel>
+                            <Border Grid.Column="1"
+                                    Padding="10,5"
+                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                    CornerRadius="12">
+                                <TextBlock FontSize="10"
+                                           FontWeight="Bold"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="READY" />
+                            </Border>
+                        </Grid>
+
+                        <UniformGrid Columns="4" Rows="2">
+                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                <StackPanel>
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/troops/dragon.png" />
+                                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="DRAGON" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                <StackPanel>
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/troops/E_Drag.png" />
+                                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="E-DRAG" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                <StackPanel>
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/troops/balloon.png" />
+                                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="LOONS" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                <StackPanel>
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/troops/icon_siege.png" />
+                                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="SIEGE" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                <StackPanel>
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/heroes/bk.png" />
+                                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="KING" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                <StackPanel>
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/heroes/queen.png" />
+                                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="QUEEN" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                <StackPanel>
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/spells/rage.png" />
+                                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="RAGE" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                <StackPanel>
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/spells/freeze.png" />
+                                    <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="FREEZE" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Attack strategy -->
+                <Border Style="{StaticResource GamingCardStyle}" Margin="0,0,0,16" Padding="14">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="156" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Image Width="22" Height="22" Margin="0,0,10,0" Source="pack://siteoforigin:,,,/Templates/icon_attack.png" />
+                                <StackPanel>
+                                    <ui:TextBlock FontTypography="Caption" Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}" Text="ATTACK PLAN" />
+                                    <ui:TextBlock FontTypography="BodyStrong" Text="Strategy" />
+                                </StackPanel>
+                            </StackPanel>
+                            <ComboBox Grid.Column="1"
+                                      Width="156"
+                                      VerticalAlignment="Center"
+                                      ItemsSource="{Binding AttackStrategies}"
+                                      SelectedItem="{Binding SelectedAttackStrategy}" />
+                        </Grid>
+
+                        <Border Margin="0,12,0,0"
+                                Padding="12"
+                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="94" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Padding="8" Background="{DynamicResource ControlFillColorTertiaryBrush}" CornerRadius="10">
+                                    <Image Height="72" Stretch="Uniform" Source="{Binding AttackImagePath}" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock FontSize="18" FontWeight="Bold" Foreground="{StaticResource ReadyBrush}" Text="{Binding AttackPreview}" />
+                                    <TextBlock Margin="0,4,0,0" FontSize="11.5" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AttackDescription}" TextWrapping="Wrap" />
+                                    <Border Margin="0,10,0,0" Padding="8,6" Background="{DynamicResource ControlFillColorTertiaryBrush}" CornerRadius="8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Image Grid.Column="0" Width="16" Height="16" Margin="0,0,7,0" Source="pack://siteoforigin:,,,/Templates/troops/balloon.png" />
+                                            <TextBlock Grid.Column="1" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AttackComposition}" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+                                    <Border Margin="0,6,0,0" Padding="8,6" Background="{DynamicResource ControlFillColorTertiaryBrush}" CornerRadius="8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Image Grid.Column="0" Width="16" Height="16" Margin="0,0,7,0" Source="pack://siteoforigin:,,,/Templates/icon_clan_castle.png" />
+                                            <TextBlock Grid.Column="1" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AttackSupport}" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Train mode -->
+                <Border Style="{StaticResource GamingCardStyle}" Margin="0,0,0,16" Padding="14">
+                    <StackPanel>
+                        <ui:TextBlock FontTypography="Caption"
+                                      Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}"
+                                      Text="TRAIN MODE" />
+
+                        <Border Margin="0,10,0,0" Padding="12,10" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Image Width="22" Height="22" Margin="0,0,10,0" Source="pack://siteoforigin:,,,/Templates/start_button.png" />
+                                    <StackPanel>
+                                        <ui:TextBlock FontTypography="BodyStrong" Text="Smart auto train" />
+                                        <ui:TextBlock Appearance="Secondary" FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="Let bot rebuild army by template matching." />
+                                    </StackPanel>
+                                </StackPanel>
+                                <RadioButton Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Content="Smart" IsChecked="{Binding IsSmartTrain}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Margin="0,10,0,0" Padding="12,10" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Image Width="22" Height="22" Margin="0,0,10,0" Source="pack://siteoforigin:,,,/Templates/icon_hourglass.png" />
+                                    <StackPanel>
+                                        <ui:TextBlock FontTypography="BodyStrong" Text="Quick train slot" />
+                                        <ui:TextBlock Appearance="Secondary" FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="Use an in-game quick army preset." />
+                                    </StackPanel>
+                                </StackPanel>
+                                <RadioButton Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Content="Quick" IsChecked="{Binding IsQuickTrain}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Margin="0,10,0,0"
+                                Padding="12,10"
+                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                IsEnabled="{Binding IsQuickSlotEnabled}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="116" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBlock Grid.Column="0" VerticalAlignment="Center" FontTypography="BodyStrong" Text="Quick Slot" />
+                                <ui:NumberBox Grid.Column="1"
+                                              Width="116"
+                                              HorizontalAlignment="Right"
+                                              Minimum="1"
+                                              Maximum="2"
+                                              MaxDecimalPlaces="0"
+                                              SpinButtonPlacementMode="Compact"
+                                              Text="{Binding QuickSlot, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

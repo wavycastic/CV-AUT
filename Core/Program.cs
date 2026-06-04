@@ -4,7 +4,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Windows.Forms;
 using OpenCvSharp;
 using Timer = System.Threading.Timer;
 
@@ -31,14 +30,15 @@ namespace CvAut
         [STAThread]
         static void Main(string[] args)
         {
+            Console.WriteLine($"[BUILD-ID] Simplimixi v0.5.0 binary loaded at {DateTime.Now:yyyy-MM-dd HH:mm:ss} | base={AppContext.BaseDirectory}");
+
             if (!args.Any(a => string.Equals(a, "--console", StringComparison.OrdinalIgnoreCase)))
             {
-                ApplicationConfiguration.Initialize();
-                Application.Run(new BotControlForm());
+                RunWpfApp();
                 return;
             }
 
-            try { Console.Clear(); } catch {}
+            try { Console.Clear(); } catch { }
 
             string configPath = "CV-AUT-PY/test_config.json";
             string templatesPath = Path.Combine(AppContext.BaseDirectory, "Templates");
@@ -59,6 +59,14 @@ namespace CvAut
 
                 selected.Action(configPath, templatesPath);
             }
+        }
+
+        [STAThread]
+        private static void RunWpfApp()
+        {
+            var app = new CvAut.WpfApp.App();
+            app.InitializeComponent();
+            app.Run();
         }
 
         private static void RunOfflineTestFromMenu(string _, string templatesPath) => RunOfflineTest(templatesPath);
@@ -106,11 +114,11 @@ namespace CvAut
 
         private static void DrawMainMenu(int selectedIndex)
         {
-            try { Console.Clear(); } catch {}
+            try { Console.Clear(); } catch { }
 
-            Console.Title = "CV-AUT C# Control Console";
+            Console.Title = "Simplimixi v0.5.0 Control Console";
             WriteRule(ConsoleColor.DarkCyan);
-            WriteCentered("CV-AUT C# CONTROL CONSOLE", ConsoleColor.Cyan);
+            WriteCentered("SIMPLIMIXI v0.5.0 CONTROL CONSOLE", ConsoleColor.Cyan);
             WriteCentered("Tu dong hoa Clash of Clans | FSM + OCR + ADB", ConsoleColor.Gray);
             WriteRule(ConsoleColor.DarkCyan);
             Console.WriteLine();
@@ -132,7 +140,7 @@ namespace CvAut
 
         private static void PrintBanner(string title, string? subtitle = null)
         {
-            try { Console.Clear(); } catch {}
+            try { Console.Clear(); } catch { }
             WriteRule(ConsoleColor.DarkCyan);
             WriteCentered(title, ConsoleColor.Cyan);
             if (!string.IsNullOrWhiteSpace(subtitle))
@@ -218,7 +226,7 @@ namespace CvAut
 
         private static void RunOfflineTest(string templatesPath)
         {
-            try { Console.Clear(); } catch {}
+            try { Console.Clear(); } catch { }
             Console.WriteLine("=== CHẠY KIỂM THỬ NGOẠI TUYẾN (OFFLINE MOCK TEST) ===");
 
             VisionEngine vision = new VisionEngine(templatesPath);
@@ -231,7 +239,7 @@ namespace CvAut
                 if (!testImg.Empty())
                 {
                     Console.WriteLine("\n=== [TEST-CS] 1. Kiểm thử Phân hệ Đọc số siêu nhẹ (Light OCR C#) ===");
-                    
+
                     int wImg = testImg.Width;
                     int hImg = testImg.Height;
 
@@ -269,7 +277,7 @@ namespace CvAut
                     }
 
                     Console.WriteLine("\n=== [TEST-CS] 2. Kiểm thử Phân hệ Thả quân chống phát hiện (Attacks C#) ===");
-                    
+
                     ADBHelper adb = new ADBHelper("127.0.0.1", 5556);
                     Attacks attack = new Attacks(adb, vision);
                     attack.Run("Dragon_Attack");
@@ -289,7 +297,7 @@ namespace CvAut
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" THỬ NGHIỆM PHÂN HỆ C# HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
             Console.WriteLine("==============================================");
-            try { Console.ReadKey(); } catch {}
+            try { Console.ReadKey(); } catch { }
         }
 
         private static void RunLiveFSMLoop(string configPath)
@@ -354,7 +362,7 @@ namespace CvAut
 
         private static void RunLiveScoutingTest(string templatesPath)
         {
-            try { Console.Clear(); } catch {}
+            try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
             Console.WriteLine("   QUÉT TÀI NGUYÊN TRỰC TIẾP TỪ GIẢ LẬP BLUESTACKS ĐANG HOẠT ĐỘNG  ");
@@ -367,7 +375,7 @@ namespace CvAut
 
             Console.WriteLine("[LIVE-SCOUT] Đang tiến hành chụp màn hình giả lập trực tiếp...");
             using Mat? screenshot = adb.TakeScreenshot();
-            
+
             if (screenshot == null || screenshot.Empty())
             {
                 Console.ForegroundColor = ConsoleColor.Red;
@@ -391,7 +399,7 @@ namespace CvAut
                 Console.WriteLine($"👉 Dầu đen (Dark Elixir) quét được: {res.DarkElixir:N0}");
                 Console.WriteLine("===================================================");
                 Console.ResetColor();
-                
+
                 // Lưu lại ảnh chụp màn hình để debug
                 string debugPath = Path.Combine(AppContext.BaseDirectory, "live_screenshot_debug.png");
                 Cv2.ImWrite(debugPath, screenshot);
@@ -401,12 +409,12 @@ namespace CvAut
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" QUÉT TÀI NGUYÊN LIVE HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
             Console.WriteLine("==============================================");
-            try { Console.ReadKey(); } catch {}
+            try { Console.ReadKey(); } catch { }
         }
 
         private static void RunLiveHomeBaseTest(string templatesPath)
         {
-            try { Console.Clear(); } catch {}
+            try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
             Console.WriteLine("  QUÉT TÀI NGUYÊN LÀNG CHÍNH TRỰC TIẾP TỪ GIẢ LẬP BLUESTACKS ĐANG MỞ ");
@@ -419,7 +427,7 @@ namespace CvAut
 
             Console.WriteLine("[LIVE-HOME] Đang tiến hành chụp màn hình giả lập trực tiếp...");
             using Mat? screenshot = adb.TakeScreenshot();
-            
+
             if (screenshot == null || screenshot.Empty())
             {
                 Console.ForegroundColor = ConsoleColor.Red;
@@ -443,7 +451,7 @@ namespace CvAut
                 Console.WriteLine($"👉 Dầu đen (Dark Elixir) quét được: {res.DarkElixir:N0}");
                 Console.WriteLine("========================================================");
                 Console.ResetColor();
-                
+
                 // Lưu lại ảnh chụp màn hình để debug
                 string debugPath = Path.Combine(AppContext.BaseDirectory, "live_home_screenshot_debug.png");
                 Cv2.ImWrite(debugPath, screenshot);
@@ -453,12 +461,12 @@ namespace CvAut
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" QUÉT TÀI NGUYÊN LÀNG CHÍNH LIVE HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
             Console.WriteLine("==============================================");
-            try { Console.ReadKey(); } catch {}
+            try { Console.ReadKey(); } catch { }
         }
 
         private static void RunLiveZoomOutTest(string configPath)
         {
-            try { Console.Clear(); } catch {}
+            try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
             Console.WriteLine("      THỬ NGHIỆM THU NHỎ BẢN ĐỒ (ZOOM OUT) LIVE TRÊN GIẢ LẬP       ");
@@ -484,12 +492,12 @@ namespace CvAut
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" THỬ NGHIỆM ZOOM OUT HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
             Console.WriteLine("==============================================");
-            try { Console.ReadKey(); } catch {}
+            try { Console.ReadKey(); } catch { }
         }
 
         private static void RunLiveSmartTrainTest(string configPath, string templatesPath)
         {
-            try { Console.Clear(); } catch {}
+            try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
             Console.WriteLine("         CHẠY SMART TRAIN MỘT LẦN ĐỂ KIỂM TRA COUNT OCR LIVE       ");
@@ -521,12 +529,12 @@ namespace CvAut
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" SMART TRAIN LIVE TEST HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
             Console.WriteLine("==============================================");
-            try { Console.ReadKey(); } catch {}
+            try { Console.ReadKey(); } catch { }
         }
 
         private static void RunLiveBootRecoveryTest(string configPath)
         {
-            try { Console.Clear(); } catch {}
+            try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
             Console.WriteLine("        CHẠY BOOT RECOVERY: FORCE-STOP RỒI MỞ LẠI CLASH OF CLANS  ");
@@ -551,7 +559,7 @@ namespace CvAut
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" BOOT RECOVERY LIVE TEST HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
             Console.WriteLine("==============================================");
-            try { Console.ReadKey(); } catch {}
+            try { Console.ReadKey(); } catch { }
         }
 
         private static void RunLiveWorkflowTemplateTest(string configPath)
@@ -684,7 +692,7 @@ namespace CvAut
         private static void PauseForMenu()
         {
             Console.WriteLine("\nNhấn phím bất kỳ để quay lại menu.");
-            try { Console.ReadKey(intercept: true); } catch {}
+            try { Console.ReadKey(intercept: true); } catch { }
         }
 
         private sealed record MenuItem(

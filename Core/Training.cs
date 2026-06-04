@@ -27,6 +27,7 @@ namespace CvAut
         private static readonly Rect ArmyRoi = Rect.FromLTRB(682, 228, 1573, 383);
         private static readonly Rect SpellRoi = Rect.FromLTRB(689, 461, 1250, 600);
         private static readonly Rect SiegeRoi = Rect.FromLTRB(1256, 457, 1554, 608);
+        private static readonly Rect SpaceRoi = Rect.FromLTRB(750, 195, 826, 225);
         private static readonly Rect ArmySpaceSecondaryRoi = Rect.FromLTRB(751, 183, 858, 230);
         private static readonly Rect SpellSpaceRoi = Rect.FromLTRB(731, 398, 810, 464);
 
@@ -34,7 +35,7 @@ namespace CvAut
         private static readonly Rect TrashSpellRoi = Rect.FromLTRB(1197, 408, 1250, 455);
         private static readonly Rect TrashSiegeRoi = Rect.FromLTRB(1511, 406, 1577, 458);
 
-        private const double ValidationIconThreshold = 0.84;
+        private const double ValidationIconThreshold = 0.70;
 
         private static readonly Point TapClearArmy = new(1546, 209);
         private static readonly Point TapClearSpell = new(1225, 429);
@@ -198,7 +199,7 @@ namespace CvAut
 
         private bool ValidateTroops(JsonElement cfg)
         {
-            ArmySpec spec = GetArmySpec(cfg);
+            Console.WriteLine("[SMART] Validating current troops...");
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -206,67 +207,44 @@ namespace CvAut
                 return false;
             }
 
-            using Mat roi = Crop(shot, ArmyRoi);
-            bool mainOk = TryMatch("Army Troops", spec.Main, roi, ValidationIconThreshold, out Point mainCenter, out _);
-            if (!mainOk)
+            ArmySpec spec = GetArmySpec(cfg);
+            using Mat army = Crop(shot, ArmyRoi);
+            foreach (string troop in spec.Troops)
             {
-                mainOk = TryMatch("s_troops", $"s_{spec.Main}", roi, ValidationIconThreshold, out mainCenter, out _);
-            }
+                string subdir = troop.Equals("electro_dragon", StringComparison.OrdinalIgnoreCase) ? "s_troops" : "Army Troops";
+                if (!TryMatch(subdir, troop, army, 0.86, out Point center, out double score))
+                {
+                    Console.WriteLine($"[VALIDATION] {subdir}/{troop}: score={score:F3}, center=({center.X},{center.Y}) => missing; retraining.");
+                    return false;
+                }
 
-            bool balloonOk = TryMatch("Army Troops", "balloon", roi, ValidationIconThreshold, out Point balloonCenter, out _);
-            if (!mainOk || !balloonOk)
-            {
-                Console.WriteLine("[VALIDATION] will train fresh load");
-                return false;
+                Console.WriteLine($"[VALIDATION] {subdir}/{troop}: score={score:F3}, center=({center.X},{center.Y}) => ok");
             }
 
             Console.WriteLine("[VALIDATION] composition ok");
-
-            int? armySpace = MeasureArmySpaceSecondary(shot);
-            if (armySpace == null)
-            {
-                Console.WriteLine("[SPACE CHECK] Secondary not confident; icon validation passed.");
-                return true;
-            }
-
-            Console.WriteLine($"[SPACE CHECK] Available space = {armySpace.Value}");
-
-            var expected = GetExpectedTroopCounts(spec, armySpace.Value);
-            bool mainCountOk = ValidateIconCount(shot, ArmyRoi, spec.Main, mainCenter, expected.MainCount);
-            bool balloonCountOk = ValidateIconCount(shot, ArmyRoi, "balloon", balloonCenter, expected.BalloonCount);
-
-            if (!mainCountOk || !balloonCountOk)
-            {
-                return false;
-            }
-
-            return armySpace.Value >= 120;
+            return true;
         }
 
         private bool ValidateSpells()
         {
+            Console.WriteLine("[SMART] Validating spells...");
+
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
             {
                 return false;
             }
 
-            using Mat roi = Crop(shot, SpellRoi);
-            bool rageOk = TryMatch("Spells", "rage", roi, ValidationIconThreshold, out Point rageCenter, out _);
-            bool freezeOk = TryMatch("Spells", "freeze", roi, ValidationIconThreshold, out Point freezeCenter, out _);
-            if (!rageOk || !freezeOk)
+            using Mat spells = Crop(shot, SpellRoi);
+            foreach (string spell in new[] { "rage", "freeze" })
             {
-                Console.WriteLine("[SPELL VALIDATION] will train fresh load");
-                return false;
-            }
+                if (!TryMatch("Spells", spell, spells, 0.86, out Point center, out double score))
+                {
+                    Console.WriteLine($"[SPELL VALIDATION] Spells/{spell}: score={score:F3}, center=({center.X},{center.Y}) => missing; retraining.");
+                    return false;
+                }
 
-            int limit = MeasureSpellSpaceFromShot(shot) ?? 11;
-            var expected = GetExpectedSpellCounts(limit);
-            bool rageCountOk = ValidateIconCount(shot, SpellRoi, "rage", rageCenter, expected.RageCount);
-            bool freezeCountOk = ValidateIconCount(shot, SpellRoi, "freeze", freezeCenter, expected.FreezeCount);
-            if (!rageCountOk || !freezeCountOk)
-            {
-                return false;
+                Console.WriteLine($"[SPELL VALIDATION] Spells/{spell}: score={score:F3}, center=({center.X},{center.Y}) => ok");
             }
 
             Console.WriteLine("[SPELL VALIDATION] composition ok");
@@ -275,14 +253,24 @@ namespace CvAut
 
         private bool ValidateSiege()
         {
+            Console.WriteLine("[SMART] Validating siege machines...");
+
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
             {
                 return false;
             }
 
-            using Mat roi = Crop(shot, SiegeRoi);
-            return TryMatch("Siege Machines", "slammer", roi, ValidationIconThreshold, out _, out _);
+            using Mat siege = Crop(shot, SiegeRoi);
+            if (TryMatch("Siege Machines", "slammer", siege, 0.86, out Point center, out double score))
+            {
+                Console.WriteLine($"[SIEGE] Siege Machines/slammer: score={score:F3}, center=({center.X},{center.Y}) => ok");
+                Console.WriteLine("[SIEGE] composition ok");
+                return true;
+            }
+
+            Console.WriteLine($"[SIEGE] Siege Machines/slammer: score={score:F3}, center=({center.X},{center.Y}) => missing; will rebuild");
+            return false;
         }
 
         public static void DiagnoseSavedArmyWindow(string imagePath, string templatesPath)
@@ -316,28 +304,16 @@ namespace CvAut
         private void TrainTroops(JsonElement cfg)
         {
             ArmySpec spec = GetArmySpec(cfg);
+            Console.WriteLine("[TRAIN] Initiating fresh troop training load...");
 
-            using Mat? shot = _adb.TakeScreenshot();
-            int limit = 240;
-            if (shot != null && !shot.Empty())
-            {
-                int? measured = MeasureArmySpaceSecondary(shot);
-                if (measured is >= 120)
-                {
-                    limit = measured.Value;
-                }
-            }
+            ClearQueue(TrashArmyRoi, TapClearArmy, ConfirmTapArmy);
 
-            Console.WriteLine($"[SPACE CHECK] Available space = {limit}");
-
-            ClearIfTrash(TrashArmyRoi, TapClearArmy, ConfirmTapArmy);
             _adb.Tap(OpenArmyTab.X, OpenArmyTab.Y);
             Thread.Sleep(1000);
 
-            int mainCost = SpaceCost[spec.Main];
-            int mainSpace = ((limit * 80 / 100) / mainCost) * mainCost;
-            int mainCount = mainSpace / mainCost;
-            int balloonCount = Math.Max(0, (limit - mainSpace) / SpaceCost["balloon"]);
+            using Mat? shot = _adb.TakeScreenshot();
+            int limit = shot == null || shot.Empty() ? 260 : MeasureArmySpace(shot) ?? 260;
+            (int mainCount, int balloonCount) = GetExpectedTroopCounts(spec, limit);
 
             Console.WriteLine($"[TRAIN] {mainCount}x{spec.Main}, {balloonCount}xballoon (limit={limit})");
             TapIconInTab(spec.Main, mainCount);
@@ -345,20 +321,20 @@ namespace CvAut
 
             _adb.Tap(CloseArmyTab.X, CloseArmyTab.Y);
             Thread.Sleep(1000);
+            Console.WriteLine("[TRAIN] Troops queued successfully.");
         }
 
         private void TrainSpells()
         {
-            int limit = MeasureSpellSpace() ?? 11;
-            Console.WriteLine($"[SPELL SPACE CHECK] Available space = {limit}");
+            Console.WriteLine("[TRAIN] Initiating spell production load...");
 
-            ClearIfTrash(TrashSpellRoi, TapClearSpell, ConfirmTapSpell);
+            ClearQueue(TrashSpellRoi, TapClearSpell, ConfirmTapSpell);
+
             _adb.Tap(OpenSpellTab.X, OpenSpellTab.Y);
             Thread.Sleep(1000);
 
-            var expected = GetExpectedSpellCounts(limit);
-            int rageCount = expected.RageCount;
-            int freezeCount = expected.FreezeCount;
+            int limit = MeasureSpellSpace() ?? 11;
+            (int rageCount, int freezeCount) = GetExpectedSpellCounts(limit);
 
             Console.WriteLine($"[TRAIN] {rageCount}xrage, {freezeCount}xfreeze (limit={limit})");
             TapIconInTab("rage", rageCount);
@@ -366,23 +342,14 @@ namespace CvAut
 
             _adb.Tap(CloseSpellTab.X, CloseSpellTab.Y);
             Thread.Sleep(1000);
+            Console.WriteLine("[TRAIN] Spells queued successfully.");
         }
 
         private void TrainSlammer()
         {
-            using Mat? shot = _adb.TakeScreenshot();
-            if (shot != null && !shot.Empty())
-            {
-                using Mat roi = Crop(shot, SiegeRoi);
-                if (TryMatch("Siege Machines", "slammer", roi, 0.80, out _, out _))
-                {
-                    Console.WriteLine("[SIEGE] composition ok");
-                    return;
-                }
-            }
+            Console.WriteLine("[TRAIN] Queuing Stone Slammer production...");
 
-            Console.WriteLine("[SIEGE] 'slammer' missing - will rebuild");
-            ClearIfTrash(TrashSiegeRoi, TapClearSiege, ConfirmTapSiege);
+            ClearQueue(TrashSiegeRoi, TapClearSiege, ConfirmTapSiege);
 
             _adb.Tap(OpenSiegeTab.X, OpenSiegeTab.Y);
             Thread.Sleep(1000);
@@ -392,6 +359,14 @@ namespace CvAut
 
             _adb.Tap(CloseSiegeTab.X, CloseSiegeTab.Y);
             Thread.Sleep(1000);
+            Console.WriteLine("[TRAIN] Stone Slammer queued.");
+        }
+
+
+
+        private void ClearQueue(Rect roi, Point tapCoord, Point confirmCoord)
+        {
+            ClearIfTrash(roi, tapCoord, confirmCoord);
         }
 
         private void ClearIfTrash(Rect roi, Point tapCoord, Point confirmCoord)
@@ -422,22 +397,38 @@ namespace CvAut
                 return;
             }
 
-            using Mat? tab = _adb.TakeScreenshot();
-            if (tab == null || tab.Empty())
+            using Mat? shot = _adb.TakeScreenshot();
+            if (shot == null || shot.Empty())
             {
                 return;
             }
 
-            if (!TryMatch("to_train", name, tab, 0.70, out Point center, out _))
+            if (!TryMatch("to_train", name, shot, 0.70, out Point center, out double score))
             {
-                Console.WriteLine($"[TRAIN] {name}.png not found in tab");
+                Console.WriteLine($"[TRAIN] {name}.png not found in tab (score={score:F3})");
                 return;
             }
 
+            Console.WriteLine($"[TRAIN] {name}: score={score:F3} center=({center.X},{center.Y}) count={count}");
             for (int i = 0; i < count; i++)
             {
+                Console.WriteLine($"[TRAIN] tap {i + 1}/{count} -> ({center.X},{center.Y}) score={score:F3}");
                 _adb.Tap(center.X, center.Y);
+                Thread.Sleep(100);
             }
+        }
+
+        private int? MeasureArmySpace(Mat shot)
+        {
+            if (_vision.TryExtractNumericalMetrics(shot, SpaceRoi, out int limit, out double confidence, useRgbThresh: true)
+                && limit >= 120)
+            {
+                Console.WriteLine($"[SPACE CHECK] Available space = {limit}, confidence={confidence:F2}");
+                return limit;
+            }
+
+            Console.WriteLine("Failed to get the correct army space. ");
+            return MeasureArmySpaceSecondary(shot);
         }
 
         private int? MeasureArmySpaceSecondary(Mat shot)
@@ -611,6 +602,12 @@ namespace CvAut
             int primarySpace = ((limit * 80 / 100) / 2) * 2;
             int rageCount = primarySpace / 2;
             int freezeCount = Math.Max(0, limit - primarySpace);
+
+            if (freezeCount > 9)
+            {
+                freezeCount %= 10;
+            }
+
             return (rageCount, freezeCount);
         }
 

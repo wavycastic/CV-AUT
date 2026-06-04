@@ -1,7 +1,7 @@
-{
+﻿{
   "target_data_threshold": {
-    "gold": 300000,
-    "elixir": 300000,
+    "gold": 400000,
+    "elixir": 400000,
     "dark_elixir": 0
   },
   "element_state_automation": {
@@ -21,8 +21,8 @@
     "port": 5556
   },
   "farming_thresholds": {
-    "gold_threshold": 300000,
-    "elixir_threshold": 300000,
+    "gold_threshold": 400000,
+    "elixir_threshold": 400000,
     "dark_elixir_threshold": 0
   },
   "multi_account": {
@@ -37,9 +37,9 @@
   "train_mode": "smart",
   "quick_slot": 1,
   "upgrade_wall": false,
-  "wall_level": 12,
-  "wall_gold_threshold": 9000000,
-  "wall_elixir_threshold": 9000000,
+  "wall_level": 13,
+  "wall_gold_threshold": 10000000,
+  "wall_elixir_threshold": 10000000,
   "request_troops": false,
   "enable_clan_games": false,
   "enable_clan_capital": false,

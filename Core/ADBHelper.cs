@@ -126,6 +126,59 @@ namespace CvAut
             return false;
         }
 
+        public bool EnsureConnectedOnline(int timeoutSeconds = 30)
+        {
+            DateTime deadline = DateTime.Now.AddSeconds(timeoutSeconds);
+            while (DateTime.Now < deadline)
+            {
+                try
+                {
+                    AdbClient.Instance.Connect(new IPEndPoint(IPAddress.Parse(_host), _port));
+                }
+                catch
+                {
+                    // The device may already be connected; verify state below.
+                }
+
+                string state = GetDeviceState();
+                if (string.Equals(state, "device", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                Thread.Sleep(1000);
+            }
+
+            return false;
+        }
+
+        public string GetDeviceState()
+        {
+            try
+            {
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = _adbExePath,
+                    Arguments = $"-s {_deviceAddress} get-state",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                using var process = Process.Start(processInfo);
+                if (process == null) return "unknown";
+
+                string output = process.StandardOutput.ReadToEnd().Trim();
+                process.WaitForExit(5000);
+                return string.IsNullOrWhiteSpace(output) ? "unknown" : output;
+            }
+            catch
+            {
+                return "unknown";
+            }
+        }
+
         public string ExecuteShell(string command)
         {
             try
