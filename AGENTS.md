@@ -45,8 +45,8 @@ This project is indexed by GitNexus as **CV-AUT** (2920 symbols, 5654 relationsh
 # WPF UI coding rules
 - This project uses the `Wpf.Ui` (lepoco/wpfui) library for all UI.
 - BEFORE writing or editing any XAML/UI code, READ the relevant files in:
-  - `.zed-context/wpfui-docs/`     → official control documentation (markdown)
-  - `.zed-context/wpfui-gallery/`  → real source code of the WPF UI Gallery app (use as the canonical example)
-- NEVER invent Wpf.Ui control names, properties, or namespaces. If unsure, find the exact usage in `.zed-context/wpfui-gallery/` first.
+  - `docs/wpf-ui/docs/`     → official control documentation (markdown)
+  - `docs/wpf-ui/gallery/`  → real source code of the WPF UI Gallery app (use as the canonical example)
+- NEVER invent Wpf.Ui control names, properties, or namespaces. If unsure, find the exact usage in `docs/wpf-ui/gallery/` first.
 - Match the Gallery's patterns: `ui:FluentWindow`, `ui:NavigationView` + `ui:NavigationViewItem`, `ui:CardControl`, `ui:CardExpander`, `ui:CardAction`, `ui:TextBlock FontTypography=...`, `ui:Button Appearance="Primary"`.
 - Use theme resource keys (e.g. `ApplicationBackgroundBrush`, `TextFillColorPrimary`) instead of hardcoded hex, except documented fallbacks.
