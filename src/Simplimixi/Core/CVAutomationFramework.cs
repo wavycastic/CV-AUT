@@ -29,6 +29,7 @@ namespace CvAut
         private readonly string _templatesPath;
 
         private CancellationTokenSource? _cts;
+        private Task? _workerTask;
         private readonly ManualResetEvent _pauseEvent = new(true);
         private volatile bool _isRunning;
         private int _cycleCount;
@@ -44,14 +45,16 @@ namespace CvAut
         private static readonly Rect ResultYouGotRoi = Rect.FromLTRB(720, 330, 910, 390);
         private static readonly Rect ResultContinueRoi = Rect.FromLTRB(590, 670, 1020, 860);
         private static readonly Rect ConnectionPopupRoi = Rect.FromLTRB(360, 180, 1240, 720);
-        
+        private static readonly Rect StarBonusPopupRoi = Rect.FromLTRB(430, 55, 1170, 145);
+
         // Vùng ROI cho sự kiện rương báu (Treasure Hunt) xuất hiện gây nghẽn màn hình
         private static readonly Rect TreasureHuntRoi = Rect.FromLTRB(940, 80, 1450, 830);
         private static readonly Rect TreasureHuntChestTemplateRoi = Rect.FromLTRB(105, 65, 210, 145);
         private static readonly Rect TreasureHuntTextTemplateRoi = Rect.FromLTRB(15, 210, 300, 275);
         private static readonly Point TreasureHuntOpenedChestTapPoint = new(800, 455);
         private static readonly Point TreasureHuntRewardContinueTapPoint = new(800, 750);
-        
+        private static readonly Point StarBonusOkayTapPoint = new(808, 766);
+
         // Ngưỡng tin cậy khớp mẫu
         private const double HomeTemplateThreshold = 0.70;
         private const double ConnectionPopupThreshold = 0.88;
@@ -62,11 +65,12 @@ namespace CvAut
         private const double TreasureHuntMarkerThreshold = 0.82;
         private const double ResultContinueThreshold = 0.38;
         private const double ResultYouGotThreshold = 0.55;
+        private const double StarBonusPopupThreshold = 0.70;
         private const int ResultScreenStableMatches = 2;
         private const int MaxWaitBattleSeconds = 170; // Thời gian tối đa chờ trận đấu tự động kết thúc (hết giờ 3 phút)
         private const int NormalCycleDelayMs = 10000;
         private const int FastAttackCycleDelayMs = 500;
-        
+
         // Tên các template popup lỗi mạng thường thấy cần giải tỏa
         private static readonly string[] ConnectionPopupTemplates =
         {
@@ -93,13 +97,13 @@ namespace CvAut
 
             _adb = new ADBHelper(host, port);
 
-            _templatesPath = Path.Combine(AppContext.BaseDirectory, "Templates");
+            _templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
             _vision = new VisionEngine(_templatesPath);
             _training = new Training(_adb, _templatesPath, _vision);
             _attacks = new Attacks(_adb, _vision);
             _wallUpdater = new WallUpdater(_adb, _vision, _templatesPath);
 
-            Console.WriteLine("[FSM-CS] Phân hệ lõi Máy trạng thái đã khởi tạo thành công.");
+            Console.WriteLine("[FSM] Automation core initialized.");
         }
 
         /// <summary>
@@ -119,7 +123,7 @@ namespace CvAut
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[FSM-CS WARNING] Lỗi đọc cấu hình: {ex.Message}. Sử dụng cấu hình mặc định.");
+                Console.WriteLine($"[FSM WARNING] Config load failed: {ex.Message}. Using defaults.");
             }
 
             // Gán cấu hình mặc định dự phòng
@@ -147,8 +151,8 @@ namespace CvAut
             _cts = new CancellationTokenSource();
             _pauseEvent.Set(); // Mở khoá luồng để bot bắt đầu chạy
 
-            Task.Run(() => StartWorker(_cts.Token));
-            Console.WriteLine("[FSM-CS] Vòng lặp tự động hóa đã bắt đầu chạy ngầm...");
+            _workerTask = Task.Run(() => StartWorker(_cts.Token));
+            Console.WriteLine("[FSM] Automation started.");
         }
 
         /// <summary>
@@ -169,13 +173,22 @@ namespace CvAut
                     return;
                 }
 
-                Console.WriteLine("🧠 Checking if we're on the home base screen...");
+                Console.WriteLine("[BASE] Checking home screen...");
                 BotLoop(token);
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("[FSM] Worker cancelled.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[FSM-CS ERROR] Lỗi khởi động bot: {ex.Message}");
+                Console.WriteLine($"[FSM ERROR] Startup failed: {ex.Message}");
+            }
+            finally
+            {
                 _isRunning = false;
+                _fastAttackQueued = false;
+                Console.WriteLine("[FSM] Worker stopped.");
             }
         }
 
@@ -184,13 +197,14 @@ namespace CvAut
         /// </summary>
         public void Stop()
         {
-            if (!_isRunning) return;
-
             _isRunning = false;
             _fastAttackQueued = false;
             _cts?.Cancel();
-            Console.WriteLine("[FSM-CS] Đã gửi lệnh dừng khẩn cấp Máy trạng thái.");
+            _pauseEvent.Set();
+            Console.WriteLine("[FSM] Stop requested.");
         }
+
+        public Task Completion => _workerTask ?? Task.CompletedTask;
 
         /// <summary>
         /// Tạm dừng tạm thời luồng chạy bot.
@@ -198,7 +212,7 @@ namespace CvAut
         public void Pause()
         {
             _pauseEvent.Reset();
-            Console.WriteLine("[FSM-CS] Đã tạm dừng luồng chạy bot.");
+            Console.WriteLine("[FSM] Paused.");
         }
 
         /// <summary>
@@ -207,7 +221,7 @@ namespace CvAut
         public void Resume()
         {
             _pauseEvent.Set();
-            Console.WriteLine("[FSM-CS] Tiếp tục chạy luồng bot.");
+            Console.WriteLine("[FSM] Resumed.");
         }
 
         public void RunSingleCycleForTest(CancellationToken token)
@@ -230,11 +244,11 @@ namespace CvAut
             {
                 for (int i = 1; i <= cycleLimit && !CheckStop(token); i++)
                 {
-                    Console.WriteLine($"[FSM-CS] Test loop cycle {i}/{cycleLimit}.");
+                    Console.WriteLine($"[FSM] Test cycle {i}/{cycleLimit}.");
                     OneCycle(Config, token);
                     if (i < cycleLimit && !CheckStop(token))
                     {
-                        Thread.Sleep(_fastAttackQueued ? FastAttackCycleDelayMs : NormalCycleDelayMs);
+                        InterruptibleSleep(_fastAttackQueued ? FastAttackCycleDelayMs : NormalCycleDelayMs, token);
                     }
                 }
             }
@@ -247,6 +261,11 @@ namespace CvAut
         private bool CheckStop(CancellationToken token)
         {
             return token.IsCancellationRequested || !_isRunning;
+        }
+
+        private bool InterruptibleSleep(int milliseconds, CancellationToken token)
+        {
+            return token.WaitHandle.WaitOne(milliseconds) || !_isRunning;
         }
 
         /// <summary>
@@ -279,23 +298,23 @@ namespace CvAut
             WaitIfPaused(token);
             if (CheckStop(token)) return;
 
-            Console.WriteLine($"\n--- [FSM-CS] Bắt đầu Chu kỳ đơn (Làng_{_currentVillageIdx}) ---");
+            Console.WriteLine($"\n--- [FSM] Cycle started (Village {_currentVillageIdx}) ---");
             bool fastAttackOnly = _fastAttackQueued;
             _fastAttackQueued = false;
             if (fastAttackOnly)
             {
-                Console.WriteLine("[FSM-CS] Fast attack mode: vừa về home sau battle, bỏ qua prep và tìm trận ngay.");
+                Console.WriteLine("[FSM] Fast attack mode enabled.");
             }
 
             // 1. Xác thực màn hình Làng chính (Home Base)
             WaitIfPaused(token);
             if (CheckStop(token)) return;
 
-            Console.WriteLine("[FSM-CS] Bước 1: Xác thực tiêu điểm Làng chính...");
+            Console.WriteLine("[FSM] Step 1: Verifying home base...");
             bool isHome = EnsureHomeBase(fastAttackOnly ? 8 : 50);
             if (!isHome)
             {
-                Console.WriteLine("[FSM-CS ERROR] Không thể xác định màn hình Làng chính. Bỏ qua chu kỳ này.");
+                Console.WriteLine("[FSM ERROR] Home base not detected. Cycle skipped.");
                 return;
             }
 
@@ -303,7 +322,7 @@ namespace CvAut
             {
                 // 2. Click giải tỏa các popup linh tinh cản trở ở tâm màn hình
                 _adb.Tap(140, 606);
-                Thread.Sleep(1000);
+                if (InterruptibleSleep(1000, token)) return;
 
                 if (RecoverIfConnectionPopup("[WARN] Connection lost → recovering"))
                 {
@@ -313,7 +332,7 @@ namespace CvAut
                 // 3. Kéo camera giãn góc nhìn rộng (Multi-Zoom Out)
                 WaitIfPaused(token);
                 if (CheckStop(token)) return;
-                Console.WriteLine("[FSM-CS] Bước 2: Kéo camera góc rộng (Zoom Out)...");
+                Console.WriteLine("[FSM] Step 2: Adjusting camera...");
                 ZoomOut();
 
                 // 4. Huấn luyện lính theo cấu hình
@@ -325,13 +344,17 @@ namespace CvAut
 
                 if (trainMode.Equals("quick", StringComparison.OrdinalIgnoreCase) && _cycleCount % 5 == 0)
                 {
-                    Console.WriteLine($"[FSM-CS] Bước 3: Luyện quân nhanh (Quick Train Slot {quickSlot})...");
+                    Console.WriteLine($"[FSM] Step 3: Quick Train slot {quickSlot}...");
                     _training.QuickTrain(quickSlot);
                 }
                 else if (!trainMode.Equals("quick", StringComparison.OrdinalIgnoreCase) && _cycleCount % 3 == 0)
                 {
-                    Console.WriteLine($"[FSM-CS] Bước 3: Smart Train theo cấu hình attack='{GetStringOrDefault(cfg, "attack", "Dragon_Attack")}'...");
-                    _training.SmartTrain(cfg);
+                    Console.WriteLine($"[FSM] Step 3: Smart Train ({GetStringOrDefault(cfg, "attack", "Dragon_Attack")})...");
+                    if (!_training.SmartTrain(cfg))
+                    {
+                        Console.WriteLine("[FSM WARNING] Smart Train incomplete. Skipping attack cycle.");
+                        return;
+                    }
                 }
 
                 if (RecoverIfConnectionPopup("[WARN] Connection lost → recovering"))
@@ -346,7 +369,7 @@ namespace CvAut
                 var wallConfig = GetWallUpgradeConfig(cfg, _currentVillageIdx);
                 if (wallConfig.Enabled)
                 {
-                    Console.WriteLine($"[FSM-CS] Bước 4: Wall Updater - nâng tường level {wallConfig.WallLevel} nếu vượt ngưỡng...");
+                    Console.WriteLine($"[FSM] Step 4: Wall upgrade check (level {wallConfig.WallLevel})...");
                     _wallUpdater.HandleHomeResources(
                         wallConfig.WallLevel,
                         wallConfig.GoldThreshold,
@@ -356,7 +379,7 @@ namespace CvAut
                 // 6. Thu hoạch tài nguyên mỏ
                 WaitIfPaused(token);
                 if (CheckStop(token)) return;
-                Console.WriteLine("[FSM-CS] Bước 5: Tự động thu hoạch tài nguyên tại các mỏ sản xuất...");
+                Console.WriteLine("[FSM] Step 5: Collecting resources...");
                 CollectResourcesPlaceholder();
             }
 
@@ -367,7 +390,7 @@ namespace CvAut
             var (goldReq, elixirReq, deReq) = GetFarmingThresholds(cfg);
 
             Console.WriteLine($"\n==============================================");
-            Console.WriteLine($"[FSM-CS] TÌM TRẬN ĐẤU (Yêu cầu: Vàng >= {goldReq:N0} | Dầu hồng >= {elixirReq:N0})");
+            Console.WriteLine($"[MATCH] Searching targets (Gold >= {goldReq:N0}, Elixir >= {elixirReq:N0})");
             Console.WriteLine($"==============================================");
 
             // Bấm nút Tấn công (Attack) để mở giao diện tìm kiếm
@@ -382,7 +405,7 @@ namespace CvAut
                 WaitIfPaused(token);
                 if (CheckStop(token)) break;
 
-                Console.WriteLine($"\n[FSM-CS] Phân tích nhà đối thủ {searchCount}/{maxSearches}...");
+                Console.WriteLine($"\n[MATCH] Evaluating target {searchCount}/{maxSearches}...");
 
                 if (RecoverIfConnectionPopup("[WARN] Connection lost during evaluation → recovering"))
                 {
@@ -410,15 +433,15 @@ namespace CvAut
                         break;
                     }
 
-                    Console.WriteLine($"⚠️ Next button missing—retrying ({attempt}/2)");
-                    Thread.Sleep(500);
+                    Console.WriteLine($"[MATCH WARNING] Next button unavailable. Retry {attempt}/2.");
+                    if (InterruptibleSleep(500, token)) break;
                 }
 
                 if (!nextButtonFound)
                 {
-                    Console.WriteLine("⚠️ Next button still missing after 2 quick attempts—triggering recovery");
+                    Console.WriteLine("[MATCH WARNING] Next button unavailable. Starting recovery.");
                     BootRecovery();
-                    Console.WriteLine("✅ Recovered successfully");
+                    Console.WriteLine("[RECOVERY] Completed.");
                     return;
                 }
 
@@ -428,14 +451,13 @@ namespace CvAut
                 // Kiểm tra xem lượng tài nguyên có đạt tiêu chí cấu hình hay không
                 if (resources.Gold >= goldReq && resources.Elixir >= elixirReq && resources.DarkElixir >= deReq)
                 {
-                    Console.WriteLine($"🔥 [FSM-CS] ĐÃ ĐẠT TIÊU CHÍ! Gold={resources.Gold:N0} >= {goldReq:N0} | Elixir={resources.Elixir:N0} >= {elixirReq:N0}");
-                    Console.WriteLine("[FSM-CS] Chờ 1.5s để trang trí/base overlay của đối thủ ẩn hết trước khi đánh...");
-                    Thread.Sleep(1500);
-                    if (CheckStop(token)) break;
+                    Console.WriteLine($"[MATCH] Target accepted: Gold={resources.Gold:N0}, Elixir={resources.Elixir:N0}.");
+                    Console.WriteLine("[MATCH] Preparing attack...");
+                    if (InterruptibleSleep(1500, token)) break;
 
                     // Chạy script tự động rải quân tấn công
                     string attackStrategy = GetStringOrDefault(cfg, "attack", "Dragon_Attack");
-                    _attacks.Run(attackStrategy);
+                    _attacks.Run(attackStrategy, token);
                     battleExecuted = true;
 
                     WaitIfPaused(token);
@@ -469,7 +491,7 @@ namespace CvAut
                 }
                 else
                 {
-                    Console.WriteLine("[FSM-CS] Tài nguyên thấp. Bỏ qua nhà này.");
+                    Console.WriteLine("[MATCH] Target skipped.");
                     // Bấm tìm kiếm đối thủ tiếp theo
                     SearchNext();
                     searchCount++;
@@ -479,17 +501,17 @@ namespace CvAut
             // Đầu hàng nếu quá 50 lần tìm kiếm không đạt yêu cầu
             if (!battleExecuted && !CheckStop(token))
             {
-                Console.WriteLine("[FSM-CS WARN] Đã tìm kiếm 50 lần không thấy nhà phù hợp. Surrendering...");
+                Console.WriteLine("[MATCH WARNING] Search limit reached. Returning home.");
                 _adb.Tap(80, 780); // Click Surrender
-                Thread.Sleep(1000);
+                if (InterruptibleSleep(1000, token)) return;
                 _adb.Tap(960, 560); // Confirm OK
-                Thread.Sleep(2000);
+                if (InterruptibleSleep(2000, token)) return;
                 _adb.Tap(800, 780); // Click Home
-                Thread.Sleep(5000);
+                InterruptibleSleep(5000, token);
             }
 
             _cycleCount++;
-            Console.WriteLine($"--- [FSM-CS] Kết thúc Chu kỳ đơn (Làng_{_currentVillageIdx}) ---\n");
+            Console.WriteLine($"--- [FSM] Cycle finished (Village {_currentVillageIdx}) ---\n");
         }
 
         /// <summary>
@@ -498,20 +520,20 @@ namespace CvAut
         /// </summary>
         private void BotLoop(CancellationToken token)
         {
-            Console.WriteLine("[FSM-CS] Vòng lặp bất đồng bộ bắt đầu xử lý...");
+            Console.WriteLine("[FSM] Worker loop started.");
 
             JsonElement multiConfig = GetObjectOrDefault(Config, "multi_account");
             bool enableMulti = GetBoolOrDefault(multiConfig, "enable_multi_account", false);
 
             if (!enableMulti)
             {
-                Console.WriteLine("[FSM-CS] Chế độ chạy đơn tài khoản (Single Account Mode).");
+                Console.WriteLine("[FSM] Single account mode.");
                 _currentVillageIdx = 1;
                 while (!CheckStop(token))
                 {
                     OneCycle(Config, token);
                     // Nghỉ ngắt quãng giữa các chu kỳ. Nếu vừa đánh xong, delay ngắn hơn để đánh tiếp ngay
-                    Thread.Sleep(_fastAttackQueued ? FastAttackCycleDelayMs : NormalCycleDelayMs);
+                    InterruptibleSleep(_fastAttackQueued ? FastAttackCycleDelayMs : NormalCycleDelayMs, token);
                 }
                 return;
             }
@@ -530,7 +552,7 @@ namespace CvAut
 
                     _currentVillageIdx = idx;
                     _fastAttackQueued = false;
-                    Console.WriteLine($"[FSM-CS] Đang thực hiện chuyển sang Làng_{idx}...");
+                    Console.WriteLine($"[FSM] Switching to Village {idx}...");
 
                     // Thực hiện thay đổi tài khoản tương ứng
                     SwitchToVillagePlaceholder(idx);
@@ -543,16 +565,16 @@ namespace CvAut
                     {
                         WaitIfPaused(token);
                         OneCycle(Config, token);
-                        Thread.Sleep(_fastAttackQueued ? FastAttackCycleDelayMs : 15000);
+                        InterruptibleSleep(_fastAttackQueued ? FastAttackCycleDelayMs : 15000, token);
                     }
 
-                    Console.WriteLine($"[FSM-CS] Hoàn tất thời gian chơi của Làng_{idx}.");
+                    Console.WriteLine($"[FSM] Village {idx} session complete.");
                 }
 
-                Thread.Sleep(5000);
+                InterruptibleSleep(5000, token);
             }
 
-            Console.WriteLine("[FSM-CS] Vòng lặp chạy ngầm đã dừng hoàn toàn.");
+            Console.WriteLine("[FSM] Worker loop stopped.");
         }
 
         /// <summary>
@@ -561,19 +583,19 @@ namespace CvAut
         /// </summary>
         private bool EnsureHomeBase(int maxWaitSeconds = 50, bool allowBootRecovery = true)
         {
-            Console.WriteLine("[BASE] Checking if we're on the home base screen...");
+            Console.WriteLine("[BASE] Checking home screen...");
 
             DateTime start = DateTime.Now;
             while ((DateTime.Now - start).TotalSeconds < maxWaitSeconds)
             {
                 if (DetectHomeBase(out string reason))
                 {
-                    Console.WriteLine($"[BASE] Home base confirmed ({reason}).");
+                    Console.WriteLine("[BASE] Home base confirmed.");
                     return true;
                 }
 
-                Console.WriteLine("[BASE] Still not on home base. Retrying in 5s...");
-                Thread.Sleep(5000);
+                Console.WriteLine("[BASE] Waiting for home base...");
+                if (InterruptibleSleep(5000, _cts?.Token ?? CancellationToken.None)) return false;
             }
 
             if (!allowBootRecovery)
@@ -614,7 +636,7 @@ namespace CvAut
                 return true;
             }
 
-            Console.WriteLine($"[BASE] game_setting score={settingScore:F3}; shop template not confirmed.");
+
             return false;
         }
 
@@ -631,11 +653,11 @@ namespace CvAut
             _adb.ExecuteShell("am force-stop com.supercell.clashofclans");
             _adb.ExecuteShell("monkey -p com.supercell.clashofclans -c android.intent.category.LAUNCHER 1");
 
-            Console.WriteLine("[RECOVERY] Waiting 10 seconds for game to load...");
-            Thread.Sleep(10000);
+            Console.WriteLine("[RECOVERY] Waiting for game to load...");
+            if (InterruptibleSleep(10000, _cts?.Token ?? CancellationToken.None)) return;
 
-            Console.WriteLine("[RECOVERY] Dismissing pop-ups...");
-            _adb.Tap(146, 487); // Chạm góc dưới bên trái để giải tỏa nhanh các hộp thoại sự kiện
+            Console.WriteLine("[RECOVERY] Clearing pop-ups...");
+            _adb.Tap(146, 487); // Chạm rìa bên trái màn hình để giải tỏa nhanh các hộp thoại sự kiện
         }
 
         /// <summary>
@@ -644,11 +666,13 @@ namespace CvAut
         /// </summary>
         private void SearchAttack()
         {
+            CancellationToken token = _cts?.Token ?? CancellationToken.None;
             _adb.Tap(113, 797); // Nút Tấn công chính
-            Thread.Sleep(700);
+            if (InterruptibleSleep(700, token)) return;
             HandleTreasureHuntIfPresent();
+            if (CheckStop(token)) return;
             _adb.Tap(272, 659); // Chọn Tìm trận đối thủ (Find Match)
-            Thread.Sleep(700);
+            if (InterruptibleSleep(700, token)) return;
             _adb.Tap(1445, 804); // Chấp nhận phí tìm trận ban đầu
         }
 
@@ -674,13 +698,13 @@ namespace CvAut
             {
                 if (verboseNotFound)
                 {
-                    Console.WriteLine($"[TREASURE] Treasure Hunt popup not found (score={score:F2}).");
+                    Console.WriteLine("[TREASURE] Popup not found.");
                 }
 
                 return false;
             }
 
-            Console.WriteLine($"[TREASURE] Treasure Hunt popup detected at ({center.X},{center.Y}) score={score:F2}.");
+            Console.WriteLine("[TREASURE] Popup detected.");
             for (int i = 1; i <= 5; i++)
             {
                 _adb.Tap(center.X, center.Y);
@@ -696,7 +720,7 @@ namespace CvAut
         /// </summary>
         private bool HandleOpenedTreasureChest()
         {
-            Console.WriteLine($"[TREASURE] Possible opened Treasure Hunt chest screen. Tapping chest at ({TreasureHuntOpenedChestTapPoint.X},{TreasureHuntOpenedChestTapPoint.Y}) 5 times...");
+            Console.WriteLine("[TREASURE] Handling opened chest screen.");
             for (int i = 1; i <= 5; i++)
             {
                 _adb.Tap(TreasureHuntOpenedChestTapPoint.X, TreasureHuntOpenedChestTapPoint.Y);
@@ -706,7 +730,7 @@ namespace CvAut
             Thread.Sleep(2000);
             if (!TapTreasureRewardContinue())
             {
-                Console.WriteLine($"[TREASURE] Reward Continue template not confirmed. Using fallback tap at ({TreasureHuntRewardContinueTapPoint.X},{TreasureHuntRewardContinueTapPoint.Y}).");
+                Console.WriteLine("[TREASURE] Continue action unavailable; using fallback.");
                 _adb.Tap(TreasureHuntRewardContinueTapPoint.X, TreasureHuntRewardContinueTapPoint.Y);
                 Thread.Sleep(1500);
             }
@@ -725,7 +749,7 @@ namespace CvAut
                 using Mat? screenshot = _adb.TakeScreenshot();
                 if (screenshot != null && !screenshot.Empty() && TryFindContinueButton(screenshot, out Point continueCenter, out double score))
                 {
-                    Console.WriteLine($"[TREASURE] Reward Continue found at ({continueCenter.X},{continueCenter.Y}) score={score:F2}. Tapping...");
+                    Console.WriteLine("[TREASURE] Continue action detected.");
                     _adb.Tap(continueCenter.X, continueCenter.Y);
                     Thread.Sleep(1500);
                     return true;
@@ -812,12 +836,12 @@ namespace CvAut
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty())
             {
-                Console.WriteLine("❌ Could not load screenshot for next button check.");
+                Console.WriteLine("[MATCH WARNING] Screenshot unavailable.");
                 return false;
             }
 
             bool found = TryMatchTemplate(screenshot, "next_button.png", NextButtonRoi, NextButtonThreshold, out _, out double score);
-            Console.WriteLine($"    [DEBUG] Next-btn match score: {score:F2}");
+
             return found;
         }
 
@@ -826,7 +850,7 @@ namespace CvAut
         /// </summary>
         private bool WaitForScoutScreen(int timeoutSeconds = 12, int intervalMs = 500)
         {
-            Console.WriteLine("[WAIT] Scouting UI loading…");
+            Console.WriteLine("[WAIT] Loading scouting screen...");
 
             DateTime start = DateTime.Now;
             while ((DateTime.Now - start).TotalSeconds < timeoutSeconds)
@@ -836,7 +860,7 @@ namespace CvAut
                 using Mat? screenshot = _adb.TakeScreenshot();
                 if (screenshot == null || screenshot.Empty())
                 {
-                    Console.WriteLine("❌ Screenshot failed.");
+                    Console.WriteLine("[WAIT WARNING] Screenshot unavailable.");
                     Thread.Sleep(intervalMs);
                     continue;
                 }
@@ -844,7 +868,7 @@ namespace CvAut
                 // Dò biểu tượng thanh thả lính chiến trận
                 if (TryMatchTemplate(screenshot, "end_battle.png", ScoutUiRoi, ScoutUiThreshold, out _, out _))
                 {
-                    Console.WriteLine("[OK] Scouting UI detected.");
+                    Console.WriteLine("[WAIT] Scouting screen ready.");
                     return true;
                 }
 
@@ -857,7 +881,7 @@ namespace CvAut
                 Thread.Sleep(intervalMs);
             }
 
-            Console.WriteLine("[WARN] Scouting UI never detected.");
+            Console.WriteLine("[WAIT WARNING] Scouting screen not detected.");
             return false;
         }
 
@@ -901,7 +925,7 @@ namespace CvAut
                 }
 
                 matchInfo = $"{templateName} score={score:F2} center=({center.X},{center.Y})";
-                Console.WriteLine($"[OK] Detected \"{templateName}\" (score={score:F2}, center=({center.X},{center.Y}))");
+                Console.WriteLine($"[CONNECTION] Popup detected: {templateName}.");
                 return true;
             }
 
@@ -924,14 +948,14 @@ namespace CvAut
             string templatePath = Path.Combine(_templatesPath, templateFileName);
             if (!File.Exists(templatePath))
             {
-                Console.WriteLine($"[VISION WARNING] Template không tồn tại: {templatePath}");
+                Console.WriteLine("[VISION WARNING] Template missing.");
                 return false;
             }
 
             using Mat template = Cv2.ImRead(templatePath, ImreadModes.Grayscale);
             if (template.Empty())
             {
-                Console.WriteLine($"[VISION WARNING] Không đọc được template: {templatePath}");
+                Console.WriteLine("[VISION WARNING] Template unreadable.");
                 return false;
             }
 
@@ -1072,7 +1096,7 @@ namespace CvAut
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[FSM-CS WARNING] Không đọc được profile wall {path}: {ex.Message}");
+                Console.WriteLine($"[FSM WARNING] Wall profile load failed: {ex.Message}");
                 return default;
             }
         }
@@ -1190,10 +1214,12 @@ namespace CvAut
         /// </summary>
         private bool WaitBattleEnd(CancellationToken token)
         {
-            Console.WriteLine("⏳ Waiting for battle to finish…");
+            Console.WriteLine("[BATTLE] waiting for result screen...");
 
             DateTime start = DateTime.Now;
             int stableResultMatches = 0;
+            bool waitingLogged = false;
+            bool resultDetectedLogged = false;
             while (!CheckStop(token))
             {
                 WaitIfPaused(token);
@@ -1201,7 +1227,7 @@ namespace CvAut
 
                 if (ConnectionPopupVisible(out string matchInfo))
                 {
-                    Console.WriteLine($"\n[WARN] Connection lost detected—recovering… ({matchInfo})");
+                    Console.WriteLine("[BATTLE WARNING] Connection lost. Recovering.");
                     BootRecovery();
                     return false;
                 }
@@ -1209,11 +1235,15 @@ namespace CvAut
                 if (BattleEnded(out string resultMatchInfo))
                 {
                     stableResultMatches++;
-                    Console.Write($"\r[BATTLE] result screen detected ({stableResultMatches}/{ResultScreenStableMatches}) {resultMatchInfo}");
+                    if (!resultDetectedLogged)
+                    {
+                        Console.WriteLine("[BATTLE] result screen detected");
+                        resultDetectedLogged = true;
+                    }
 
                     if (stableResultMatches >= ResultScreenStableMatches)
                     {
-                        Console.WriteLine("\n🏁 Battle ended");
+                        Console.WriteLine("[BATTLE] battle ended");
                         Thread.Sleep(1000);
                         return true;
                     }
@@ -1221,11 +1251,16 @@ namespace CvAut
                 else
                 {
                     stableResultMatches = 0;
+                    if (!waitingLogged)
+                    {
+                        Console.WriteLine("[BATTLE] waiting for result screen...");
+                        waitingLogged = true;
+                    }
                 }
 
                 if ((DateTime.Now - start).TotalSeconds >= MaxWaitBattleSeconds)
                 {
-                    Console.WriteLine("\r⏰ Timeout waiting for result screen. Skipping stats/return-home tap for safety.");
+                    Console.WriteLine("[BATTLE WARNING] Result screen timeout.");
                     return false;
                 }
 
@@ -1265,7 +1300,6 @@ namespace CvAut
                 return true;
             }
 
-            Console.Write($"\r[BATTLE] waiting for result screen... {matchInfo}");
             return false;
         }
 
@@ -1273,6 +1307,43 @@ namespace CvAut
         {
             return TryMatchTemplate(screenshot, @"ui\continue.png", ResultContinueRoi, ResultContinueThreshold, out center, out score)
                 || TryMatchTemplate(screenshot, "continue.png", ResultContinueRoi, ResultContinueThreshold, out center, out score);
+        }
+
+        private bool DismissStarBonusIfPresent()
+        {
+            using Mat? screenshot = _adb.TakeScreenshot();
+            if (screenshot == null || screenshot.Empty())
+            {
+                return false;
+            }
+
+            if (!TryFindStarBonusPopup(screenshot, out _, out double score))
+            {
+                return false;
+            }
+
+            Console.WriteLine($"[REWARD] Star Bonus popup detected: score={score:F2}. Dismissing.");
+            _adb.Tap(StarBonusOkayTapPoint.X, StarBonusOkayTapPoint.Y);
+            Thread.Sleep(1500);
+            return true;
+        }
+
+        private bool TryFindStarBonusPopup(Mat screenshot, out Point center, out double score)
+        {
+            center = default;
+            score = 0;
+
+            string uiTemplate = Path.Combine(_templatesPath, "ui", "star_bonus_received.png");
+            string rootTemplate = Path.Combine(_templatesPath, "star_bonus_received.png");
+            bool hasUiTemplate = File.Exists(uiTemplate);
+            bool hasRootTemplate = File.Exists(rootTemplate);
+            if (!hasUiTemplate && !hasRootTemplate)
+            {
+                return false;
+            }
+
+            return (hasUiTemplate && TryMatchTemplate(screenshot, @"ui\star_bonus_received.png", StarBonusPopupRoi, StarBonusPopupThreshold, out center, out score))
+                || (hasRootTemplate && TryMatchTemplate(screenshot, "star_bonus_received.png", StarBonusPopupRoi, StarBonusPopupThreshold, out center, out score));
         }
 
         private bool TryMatchTemplateRegion(
@@ -1295,14 +1366,14 @@ namespace CvAut
             string templatePath = Path.Combine(_templatesPath, templateFileName);
             if (!File.Exists(templatePath))
             {
-                Console.WriteLine($"[VISION WARNING] Template không tồn tại: {templatePath}");
+                Console.WriteLine("[VISION WARNING] Template missing.");
                 return false;
             }
 
             using Mat fullTemplate = Cv2.ImRead(templatePath, ImreadModes.Grayscale);
             if (fullTemplate.Empty())
             {
-                Console.WriteLine($"[VISION WARNING] Không đọc được template: {templatePath}");
+                Console.WriteLine("[VISION WARNING] Template unreadable.");
                 return false;
             }
 
@@ -1359,14 +1430,14 @@ namespace CvAut
             string templatePath = Path.Combine(_templatesPath, templateFileName);
             if (!File.Exists(templatePath))
             {
-                Console.WriteLine($"[VISION WARNING] Template không tồn tại: {templatePath}");
+                Console.WriteLine("[VISION WARNING] Template missing.");
                 return false;
             }
 
             using Mat fullTemplate = Cv2.ImRead(templatePath, ImreadModes.Grayscale);
             if (fullTemplate.Empty())
             {
-                Console.WriteLine($"[VISION WARNING] Không đọc được template: {templatePath}");
+                Console.WriteLine("[VISION WARNING] Template unreadable.");
                 return false;
             }
 
@@ -1513,17 +1584,17 @@ namespace CvAut
             bool plausible = value == 0 || value >= minValidValue;
             if (confidence < 0.62)
             {
-                Console.WriteLine($"[STATS OCR] {label}: rejected {value:N0} via {mode}, confidence={confidence:F2} < 0.62");
+                Console.WriteLine($"[STATS OCR] {label}: value rejected.");
                 return false;
             }
 
             if (!plausible)
             {
-                Console.WriteLine($"[STATS OCR] {label}: rejected tiny value {value:N0} via {mode}, confidence={confidence:F2}");
+                Console.WriteLine($"[STATS OCR] {label}: value rejected.");
                 return false;
             }
 
-            Console.WriteLine($"[STATS OCR] {label}: {value:N0} via {mode}, confidence={confidence:F2}");
+            Console.WriteLine($"[STATS OCR] {label}: {value:N0}.");
             return true;
         }
 
@@ -1542,7 +1613,7 @@ namespace CvAut
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[STATS OCR WARNING] Không thể lưu crop {label}: {ex.Message}");
+                Console.WriteLine($"[STATS OCR WARNING] Failed to save crop for {label}: {ex.Message}");
             }
         }
 
@@ -1552,21 +1623,22 @@ namespace CvAut
         /// </summary>
         private bool ReturnHome()
         {
-            Console.WriteLine("[FSM-CS] Quay trở về làng chính...");
+            Console.WriteLine("[FSM] Returning home...");
 
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot != null && !screenshot.Empty() && TryFindContinueButton(screenshot, out Point continueCenter, out double score))
             {
-                Console.WriteLine($"[FSM-CS] Found Return Home/Continue button at ({continueCenter.X},{continueCenter.Y}) score={score:F2}.");
+                Console.WriteLine("[FSM] Return action detected.");
                 _adb.Tap(continueCenter.X, continueCenter.Y);
             }
             else
             {
-                Console.WriteLine("[FSM-CS WARN] Continue template not found at return step; using fallback tap.");
+                Console.WriteLine("[FSM WARNING] Return action unavailable; using fallback.");
                 _adb.Tap(788, 768);
             }
 
             Thread.Sleep(3000);
+            DismissStarBonusIfPresent();
             if (!DetectHomeBase(out _))
             {
                 // Giải quyết rương báu nếu xuất hiện đột ngột cản trở
@@ -1577,7 +1649,7 @@ namespace CvAut
 
                 if (!DetectHomeBase(out _))
                 {
-                    Console.WriteLine("[FSM-CS] Still not on home base after Treasure handling. Sending one BACK.");
+                    Console.WriteLine("[FSM] Home base still blocked; clearing overlay.");
                     _adb.ExecuteShell("input keyevent KEYCODE_BACK"); // Gửi lệnh phím Back của Android để giải tỏa nhanh các popup xếp chồng
                     Thread.Sleep(1500);
                 }
@@ -1680,7 +1752,7 @@ namespace CvAut
         /// </summary>
         public void ZoomOut()
         {
-            Console.WriteLine("[FSM-CS] Đang thực hiện thu nhỏ góc nhìn bản đồ (Zoom Out)...");
+            Console.WriteLine("[FSM] Adjusting camera view...");
 
             // Kiểm tra xem giả lập MEmu có đang mở không
             IntPtr memuParent = FindMainWindowByProcessName("MEmu");
@@ -1698,30 +1770,30 @@ namespace CvAut
 
             if (memuParent != IntPtr.Zero)
             {
-                Console.WriteLine($"[FSM-CS] Phát hiện giả lập MEmu HWND: {memuParent}. Gửi F3 theo cơ chế Simplicity...");
-                
+                Console.WriteLine("[FSM] MEmu detected. Adjusting camera.");
+
                 // Gửi mã phím F3 (Virtual Key Code = 0x72) 4 lần ngầm vào MEmu để thực hiện thu nhỏ camera
                 SendKeyToWindow(memuParent, (IntPtr)0x72, repetitions: 4, gapMs: 1000);
-                Console.WriteLine("[FSM-CS] Gửi lệnh Zoom Out ngầm tới MEmu hoàn tất.");
+                Console.WriteLine("[FSM] Camera adjusted.");
             }
             else if (bsParent != IntPtr.Zero)
             {
-                Console.WriteLine($"[FSM-CS] Phát hiện giả lập BlueStacks HWND: {bsParent}. Gửi pinch-in zoom-out qua ADB...");
-                
+                Console.WriteLine("[FSM] BlueStacks detected. Adjusting camera.");
+
                 // Gửi JSON-RPC pinchIn zoom out đa điểm qua ADB
                 bool ok = _adb.PinchInZoomOut(count: 5, durationMs: 450, intervalMs: 350);
                 if (ok)
                 {
-                    Console.WriteLine("[FSM-CS] Gửi lệnh Zoom Out BlueStacks qua ADB hoàn tất.");
+                    Console.WriteLine("[FSM] Camera adjusted.");
                 }
                 else
                 {
-                    Console.WriteLine("[FSM-CS WARNING] Zoom Out BlueStacks qua ADB không trả về thành công.");
+                    Console.WriteLine("[FSM WARNING] Camera adjustment did not confirm.");
                 }
             }
             else
             {
-                Console.WriteLine("[FSM-CS WARNING] Không tìm thấy cửa sổ giả lập BlueStacks hoặc MEmu đang chạy trên Windows. Bỏ qua lệnh Zoom Out...");
+                Console.WriteLine("[FSM WARNING] Emulator window not found. Skipping camera adjustment.");
             }
         }
 
@@ -1741,7 +1813,7 @@ namespace CvAut
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty())
             {
-                Console.WriteLine("[FSM-CS WARNING] Không thể chụp ảnh để thu hoạch mỏ tài nguyên.");
+                Console.WriteLine("[FSM WARNING] Screenshot unavailable for collection.");
                 return;
             }
 
@@ -1753,14 +1825,14 @@ namespace CvAut
                 string templatePath = Path.Combine(_templatesPath, templateName);
                 if (!File.Exists(templatePath))
                 {
-                    Console.WriteLine($"[FSM-CS WARNING] Thiếu template thu hoạch: {templatePath}");
+                    Console.WriteLine("[FSM WARNING] Collection template missing.");
                     continue;
                 }
 
                 using Mat template = Cv2.ImRead(templatePath, ImreadModes.Grayscale);
                 if (template.Empty())
                 {
-                    Console.WriteLine($"[FSM-CS WARNING] Không đọc được template thu hoạch: {templatePath}");
+                    Console.WriteLine("[FSM WARNING] Collection template unreadable.");
                     continue;
                 }
 
@@ -1771,13 +1843,13 @@ namespace CvAut
                 // Ngưỡng tin cậy thu hoạch từ 65% trở lên
                 if (maxVal < 0.65)
                 {
-                    Console.WriteLine($"[FSM-CS] Bỏ qua {templateName}: confidence {maxVal:F2} < 0.65.");
+                    Console.WriteLine($"[FSM] Skipping {templateName}: not confirmed.");
                     continue;
                 }
 
                 int centerX = maxLoc.X + template.Width / 2;
                 int centerY = maxLoc.Y + template.Height / 2;
-                Console.WriteLine($"[FSM-CS] Thu hoạch {templateName} tại ({centerX}, {centerY}) confidence={maxVal:F2}.");
+                Console.WriteLine($"[FSM] Collecting {templateName}.");
                 _adb.Tap(centerX, centerY);
                 Thread.Sleep(500);
             }
@@ -1786,7 +1858,7 @@ namespace CvAut
         private void SwitchToVillagePlaceholder(int villageIdx)
         {
             // Placeholder cho chức năng luân chuyển tài khoản trong tương lai
-            Console.WriteLine($"[FSM-CS-SWITCH] Bấm Settings -> Đăng nhập tài khoản Làng_{villageIdx}...");
+            Console.WriteLine($"[FSM SWITCH] Switching to Village {villageIdx}...");
             Thread.Sleep(3000);
         }
 

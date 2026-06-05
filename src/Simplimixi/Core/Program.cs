@@ -9,29 +9,44 @@ using Timer = System.Threading.Timer;
 
 namespace CvAut
 {
+    /// <summary>
+    /// Điểm khởi đầu chính (Entry Point) cho chương trình điều khiển console hoặc khởi chạy giao diện WPF.
+    /// Cung cấp menu console tương tác để chạy các kiểm thử trực tiếp (live test) hoặc ngoại tuyến (offline test),
+    /// và hiển thị panel thống kê loot thời gian thực trên màn hình console.
+    /// </summary>
     class Program
     {
+        // Chiều rộng cố định của khung Menu chính
         private const int MenuWidth = 92;
+
+        // Chiều rộng cố định của khung Thống kê kết thúc phiên chơi
         private const int SummaryWidth = 78;
 
+        // Định nghĩa danh sách các chức năng trong Menu điều khiển console
         private static readonly MenuItem[] MainMenu =
         {
-            new("1", "Kiểm thử offline", "OCR tài nguyên từ ảnh mẫu và kiểm thử attack offline", "Test", RunOfflineTestFromMenu),
-            new("2", "FSM live loop", "Chạy bot theo FSM với điều khiển Pause/Resume/Stop", "Bot", RunLiveFSMLoopFromMenu),
-            new("3", "Quét đối thủ", "Chụp giả lập và đọc loot nhà đối thủ", "Live OCR", RunLiveScoutingTestFromMenu),
-            new("4", "Quét làng chính", "Đọc tài nguyên làng chính ở góc phải màn hình", "Live OCR", RunLiveHomeBaseTestFromMenu),
-            new("5", "Zoom Out live", "Gửi thao tác zoom out tới giả lập", "Thiết bị", RunLiveZoomOutTestFromMenu),
-            new("6", "Smart Train", "Kiểm tra OCR quân và logic train một lần", "Army", RunLiveSmartTrainTestFromMenu),
-            new("7", "Boot Recovery", "Force-stop rồi mở lại Clash of Clans", "Thiết bị", RunLiveBootRecoveryTestFromMenu),
-            new("8", "Run bot vô hạn", "Chạy bot liên tục, P pause, R tiếp tục, S dừng", "Bot", RunInfiniteBotFromMenu),
-            new("9", "Thoát", "Đóng chương trình", "Hệ thống", null)
+            new("1", "Offline test", "Run OCR and attack checks from sample images", "Test", RunOfflineTestFromMenu),
+            new("2", "FSM live loop", "Run the bot with Pause/Resume/Stop controls", "Bot", RunLiveFSMLoopFromMenu),
+            new("3", "Scout target", "Capture the emulator and read target loot", "Live OCR", RunLiveScoutingTestFromMenu),
+            new("4", "Home resources", "Read home-base resources from the top-right panel", "Live OCR", RunLiveHomeBaseTestFromMenu),
+            new("5", "Zoom Out live", "Send a zoom-out gesture to the emulator", "Device", RunLiveZoomOutTestFromMenu),
+            new("6", "Smart Train", "Check troop OCR and train logic once", "Army", RunLiveSmartTrainTestFromMenu),
+            new("7", "Boot Recovery", "Force-stop and relaunch Clash of Clans", "Device", RunLiveBootRecoveryTestFromMenu),
+            new("8", "Run bot forever", "Run continuously: P pause, R resume, S stop", "Bot", RunInfiniteBotFromMenu),
+            new("9", "Exit", "Close the application", "System", null)
         };
 
+        /// <summary>
+        /// Phương thức Main bắt đầu vòng đời ứng dụng.
+        /// Mặc định sẽ khởi động giao diện WPF. Nếu có tham số "--console", ứng dụng sẽ chạy trên Console CLI.
+        /// </summary>
+        /// <param name="args">Các đối số dòng lệnh truyền vào.</param>
         [STAThread]
         static void Main(string[] args)
         {
-            Console.WriteLine($"[BUILD-ID] Simplimixi v0.5.0 binary loaded at {DateTime.Now:yyyy-MM-dd HH:mm:ss} | base={AppContext.BaseDirectory}");
+            Console.WriteLine($"[BUILD-ID] SimpliMixi v0.5.0 binary loaded at {DateTime.Now:yyyy-MM-dd HH:mm:ss} | base={AppContext.BaseDirectory}");
 
+            // Mặc định khởi chạy giao diện WPF nếu không truyền cờ --console
             if (!args.Any(a => string.Equals(a, "--console", StringComparison.OrdinalIgnoreCase)))
             {
                 RunWpfApp();
@@ -41,19 +56,22 @@ namespace CvAut
             try { Console.Clear(); } catch { }
 
             string configPath = Path.Combine(AppContext.BaseDirectory, "Config", "test_config.json");
-            string templatesPath = Path.Combine(AppContext.BaseDirectory, "Templates");
+            string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
+
+            // Xử lý cờ chẩn đoán giao diện quân đội riêng biệt
             if (args.Any(a => string.Equals(a, "--diagnose-saved-army-window", StringComparison.OrdinalIgnoreCase)))
             {
                 Training.DiagnoseSavedArmyWindow("live_army_window_debug.png", templatesPath);
                 return;
             }
 
+            // Vòng lặp hiển thị Menu chính cho console
             while (true)
             {
                 MenuItem selected = ReadMainMenuChoice();
                 if (selected.Action == null)
                 {
-                    WriteInfoLine("Đang đóng ứng dụng. Hẹn gặp lại bạn!");
+                    WriteInfoLine("Closing application. Goodbye.");
                     break;
                 }
 
@@ -61,6 +79,9 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Khởi chạy ứng dụng đồ họa WPF bằng lớp App.
+        /// </summary>
         [STAThread]
         private static void RunWpfApp()
         {
@@ -69,6 +90,7 @@ namespace CvAut
             app.Run();
         }
 
+        // Các hàm chuyển hướng gọi chức năng tương ứng của Menu
         private static void RunOfflineTestFromMenu(string _, string templatesPath) => RunOfflineTest(templatesPath);
         private static void RunLiveFSMLoopFromMenu(string configPath, string _) => RunLiveFSMLoop(configPath);
         private static void RunLiveScoutingTestFromMenu(string _, string templatesPath) => RunLiveScoutingTest(templatesPath);
@@ -79,9 +101,12 @@ namespace CvAut
         private static void RunLiveWorkflowTemplateTestFromMenu(string configPath, string _) => RunLiveWorkflowTemplateTest(configPath);
         private static void RunInfiniteBotFromMenu(string configPath, string _) => RunLiveFSMLoop(configPath);
 
+        /// <summary>
+        /// Đọc lựa chọn của người dùng trên Menu bằng phím mũi tên hoặc phím nóng từ 1 đến 9.
+        /// </summary>
         private static MenuItem ReadMainMenuChoice()
         {
-            int selectedIndex = 7;
+            int selectedIndex = 7; // Mặc định trỏ đến lựa chọn chạy bot liên tục
 
             while (true)
             {
@@ -112,17 +137,20 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Vẽ toàn bộ Menu chính của console CLI với phong cách hộp thoại đẹp mắt.
+        /// </summary>
         private static void DrawMainMenu(int selectedIndex)
         {
             try { Console.Clear(); } catch { }
 
-            Console.Title = "Simplimixi v0.5.0 Control Console";
+            Console.Title = "SimpliMixi v0.5.0 Control Console";
             WriteRule(ConsoleColor.DarkCyan);
             WriteCentered("SIMPLIMIXI v0.5.0 CONTROL CONSOLE", ConsoleColor.Cyan);
-            WriteCentered("Tu dong hoa Clash of Clans | FSM + OCR + ADB", ConsoleColor.Gray);
+            WriteCentered("Clash of Clans automation | FSM + OCR + ADB", ConsoleColor.Gray);
             WriteRule(ConsoleColor.DarkCyan);
             Console.WriteLine();
-            WriteStatusBar("UP/DOWN chon muc", "ENTER chay", "1-9 phim tat", "P/R/S khi bot dang chay");
+            WriteStatusBar("UP/DOWN select", "ENTER run", "1-9 shortcuts", "P/R/S while bot runs");
             Console.WriteLine();
 
             for (int i = 0; i < MainMenu.Length; i++)
@@ -134,10 +162,13 @@ namespace CvAut
 
             Console.WriteLine();
             WriteRule(ConsoleColor.DarkGray);
-            WriteMuted("Mac dinh app se mo WinForms. Dung --console de vao man hinh nay.");
-            WriteMuted("Phim tat bot: P = Pause, R = Resume, S = Stop.");
+            WriteMuted("By default, the app opens the WPF UI. Use --console to show this screen.");
+            WriteMuted("Bot shortcuts: P = Pause, R = Resume, S = Stop.");
         }
 
+        /// <summary>
+        /// In tiêu đề của một chức năng kiểm thử khi được thực thi.
+        /// </summary>
         private static void PrintBanner(string title, string? subtitle = null)
         {
             try { Console.Clear(); } catch { }
@@ -151,6 +182,9 @@ namespace CvAut
             Console.WriteLine();
         }
 
+        /// <summary>
+        /// Căn giữa một chuỗi văn bản theo chiều rộng quy định.
+        /// </summary>
         private static string Center(string text, int width)
         {
             if (text.Length >= width) return text;
@@ -158,6 +192,9 @@ namespace CvAut
             return new string(' ', left) + text;
         }
 
+        /// <summary>
+        /// Vẽ một dòng chức năng trong Menu chính, đổi màu sắc nổi bật dòng đang trỏ chuột.
+        /// </summary>
         private static void DrawMenuRow(MenuItem item, bool selected)
         {
             ConsoleColor accent = item.Action == null ? ConsoleColor.Red : ConsoleColor.Green;
@@ -176,6 +213,9 @@ namespace CvAut
             Console.ResetColor();
         }
 
+        /// <summary>
+        /// Vẽ một đường kẻ ngang toàn màn hình.
+        /// </summary>
         private static void WriteRule(ConsoleColor color)
         {
             Console.ForegroundColor = color;
@@ -183,6 +223,9 @@ namespace CvAut
             Console.ResetColor();
         }
 
+        /// <summary>
+        /// Ghi một dòng chữ căn giữa.
+        /// </summary>
         private static void WriteCentered(string text, ConsoleColor color)
         {
             Console.ForegroundColor = color;
@@ -190,6 +233,9 @@ namespace CvAut
             Console.ResetColor();
         }
 
+        /// <summary>
+        /// Vẽ thanh trạng thái nền màu xanh đậm dưới tiêu đề.
+        /// </summary>
         private static void WriteStatusBar(params string[] segments)
         {
             Console.ForegroundColor = ConsoleColor.Black;
@@ -200,6 +246,9 @@ namespace CvAut
             Console.ResetColor();
         }
 
+        /// <summary>
+        /// Ghi chữ màu xám tối.
+        /// </summary>
         private static void WriteMuted(string text)
         {
             Console.ForegroundColor = ConsoleColor.DarkGray;
@@ -207,6 +256,9 @@ namespace CvAut
             Console.ResetColor();
         }
 
+        /// <summary>
+        /// Ghi chữ màu xanh nhạt.
+        /// </summary>
         private static void WriteInfoLine(string text)
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
@@ -214,6 +266,9 @@ namespace CvAut
             Console.ResetColor();
         }
 
+        /// <summary>
+        /// Cắt ngắn chuỗi văn bản nếu độ dài vượt quá độ rộng quy định và thêm dấu ba chấm.
+        /// </summary>
         private static string TrimToWidth(string text, int width)
         {
             if (text.Length <= width)
@@ -224,25 +279,30 @@ namespace CvAut
             return text[..Math.Max(0, width - 3)] + "...";
         }
 
+        /// <summary>
+        /// Thực thi bài kiểm thử ngoại tuyến (Offline Mock Test).
+        /// Đọc hình ảnh mẫu sẵn có trong Templates để kiểm nghiệm hệ thống OCR nhị phân và mô phỏng logic thả quân.
+        /// </summary>
         private static void RunOfflineTest(string templatesPath)
         {
             try { Console.Clear(); } catch { }
-            Console.WriteLine("=== CHẠY KIỂM THỬ NGOẠI TUYẾN (OFFLINE MOCK TEST) ===");
+            Console.WriteLine("=== OFFLINE MOCK TEST ===");
 
             VisionEngine vision = new VisionEngine(templatesPath);
-            string offlineImagePath = Path.Combine(AppContext.BaseDirectory, "Templates", "ui", "enemy_resources.png");
+            string offlineImagePath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates", "ui", "enemy_resources.png");
 
             if (File.Exists(offlineImagePath))
             {
-                Console.WriteLine("[TEST-CS] Phát hiện tệp kiểm thử ngoại tuyến...");
+                Console.WriteLine("[TEST-CS] Offline test image found.");
                 using Mat testImg = Cv2.ImRead(offlineImagePath, ImreadModes.Color);
                 if (!testImg.Empty())
                 {
-                    Console.WriteLine("\n=== [TEST-CS] 1. Kiểm thử Phân hệ Đọc số siêu nhẹ (Light OCR C#) ===");
+                    Console.WriteLine("\n=== [TEST-CS] 1. Light OCR check ===");
 
                     int wImg = testImg.Width;
                     int hImg = testImg.Height;
 
+                    // Tính toán giới hạn ROI an toàn
                     Rect goldRoi = new Rect(Math.Max(0, 55 - 60), Math.Max(0, 117 - 5), Math.Min(wImg, 55 + 196 + 15) - Math.Max(0, 55 - 60), Math.Min(hImg, 117 + 44 + 5) - Math.Max(0, 117 - 5));
                     Rect elixirRoi = new Rect(Math.Max(0, 60 - 15), Math.Max(0, 167 - 5), Math.Min(wImg, 60 + 201 + 15) - Math.Max(0, 60 - 15), Math.Min(hImg, 167 + 41 + 5) - Math.Max(0, 167 - 5));
                     Rect deRoi = new Rect(Math.Max(0, 73 - 15), Math.Max(0, 214 - 5), Math.Min(wImg, 73 + 110 + 15) - Math.Max(0, 73 - 15), Math.Min(hImg, 214 + 34 + 5) - Math.Max(0, 214 - 5));
@@ -252,15 +312,15 @@ namespace CvAut
                     int de = vision.ExtractNumericalMetrics(testImg, deRoi, isOffline: true);
 
                     Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine($"-> Vàng đọc được: {gold:N0} (Kỳ vọng: 353,139 - Chuẩn hóa OCR mới)");
-                    Console.WriteLine($"-> Dầu hồng đọc được: {elixir:N0} (Kỳ vọng: 664,536 - Chuẩn hóa OCR mới)");
-                    Console.WriteLine($"-> Dầu đen đọc được: {de:N0} (Kỳ vọng: 5,859 - Chuẩn hóa OCR mới)");
+                    Console.WriteLine($"-> Gold: {gold:N0} (expected: 353,139)");
+                    Console.WriteLine($"-> Elixir: {elixir:N0} (expected: 664,536)");
+                    Console.WriteLine($"-> Dark Elixir: {de:N0} (expected: 5,859)");
                     Console.ResetColor();
 
-                    string homeImagePath = Path.Combine(AppContext.BaseDirectory, "Templates", "ui", "home.png");
+                    string homeImagePath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates", "ui", "home.png");
                     if (File.Exists(homeImagePath))
                     {
-                        Console.WriteLine("\n=== [TEST-CS] 1.2. Kiểm thử Phân hệ Đọc số Làng chính (Home Base OCR) ===");
+                        Console.WriteLine("\n=== [TEST-CS] 1.2. Home-base OCR check ===");
                         using Mat homeImg = Cv2.ImRead(homeImagePath, ImreadModes.Color);
                         if (!homeImg.Empty())
                         {
@@ -269,14 +329,14 @@ namespace CvAut
                             int deHome = vision.ExtractNumericalMetrics(homeImg, new Rect(1310, 200, 200, 32), isOffline: false, useRgbThresh: true);
 
                             Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine($"-> Làng chính - Vàng đọc được:     {goldHome:N0} (Kỳ vọng: 12,519,983)");
-                            Console.WriteLine($"-> Làng chính - Dầu hồng đọc được: {elixirHome:N0} (Kỳ vọng: 12,813,630)");
-                            Console.WriteLine($"-> Làng chính - Dầu đen đọc được:  {deHome:N0} (Kỳ vọng: 240,000)");
+                            Console.WriteLine($"-> Home Gold:        {goldHome:N0} (expected: 12,519,983)");
+                            Console.WriteLine($"-> Home Elixir:      {elixirHome:N0} (expected: 12,813,630)");
+                            Console.WriteLine($"-> Home Dark Elixir: {deHome:N0} (expected: 240,000)");
                             Console.ResetColor();
                         }
                     }
 
-                    Console.WriteLine("\n=== [TEST-CS] 2. Kiểm thử Phân hệ Thả quân chống phát hiện (Attacks C#) ===");
+                    Console.WriteLine("\n=== [TEST-CS] 2. Attack deployment check ===");
 
                     ADBHelper adb = new ADBHelper("127.0.0.1", 5556);
                     Attacks attack = new Attacks(adb, vision);
@@ -284,25 +344,27 @@ namespace CvAut
                 }
                 else
                 {
-                    Console.WriteLine("[ERROR] Không thể đọc hoặc giải mã tệp ảnh test offline.");
+                    Console.WriteLine("[ERROR] Unable to read or decode the offline test image.");
                 }
             }
             else
             {
-                Console.WriteLine($"[ERROR] Không tìm thấy ảnh test offline tại: {offlineImagePath}");
+                Console.WriteLine($"[ERROR] Offline test image not found: {offlineImagePath}");
             }
 
-
-
             Console.WriteLine("\n==============================================");
-            Console.WriteLine(" THỬ NGHIỆM PHÂN HỆ C# HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
+            Console.WriteLine(" C# MODULE TEST COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
             Console.WriteLine("==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
+        /// <summary>
+        /// Khởi chạy chu kỳ chạy FSM Live của bot trực tiếp trên cửa sổ console.
+        /// Chuyển hướng đầu ra console thông qua StatsTrackingTextWriter và hiển thị LiveStatsPanel định kỳ ở góc bên phải.
+        /// </summary>
         private static void RunLiveFSMLoop(string configPath)
         {
-            PrintBanner("FSM LIVE LOOP", "Chạy liên tục cho tới khi bấm S");
+            PrintBanner("FSM LIVE LOOP", "Runs until you press S");
 
             RunSessionStats stats = new RunSessionStats();
             TextWriter originalOut = Console.Out;
@@ -320,12 +382,13 @@ namespace CvAut
                 framework.Start();
 
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("\nBot đang chạy ngầm...");
-                Console.WriteLine("  P  Tạm dừng");
-                Console.WriteLine("  R  Tiếp tục");
-                Console.WriteLine("  S  Dừng và quay về Menu");
+                Console.WriteLine("\nBot is running in the background...");
+                Console.WriteLine("  P  Pause");
+                Console.WriteLine("  R  Resume");
+                Console.WriteLine("  S  Stop and return to menu");
                 Console.ResetColor();
 
+                // Lắng nghe phím nhấn trực tiếp từ console để kiểm soát bot
                 while (true)
                 {
                     if (Console.KeyAvailable)
@@ -360,147 +423,155 @@ namespace CvAut
             PauseForMenu();
         }
 
+        /// <summary>
+        /// Thực hiện chụp màn hình giả lập trực tiếp qua ADB và quét đọc tài nguyên nhà đối thủ (khi tìm trận).
+        /// </summary>
         private static void RunLiveScoutingTest(string templatesPath)
         {
             try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
-            Console.WriteLine("   QUÉT TÀI NGUYÊN TRỰC TIẾP TỪ GIẢ LẬP BLUESTACKS ĐANG HOẠT ĐỘNG  ");
+            Console.WriteLine("             LIVE TARGET RESOURCE SCAN FROM THE EMULATOR           ");
             Console.WriteLine("==================================================================");
             Console.ResetColor();
 
-            Console.WriteLine("[LIVE-SCOUT] Đang khởi tạo kết nối ADB và tự động phát hiện thiết bị...");
+            Console.WriteLine("[LIVE-SCOUT] Initializing ADB connection...");
             ADBHelper adb = new ADBHelper("127.0.0.1", 5556);
             VisionEngine vision = new VisionEngine(templatesPath);
 
-            Console.WriteLine("[LIVE-SCOUT] Đang tiến hành chụp màn hình giả lập trực tiếp...");
+            Console.WriteLine("[LIVE-SCOUT] Capturing emulator screen...");
             using Mat? screenshot = adb.TakeScreenshot();
 
             if (screenshot == null || screenshot.Empty())
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("[LIVE-SCOUT ERROR] Không thể chụp ảnh màn hình giả lập! Vui lòng đảm bảo:");
-                Console.WriteLine("  1. Giả lập BlueStacks / MEmu đã được bật.");
-                Console.WriteLine("  2. Tính năng 'Android Debug Bridge (ADB)' đã được kích hoạt trong cài đặt giả lập.");
+                Console.WriteLine("[LIVE-SCOUT ERROR] Unable to capture the emulator screen. Please check:");
+                Console.WriteLine("  1. BlueStacks / MEmu is running.");
+                Console.WriteLine("  2. Android Debug Bridge (ADB) is enabled in emulator settings.");
                 Console.ResetColor();
             }
             else
             {
-                Console.WriteLine($"[LIVE-SCOUT] Chụp ảnh thành công! Kích thước ảnh: {screenshot.Width}x{screenshot.Height}");
-                Console.WriteLine("[LIVE-SCOUT] Đang nhận diện tài nguyên hiển thị trên màn hình...");
+                Console.WriteLine($"[LIVE-SCOUT] Screenshot captured: {screenshot.Width}x{screenshot.Height}");
+                Console.WriteLine("[LIVE-SCOUT] Reading visible resources...");
 
-                // Gọi hàm quét IsTarget để đọc số
                 var res = IsTarget.ExtractResources(adb, vision);
 
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("\n================ KẾT QUẢ QUÉT LIVE ================");
-                Console.WriteLine($"👉 Vàng (Gold) quét được:       {res.Gold:N0}");
-                Console.WriteLine($"👉 Dầu hồng (Elixir) quét được:  {res.Elixir:N0}");
-                Console.WriteLine($"👉 Dầu đen (Dark Elixir) quét được: {res.DarkElixir:N0}");
+                Console.WriteLine("\n================ LIVE SCAN RESULT ================");
+                Console.WriteLine($"Gold:        {res.Gold:N0}");
+                Console.WriteLine($"Elixir:      {res.Elixir:N0}");
+                Console.WriteLine($"Dark Elixir: {res.DarkElixir:N0}");
                 Console.WriteLine("===================================================");
                 Console.ResetColor();
 
-                // Lưu lại ảnh chụp màn hình để debug
                 string debugPath = Path.Combine(AppContext.BaseDirectory, "live_screenshot_debug.png");
                 Cv2.ImWrite(debugPath, screenshot);
-                Console.WriteLine($"[LIVE-SCOUT] Đã lưu ảnh chụp debug thực tế tại: {debugPath}");
+                Console.WriteLine($"[LIVE-SCOUT] Debug screenshot saved: {debugPath}");
             }
 
             Console.WriteLine("\n==============================================");
-            Console.WriteLine(" QUÉT TÀI NGUYÊN LIVE HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
+            Console.WriteLine(" LIVE RESOURCE SCAN COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
             Console.WriteLine("==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
+        /// <summary>
+        /// Thực hiện chụp màn hình giả lập trực tiếp qua ADB và quét đọc tài nguyên trong Làng chính (Home Base) của người chơi.
+        /// </summary>
         private static void RunLiveHomeBaseTest(string templatesPath)
         {
             try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
-            Console.WriteLine("  QUÉT TÀI NGUYÊN LÀNG CHÍNH TRỰC TIẾP TỪ GIẢ LẬP BLUESTACKS ĐANG MỞ ");
+            Console.WriteLine("            LIVE HOME-BASE RESOURCE SCAN FROM THE EMULATOR          ");
             Console.WriteLine("==================================================================");
             Console.ResetColor();
 
-            Console.WriteLine("[LIVE-HOME] Đang khởi tạo kết nối ADB và tự động phát hiện thiết bị...");
+            Console.WriteLine("[LIVE-HOME] Initializing ADB connection...");
             ADBHelper adb = new ADBHelper("127.0.0.1", 5556);
             VisionEngine vision = new VisionEngine(templatesPath);
 
-            Console.WriteLine("[LIVE-HOME] Đang tiến hành chụp màn hình giả lập trực tiếp...");
+            Console.WriteLine("[LIVE-HOME] Capturing emulator screen...");
             using Mat? screenshot = adb.TakeScreenshot();
 
             if (screenshot == null || screenshot.Empty())
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("[LIVE-HOME ERROR] Không thể chụp ảnh màn hình giả lập! Vui lòng đảm bảo:");
-                Console.WriteLine("  1. Giả lập BlueStacks / MEmu đã được bật.");
-                Console.WriteLine("  2. Tính năng 'Android Debug Bridge (ADB)' đã được kích hoạt trong cài đặt giả lập.");
+                Console.WriteLine("[LIVE-HOME ERROR] Unable to capture the emulator screen. Please check:");
+                Console.WriteLine("  1. BlueStacks / MEmu is running.");
+                Console.WriteLine("  2. Android Debug Bridge (ADB) is enabled in emulator settings.");
                 Console.ResetColor();
             }
             else
             {
-                Console.WriteLine($"[LIVE-HOME] Chụp ảnh thành công! Kích thước ảnh: {screenshot.Width}x{screenshot.Height}");
-                Console.WriteLine("[LIVE-HOME] Đang nhận diện tài nguyên LÀNG CHÍNH hiển thị ở góc trên bên phải...");
+                Console.WriteLine($"[LIVE-HOME] Screenshot captured: {screenshot.Width}x{screenshot.Height}");
+                Console.WriteLine("[LIVE-HOME] Reading home-base resources...");
 
-                // Gọi hàm quét IsTarget để đọc số làng chính
                 var res = IsTarget.ExtractHomeResources(adb, vision);
 
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("\n============= KẾT QUẢ QUÉT LÀNG CHÍNH LIVE =============");
-                Console.WriteLine($"👉 Vàng (Gold) quét được:       {res.Gold:N0}");
-                Console.WriteLine($"👉 Dầu hồng (Elixir) quét được:  {res.Elixir:N0}");
-                Console.WriteLine($"👉 Dầu đen (Dark Elixir) quét được: {res.DarkElixir:N0}");
+                Console.WriteLine("\n============= LIVE HOME SCAN RESULT =============");
+                Console.WriteLine($"Gold:        {res.Gold:N0}");
+                Console.WriteLine($"Elixir:      {res.Elixir:N0}");
+                Console.WriteLine($"Dark Elixir: {res.DarkElixir:N0}");
                 Console.WriteLine("========================================================");
                 Console.ResetColor();
 
-                // Lưu lại ảnh chụp màn hình để debug
                 string debugPath = Path.Combine(AppContext.BaseDirectory, "live_home_screenshot_debug.png");
                 Cv2.ImWrite(debugPath, screenshot);
-                Console.WriteLine($"[LIVE-HOME] Đã lưu ảnh chụp debug thực tế tại: {debugPath}");
+                Console.WriteLine($"[LIVE-HOME] Debug screenshot saved: {debugPath}");
             }
 
             Console.WriteLine("\n==============================================");
-            Console.WriteLine(" QUÉT TÀI NGUYÊN LÀNG CHÍNH LIVE HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
+            Console.WriteLine(" LIVE HOME RESOURCE SCAN COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
             Console.WriteLine("==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
+        /// <summary>
+        /// Gửi cử chỉ thu nhỏ camera (Zoom Out) trực tiếp tới giả lập thông qua CVAutomationFramework.
+        /// </summary>
         private static void RunLiveZoomOutTest(string configPath)
         {
             try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
-            Console.WriteLine("      THỬ NGHIỆM THU NHỎ BẢN ĐỒ (ZOOM OUT) LIVE TRÊN GIẢ LẬP       ");
+            Console.WriteLine("                    LIVE ZOOM OUT TEST ON THE EMULATOR             ");
             Console.WriteLine("==================================================================");
             Console.ResetColor();
 
-            Console.WriteLine("[LIVE-ZOOM] Đang khởi chạy Máy trạng thái hỗ trợ...");
+            Console.WriteLine("[LIVE-ZOOM] Initializing automation framework...");
             try
             {
                 CVAutomationFramework framework = new CVAutomationFramework(configPath);
                 framework.ZoomOut();
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("\n[LIVE-ZOOM] Đã thực hiện xong lệnh Zoom Out. Hãy kiểm tra màn hình giả lập!");
+                Console.WriteLine("\n[LIVE-ZOOM] Zoom-out command completed. Check the emulator screen.");
                 Console.ResetColor();
             }
             catch (Exception ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"[LIVE-ZOOM ERROR] Lỗi: {ex.Message}");
+                Console.WriteLine($"[LIVE-ZOOM ERROR] {ex.Message}");
                 Console.ResetColor();
             }
 
             Console.WriteLine("\n==============================================");
-            Console.WriteLine(" THỬ NGHIỆM ZOOM OUT HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
+            Console.WriteLine(" ZOOM OUT TEST COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
             Console.WriteLine("==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
+        /// <summary>
+        /// Chạy tính năng luyện quân thông minh một lần duy nhất từ cấu hình chính để kiểm định OCR doanh trại.
+        /// </summary>
         private static void RunLiveSmartTrainTest(string configPath, string templatesPath)
         {
             try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
-            Console.WriteLine("         CHẠY SMART TRAIN MỘT LẦN ĐỂ KIỂM TRA COUNT OCR LIVE       ");
+            Console.WriteLine("                     SMART TRAIN LIVE OCR CHECK                    ");
             Console.WriteLine("==================================================================");
             Console.ResetColor();
 
@@ -522,22 +593,25 @@ namespace CvAut
             catch (Exception ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"[LIVE-SMART-TRAIN ERROR] Lỗi: {ex.Message}");
+                Console.WriteLine($"[LIVE-SMART-TRAIN ERROR] {ex.Message}");
                 Console.ResetColor();
             }
 
             Console.WriteLine("\n==============================================");
-            Console.WriteLine(" SMART TRAIN LIVE TEST HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
+            Console.WriteLine(" SMART TRAIN LIVE TEST COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
             Console.WriteLine("==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
+        /// <summary>
+        /// Khởi chạy chuỗi hồi phục giả lập: Force-Stop game CoC rồi mở lại và dismiss popup ban đầu.
+        /// </summary>
         private static void RunLiveBootRecoveryTest(string configPath)
         {
             try { Console.Clear(); } catch { }
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==================================================================");
-            Console.WriteLine("        CHẠY BOOT RECOVERY: FORCE-STOP RỒI MỞ LẠI CLASH OF CLANS  ");
+            Console.WriteLine("              BOOT RECOVERY: FORCE-STOP AND RELAUNCH COC          ");
             Console.WriteLine("==================================================================");
             Console.ResetColor();
 
@@ -546,25 +620,28 @@ namespace CvAut
                 CVAutomationFramework framework = new CVAutomationFramework(configPath);
                 framework.BootRecovery();
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("\n[BOOT-RECOVERY] Đã gửi force-stop, launch và tap dismiss popup.");
+                Console.WriteLine("\n[BOOT-RECOVERY] Force-stop, launch, and dismiss steps completed.");
                 Console.ResetColor();
             }
             catch (Exception ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"[BOOT-RECOVERY ERROR] Lỗi: {ex.Message}");
+                Console.WriteLine($"[BOOT-RECOVERY ERROR] {ex.Message}");
                 Console.ResetColor();
             }
 
             Console.WriteLine("\n==============================================");
-            Console.WriteLine(" BOOT RECOVERY LIVE TEST HOÀN TẤT. NHẤN PHÍM BẤT KỲ ĐỂ QUAY LẠI MENU.");
+            Console.WriteLine(" BOOT RECOVERY LIVE TEST COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
             Console.WriteLine("==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
+        /// <summary>
+        /// Chạy thử nghiệm kịch bản 5 chu kỳ tự động hóa, đồng thời lưu nhật ký chi tiết ra tệp tin logs/.
+        /// </summary>
         private static void RunLiveWorkflowTemplateTest(string configPath)
         {
-            PrintBanner("WORKFLOW TEMPLATE", "Chạy 5 chu kỳ live và lưu log chi tiết");
+            PrintBanner("WORKFLOW TEMPLATE", "Runs 5 live cycles and saves a detailed log");
 
             Directory.CreateDirectory("logs");
             string logPath = Path.Combine("logs", $"workflow_template_{DateTime.Now:yyyyMMdd_HHmmss}.log");
@@ -602,21 +679,24 @@ namespace CvAut
                 Console.SetOut(originalOut);
             }
 
-            Console.WriteLine($"\n[WORKFLOW-TEST] Đã lưu log debug tại: {Path.GetFullPath(logPath)}");
+            Console.WriteLine($"\n[WORKFLOW-TEST] Debug log saved: {Path.GetFullPath(logPath)}");
             PauseForMenu();
         }
 
+        /// <summary>
+        /// In tóm tắt số liệu thu được trong phiên hoạt động hiện tại (Attacks, Stars, Gold, Elixir, DE, Rates).
+        /// </summary>
         private static void PrintSessionSummary(RunSessionStats stats)
         {
             Console.WriteLine();
             WriteSummaryRule(ConsoleColor.DarkCyan);
-            WriteSummaryHeader("THONG KE LOOT SESSION");
+            WriteSummaryHeader("LOOT SESSION SUMMARY");
             WriteSummaryRule(ConsoleColor.DarkCyan);
 
             if (stats.Attacks == 0)
             {
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("  Chưa ghi nhận trận đánh nào trong session này.");
+                Console.WriteLine("  No attacks recorded in this session.");
                 Console.ResetColor();
                 WriteSummaryRule(ConsoleColor.DarkGray);
                 return;
@@ -625,12 +705,12 @@ namespace CvAut
             TimeSpan elapsed = stats.Elapsed;
             double hours = Math.Max(elapsed.TotalHours, 1.0 / 3600.0);
 
-            Console.WriteLine($"  {"Thời gian chạy",-18}: {FormatDuration(elapsed)}");
-            Console.WriteLine($"  {"Số trận",-18}: {stats.Attacks:N0}");
-            Console.WriteLine($"  {"Sao trung bình",-18}: {stats.AverageStars:F2}");
+            Console.WriteLine($"  {"Elapsed",-18}: {FormatDuration(elapsed)}");
+            Console.WriteLine($"  {"Attacks",-18}: {stats.Attacks:N0}");
+            Console.WriteLine($"  {"Average stars",-18}: {stats.AverageStars:F2}");
             Console.WriteLine();
             Console.ForegroundColor = ConsoleColor.Gray;
-            Console.WriteLine($"  {"Tài nguyên",-12} {"Tổng",-16} {"TB/trận",-16} {"Ước tính/giờ",-16}");
+            Console.WriteLine($"  {"Resource",-12} {"Total",-16} {"Avg/attack",-16} {"Est/hour",-16}");
             Console.ResetColor();
             Console.WriteLine("  " + new string('-', SummaryWidth - 4));
             PrintResourceStat("Gold", stats.Gold, stats.Attacks, hours);
@@ -639,6 +719,9 @@ namespace CvAut
             WriteSummaryRule(ConsoleColor.DarkGray);
         }
 
+        /// <summary>
+        /// In dòng thống kê cho một loại tài nguyên cụ thể.
+        /// </summary>
         private static void PrintResourceStat(string name, long total, int attacks, double hours)
         {
             Console.WriteLine($"  {name,-12} {total,16:N0} {total / Math.Max(attacks, 1),16:N0} {total / hours,16:N0}");
@@ -658,6 +741,9 @@ namespace CvAut
             Console.ResetColor();
         }
 
+        /// <summary>
+        /// Hỗ trợ định dạng rút gọn số lượng lớn (M, K, B).
+        /// </summary>
         private static string FormatCompactNumber(long value)
         {
             long abs = Math.Abs(value);
@@ -679,6 +765,9 @@ namespace CvAut
             return value.ToString("N0");
         }
 
+        /// <summary>
+        /// Định dạng khoảng thời gian Elapsed dạng HH:mm:ss.
+        /// </summary>
         private static string FormatDuration(TimeSpan elapsed)
         {
             if (elapsed.TotalHours >= 1)
@@ -691,10 +780,13 @@ namespace CvAut
 
         private static void PauseForMenu()
         {
-            Console.WriteLine("\nNhấn phím bất kỳ để quay lại menu.");
+            Console.WriteLine("\nPress any key to return to the menu.");
             try { Console.ReadKey(intercept: true); } catch { }
         }
 
+        /// <summary>
+        /// Khai báo cấu trúc một phần tử menu trong console.
+        /// </summary>
         private sealed record MenuItem(
             string Key,
             string Title,
@@ -702,8 +794,13 @@ namespace CvAut
             string Category,
             Action<string, string>? Action);
 
+        /// <summary>
+        /// Lớp nội bộ theo dõi và phân tích thống kê loot trong phiên hoạt động hiện tại của console bot.
+        /// Sử dụng Regular Expression để bắt các dòng ghi nhận kết quả trận đấu dạng "[STATS]".
+        /// </summary>
         private sealed class RunSessionStats
         {
+            // Biểu thức chính quy phát hiện và bóc tách thông tin trận đấu dạng: "[STATS] Battle result: 3 star(s), gained Gold=450,000 Elixir=320,000 Dark=1,200"
             private static readonly Regex BattleStatsRegex = new(
                 @"\[STATS\]\s+Battle result:\s+(?<stars>\d+)\s+star\(s\),\s+gained\s+Gold=(?<gold>[\d,]+)\s+Elixir=(?<elixir>[\d,]+)\s+Dark=(?<dark>[\d,]+)",
                 RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -726,6 +823,11 @@ namespace CvAut
             public double AverageStars => Attacks == 0 ? 0 : (double)Stars / Attacks;
             public double Hours => Math.Max(Elapsed.TotalHours, 1.0 / 3600.0);
 
+            /// <summary>
+            /// Lắng nghe các dòng log console viết ra. Nếu dòng log khớp với kết quả trận đấu, tự động cập nhật số liệu tích lũy.
+            /// </summary>
+            /// <param name="line">Dòng log cần phân tích.</param>
+            /// <returns>True nếu dòng log khớp mẫu kết quả trận; ngược lại là False.</returns>
             public bool ObserveLine(string? line)
             {
                 if (string.IsNullOrWhiteSpace(line))
@@ -762,21 +864,31 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Bảng hiển thị thông số loot thời gian thực (được render ở góc bên phải của màn hình console).
+        /// Sử dụng timer để tự động vẽ lại thông tin định kỳ mỗi giây một lần.
+        /// </summary>
         private sealed class LiveStatsPanel : IDisposable
         {
-            private const int Width = 42;
+            private const int Width = 42; // Chiều rộng cố định của bảng điều khiển thống kê bên phải
             private const int Top = 1;
             private readonly RunSessionStats _stats;
             private readonly object _renderLock = new();
             private readonly Timer _timer;
             private bool _disposed;
 
+            /// <summary>
+            /// Khởi tạo LiveStatsPanel nhận số liệu stats làm nguồn dữ liệu.
+            /// </summary>
             public LiveStatsPanel(RunSessionStats stats)
             {
                 _stats = stats;
                 _timer = new Timer(_ => Render(), null, Timeout.Infinite, Timeout.Infinite);
             }
 
+            /// <summary>
+            /// Render giao diện khung bảng thống kê loot sang góc phải màn hình console.
+            /// </summary>
             public void Render()
             {
                 lock (_renderLock)
@@ -801,13 +913,14 @@ namespace CvAut
                             Console.Write(lines[i].PadRight(Width));
                         }
 
+                        // Phục hồi lại con trỏ chuột về vị trí cũ trên console
                         int safeTop = Math.Min(originalTop, Console.BufferHeight - 1);
                         int safeLeft = Math.Min(originalLeft, Math.Max(0, Console.WindowWidth - 1));
                         Console.SetCursorPosition(safeLeft, safeTop);
                     }
                     catch
                     {
-                        // Console resize can race with rendering; skip this tick.
+                        // Thao tác đổi kích thước console có thể xảy ra bất đồng bộ, bỏ qua ngoại lệ nếu có
                     }
                     finally
                     {
@@ -816,16 +929,25 @@ namespace CvAut
                 }
             }
 
+            /// <summary>
+            /// Khởi chạy chu kỳ tự động vẽ lại bảng mỗi giây.
+            /// </summary>
             public void Start()
             {
                 _timer.Change(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
             }
 
+            /// <summary>
+            /// Dừng chu kỳ cập nhật tự động.
+            /// </summary>
             public void Stop()
             {
                 _timer.Change(Timeout.Infinite, Timeout.Infinite);
             }
 
+            /// <summary>
+            /// Xây dựng các chuỗi dòng văn bản vẽ khung panel.
+            /// </summary>
             private string[] BuildLines()
             {
                 double hours = _stats.Hours;
@@ -853,6 +975,9 @@ namespace CvAut
                 return $"| {label,-12} {value,25} |";
             }
 
+            /// <summary>
+            /// Giải phóng timer.
+            /// </summary>
             public void Dispose()
             {
                 _disposed = true;
@@ -860,6 +985,10 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Bộ chuyển hướng viết nhật ký để bóc tách thông tin thống kê loot theo thời gian thực
+        /// từ các dòng log console viết ra mà không ảnh hưởng luồng xuất chuẩn gốc.
+        /// </summary>
         private sealed class StatsTrackingTextWriter : TextWriter
         {
             private readonly TextWriter _inner;
@@ -896,6 +1025,9 @@ namespace CvAut
             }
         }
 
+        /// <summary>
+        /// Bộ phân chia TextWriter (Tee) ghi nhận log console đồng thời ra cả standard output và tệp nhật ký trên đĩa.
+        /// </summary>
         private sealed class TeeTextWriter : TextWriter
         {
             private readonly TextWriter _console;

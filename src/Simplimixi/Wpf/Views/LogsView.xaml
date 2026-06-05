@@ -7,158 +7,45 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              mc:Ignorable="d"
              d:DesignHeight="640"
-             d:DesignWidth="520">
-    <Grid Margin="12,8,12,8">
+             d:DesignWidth="760">
+    <Grid Style="{StaticResource PageRevealStyle}" Margin="28,24,28,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="16,8,16,12">
-            <ui:TextBlock FontTypography="Title" Text="Logs" />
-            <ui:TextBlock Margin="0,2,0,0"
-                          Appearance="Secondary"
-                          FontTypography="Caption"
-                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                          Text="Live bot console and system events." />
-        </StackPanel>
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <ui:TextBlock Grid.Column="0"
+                          VerticalAlignment="Center"
+                          FontTypography="Title"
+                          Text="Logs" />
+
+            <ui:Button Grid.Column="1"
+                       Height="32"
+                       MinWidth="72"
+                       Padding="12,0"
+                       VerticalAlignment="Center"
+                       Appearance="Secondary"
+                       Content="Clear"
+                       Click="OnClearClick" />
+        </Grid>
 
         <Border Grid.Row="1"
-                Margin="16,4,16,16"
-                Padding="14"
-                MaxWidth="430"
-                HorizontalAlignment="Stretch"
-                Style="{StaticResource GamingCardStyle}">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <Grid Grid.Row="0" Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="34"
-                                Height="34"
-                                Margin="0,0,10,0"
-                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8">
-                            <ui:SymbolIcon HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           FontSize="18"
-                                           Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}"
-                                           Symbol="WindowConsole20" />
-                        </Border>
-
-                        <StackPanel VerticalAlignment="Center">
-                            <ui:TextBlock FontTypography="Caption"
-                                          Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}"
-                                          Text="EVENT STREAM" />
-                            <ui:TextBlock Margin="0,2,0,0"
-                                          FontTypography="BodyStrong"
-                                          Text="Runtime console" />
-                        </StackPanel>
-                    </StackPanel>
-
-                    <ui:Button Grid.Column="1"
-                               Height="30"
-                               MinWidth="72"
-                               Padding="12,0"
-                               VerticalAlignment="Center"
-                               Appearance="Secondary"
-                               Content="Clear"
-                               Click="OnClearClick" />
-                </Grid>
-
-                <Grid Grid.Row="1" Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <Border Grid.Column="0"
-                            Padding="10,8"
-                            Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="8"
-                                     Height="8"
-                                     Margin="0,0,8,0"
-                                     Fill="{StaticResource ReadyBrush}" />
-                            <ui:TextBlock FontTypography="Caption"
-                                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                          Text="AUTO SCROLL" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Column="2"
-                            Padding="10,8"
-                            Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                            BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <ui:SymbolIcon Margin="0,0,8,0"
-                                           FontSize="14"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Symbol="DocumentText24" />
-                            <ui:TextBlock FontTypography="Caption"
-                                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                          Text="LAST 1000 LINES" />
-                        </StackPanel>
-                    </Border>
-                </Grid>
-
-                <Border Grid.Row="2"
-                        MinHeight="420"
-                        Padding="12"
-                        Background="{StaticResource TerminalPanelBackgroundBrush}"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Ellipse Width="9" Height="9" Margin="0,0,6,0" Fill="{StaticResource DangerBrush}" />
-                                <Ellipse Width="9" Height="9" Margin="0,0,6,0" Fill="{StaticResource WarningBrush}" />
-                                <Ellipse Width="9" Height="9" Fill="{StaticResource RunningAccentBrush}" />
-                            </StackPanel>
-
-                            <ui:TextBlock Grid.Column="2"
-                                          FontTypography="Caption"
-                                          Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                          Text="CV-AUT / BOT" />
-                        </Grid>
-
-                        <RichTextBox Grid.Row="1"
-                                     x:Name="LogsRichTextBox"
-                                     MinHeight="360"
-                                     Style="{StaticResource TerminalRichTextBoxStyle}"
-                                     services:RichTextBoxHelper.LogText="{Binding LogsText, Mode=OneWay}" />
-                    </Grid>
-                </Border>
-            </Grid>
+                Padding="12"
+                Background="#E80B111C"
+                BorderBrush="{StaticResource GlassCardStrokeBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+            <RichTextBox x:Name="LogsRichTextBox"
+                         Background="#CC050A12"
+                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                         Style="{StaticResource TerminalRichTextBoxStyle}"
+                         services:RichTextBoxHelper.LogText="{Binding LogsText, Mode=OneWay}" />
         </Border>
     </Grid>
 </UserControl>

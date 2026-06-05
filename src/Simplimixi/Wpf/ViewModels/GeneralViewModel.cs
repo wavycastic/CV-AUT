@@ -14,42 +14,47 @@ namespace CvAut.WpfApp.ViewModels
     {
         // Dịch vụ quản lý bot
         private readonly IBotService _botService;
-        
+
+        /// <summary>
+        /// ViewModel quản lý quân đội (Army Settings), dùng để chia sẻ thông số cấu hình và hiển thị trên giao diện chung.
+        /// </summary>
+        public ArmyViewModel ArmyVM { get; }
+
         // Ngưỡng Vàng (Gold) tối thiểu của đối thủ để quyết định tấn công
         private string _goldThreshold = "650000";
-        
+
         // Ngưỡng Dầu hồng (Elixir) tối thiểu của đối thủ để quyết định tấn công
         private string _elixirThreshold = "650000";
-        
+
         // Ngưỡng Dầu đen (Dark Elixir) tối thiểu của đối thủ để quyết định tấn công
         private string _darkThreshold = "1000";
 
         // Tùy chọn bật/tắt tính năng tự động nâng cấp tường
         private bool _upgradeWallEnabled = true;
-        
+
         // Lượng Vàng dự trữ tối thiểu cần giữ lại (chỉ dùng Vàng vượt quá ngưỡng này để nâng tường)
         private string _wallGoldThreshold = "5000000";
-        
+
         // Lượng Dầu hồng dự trữ tối thiểu cần giữ lại (chỉ dùng Dầu hồng vượt quá ngưỡng này để nâng tường)
         private string _wallElixirThreshold = "5000000";
-        
+
         // Cấp độ tường đích muốn hướng tới (ví dụ: cấp 12)
         private int _wallLevel = 12;
 
         // Địa chỉ IP của máy chủ ADB (mặc định là localhost)
         private string _adbHost = "127.0.0.1";
-        
+
         // Cổng kết nối ADB của thiết bị giả lập (ví dụ: 5556 cho MEmu)
         private int _adbPort = 5556;
-        
+
         // Tùy chọn tự động xin quân (Request Troops) khi ở nhà
         private bool _requestTroopsEnabled;
-        
+
         // Chuỗi văn bản hiển thị lịch sử hoạt động rút gọn trên Dashboard
         private string _activityText = "[00:00:00] INFO  Dashboard initialized\r\n[00:00:00] WAIT  Activity feed will mirror runtime logs\r\n[00:00:00] READY Configure resources and press START\r\n";
 
         // Properties (Thuộc tính liên kết Data Binding với View)
-        
+
         /// <summary>
         /// Ngưỡng Vàng tối thiểu của đối thủ.
         /// </summary>
@@ -170,22 +175,24 @@ namespace CvAut.WpfApp.ViewModels
         /// Khởi tạo GeneralViewModel, đăng ký sự kiện nhận log từ BotService và thực hiện nạp cấu hình ban đầu.
         /// </summary>
         /// <param name="botService">Dịch vụ quản lý bot.</param>
-        public GeneralViewModel(IBotService botService)
+        /// <param name="armyVM">ViewModel quản lý cấu hình quân đội.</param>
+        public GeneralViewModel(IBotService botService, ArmyViewModel armyVM)
         {
             _botService = botService;
-            
+            ArmyVM = armyVM;
+
             // Đăng ký nhận log để cập nhật bảng tin hoạt động
             _botService.LogReceived += AppendActivityLog;
-            
+
             // Nạp cấu hình
             LoadConfig();
-            
+
             // Lệnh xóa log bảng tin hoạt động nhanh
             ClearActivityCommand = new RelayCommand(() => ActivityText = string.Empty);
         }
 
         /// <summary>
-        /// Tải thông số cấu hình từ file cấu hình chính (test_config.json) 
+        /// Tải thông số cấu hình từ file cấu hình chính (test_config.json)
         /// và cấu hình cụ thể cho Làng hiện tại (Village_{id}.json).
         /// </summary>
         public void LoadConfig()
@@ -193,7 +200,7 @@ namespace CvAut.WpfApp.ViewModels
             try
             {
                 var root = _botService.LoadMainConfig();
-                
+
                 // 1. Nạp thông số kết nối ADB
                 if (root["device_connection"] is JsonObject device)
                 {
@@ -301,7 +308,7 @@ namespace CvAut.WpfApp.ViewModels
         {
             var lines = ActivityText.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None).ToList();
             lines.Add(message);
-            
+
             // Giới hạn độ dài tối đa 15 dòng
             if (lines.Count > 15)
             {
@@ -311,7 +318,7 @@ namespace CvAut.WpfApp.ViewModels
         }
 
         // Các hàm phụ trợ chuyển đổi kiểu dữ liệu an toàn từ JSON
-        
+
         private static bool GetBool(JsonObject obj, string key, bool defaultValue)
         {
             if (obj.TryGetPropertyValue(key, out var val) && val != null)

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Obfuscator>
+  <!--
+    Conservative WPF-safe profile.
+    Publish first, then run Obfuscar against the published SimpliMixi.dll.
+  -->
+  <Var name="InPath" value="publish\win-x64" />
+  <Var name="OutPath" value="publish\win-x64-obfuscated" />
+
+  <Var name="KeepPublicApi" value="false" />
+  <Var name="HidePrivateApi" value="true" />
+  <Var name="RenameProperties" value="false" />
+  <Var name="RenameEvents" value="false" />
+  <Var name="RenameFields" value="true" />
+  <Var name="ReuseNames" value="true" />
+  <Var name="UseUnicodeNames" value="true" />
+  <Var name="SuppressIldasm" value="true" />
+
+  <Module file="$(InPath)\SimpliMixi.dll">
+    <!-- WPF XAML, generated partial classes, bindings, and commands are string/reflection sensitive. -->
+    <SkipNamespace name="CvAut.WpfApp" />
+
+    <!-- Keep the entry point stable while core automation classes in namespace CvAut can be renamed. -->
+    <SkipType name="CvAut.Program" />
+
+    <!-- Keep model/service contracts stable for bindings, DI, events, and JSON serialization. -->
+    <SkipNamespace name="CvAut.WpfApp.ViewModels" />
+    <SkipNamespace name="CvAut.WpfApp.Views" />
+    <SkipNamespace name="CvAut.WpfApp.Services" />
+    <SkipNamespace name="CvAut.WpfApp.Models" />
+
+    <!-- Third-party and framework namespaces must never be touched. -->
+    <SkipNamespace name="OpenCvSharp" />
+    <SkipNamespace name="SharpAdbClient" />
+    <SkipNamespace name="Wpf.Ui" />
+  </Module>
+</Obfuscator>

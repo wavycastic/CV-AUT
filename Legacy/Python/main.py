@@ -179,7 +179,7 @@ class CVAutomationFramework:
                 # Kiểm tra chỉ tiêu tài nguyên
                 if gold >= gold_req and elixir >= elixir_req and dark_elixir >= de_req:
                     print(
-                        f"🔥 [FSM] Tìm thấy nhà phù hợp! Gold={gold:,} >= {gold_req:,} | Elixir={elixir:,} >= {elixir_req:,}"
+                        f"[FSM] Tìm thấy nhà phù hợp! Gold={gold:,} >= {gold_req:,} | Elixir={elixir:,} >= {elixir_req:,}"
                     )
                     print("[FSM] Đang khởi chạy kịch bản thả quân tấn công...")
 

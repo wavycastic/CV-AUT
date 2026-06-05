@@ -8,6 +8,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Threading;
 using CvAut.WpfApp.Services.Logging;
 
@@ -22,28 +24,34 @@ namespace CvAut.WpfApp.Services
     {
         // Đường dẫn đến tệp cấu hình kiểm thử chính của bot
         private static readonly string ConfigPath = Path.Combine(AppContext.BaseDirectory, "Config", "test_config.json");
-        
+
         // Đối tượng Engine tự động hóa lõi điều khiển game
         private CVAutomationFramework? _framework;
-        
+
         // Lưu trữ luồng xuất Standard Output gốc của Console trước khi chuyển hướng
         private TextWriter? _originalOut;
-        
+
         // Bộ ghi log tùy biến giúp định tuyến Console.WriteLine lên giao diện WPF
         private UiLogTextWriter? _uiWriter;
-        
+
         // Bộ hẹn giờ DispatcherTimer định kỳ cập nhật thời gian chạy và thống kê lên UI
         private readonly DispatcherTimer _statsTimer;
-        
+
         // Mốc thời gian bắt đầu chạy bot
         private DateTime? _runStartTime;
-        
+
+        private readonly Dictionary<int, StatsSnapshot> _sessionBaselines = new();
+        private readonly List<BattleLootPoint> _sessionBattleHistory = new();
+        private StatsSnapshot? _lastObservedSessionStats;
+
         // Trạng thái tạm dừng của bot
         private bool _isPaused;
-        
+        private bool _isStopping;
+        private bool _hasSessionStats;
+
         // ID làng hiện tại đang được chọn điều khiển (mặc định là Làng 1)
         private int _currentVillage = 1;
-        
+
         // Chuỗi văn bản trạng thái hiển thị trên giao diện (ví dụ: RUNNING, PAUSED, IDLE)
         private string _statusText = "IDLE";
 
@@ -51,7 +59,7 @@ namespace CvAut.WpfApp.Services
         /// <summary>
         /// Xác định xem luồng xử lý bot có đang chạy hay không.
         /// </summary>
-        public bool IsRunning => _framework != null;
+        public bool IsRunning => _framework != null || _isStopping;
 
         /// <summary>
         /// Xác định xem bot có đang ở trạng thái tạm dừng hay không.
@@ -152,6 +160,8 @@ namespace CvAut.WpfApp.Services
         /// </summary>
         public int Star3Count { get; private set; }
 
+        public IReadOnlyList<BattleLootPoint> SessionBattleHistory => _sessionBattleHistory;
+
         /// <summary>
         /// Sự kiện xảy ra khi nhận được một dòng nhật ký mới (được định dạng lại).
         /// </summary>
@@ -168,13 +178,13 @@ namespace CvAut.WpfApp.Services
         public event Action? StatsUpdated;
 
         /// <summary>
-        /// Khởi tạo dịch vụ BotService, thiết lập timer chạy chu kỳ 5 giây để cập nhật Uptime và chỉ số thống kê.
+        /// Khởi tạo dịch vụ BotService, thiết lập timer chạy chu kỳ 1 giây để cập nhật Uptime và chỉ số thống kê.
         /// </summary>
         public BotService()
         {
             _statsTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(5)
+                Interval = TimeSpan.FromSeconds(1)
             };
             _statsTimer.Tick += (s, e) =>
             {
@@ -190,7 +200,7 @@ namespace CvAut.WpfApp.Services
         /// </summary>
         public void StartBot()
         {
-            if (_framework != null) return;
+            if (_framework != null || _isStopping) return;
 
             // Lưu trữ TextWriter Console gốc
             _originalOut = Console.Out;
@@ -201,9 +211,16 @@ namespace CvAut.WpfApp.Services
             try
             {
                 // Khởi tạo framework tự động hóa với đường dẫn cấu hình
+                _sessionBaselines.Clear();
+                _sessionBattleHistory.Clear();
+                _lastObservedSessionStats = StatsSnapshot.Empty;
+                _hasSessionStats = false;
+                UptimeText = "00:00:00";
+                CaptureSessionBaseline(_currentVillage);
+
                 _framework = new CVAutomationFramework(ConfigPath);
                 _framework.Start();
-                
+
                 _runStartTime = DateTime.Now;
                 _isPaused = false;
                 _statusText = "RUNNING";
@@ -225,27 +242,55 @@ namespace CvAut.WpfApp.Services
         /// </summary>
         public void StopBot()
         {
-            if (_framework == null) return;
+            if (_framework == null || _isStopping) return;
+
+            CVAutomationFramework framework = _framework;
+            _isStopping = true;
+            _isPaused = false;
+            _statusText = "STOPPING";
+            UpdateUptime();
+            AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI] Hard stop requested");
+            OnStatusChanged();
 
             try
             {
-                _framework.Stop();
-                _runStartTime = null;
-                UptimeText = "00:00:00";
-                AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI] Stop requested");
+                framework.Stop();
             }
             catch (Exception ex)
             {
                 AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI ERROR] Error stopping framework: {ex.Message}");
             }
-            finally
+
+            Task.Run(async () =>
             {
-                _framework = null;
-                _isPaused = false;
-                _statusText = "IDLE";
-                RestoreConsole();
-                OnStatusChanged();
-            }
+                try
+                {
+                    await framework.Completion.ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI ERROR] Worker stop failed: {ex.Message}");
+                }
+
+                Application.Current.Dispatcher.Invoke(() => CompleteStop(framework));
+            });
+        }
+
+        private void CompleteStop(CVAutomationFramework framework)
+        {
+            if (!ReferenceEquals(_framework, framework)) return;
+
+            _framework = null;
+            _isStopping = false;
+            _isPaused = false;
+            _statusText = "IDLE";
+            UpdateUptime();
+            _runStartTime = null;
+            _hasSessionStats = _sessionBaselines.Count > 0;
+            RestoreConsole();
+            RefreshStats();
+            OnStatusChanged();
+            AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI] Bot stopped");
         }
 
         /// <summary>
@@ -337,7 +382,7 @@ namespace CvAut.WpfApp.Services
             {
                 UptimeText = (DateTime.Now - _runStartTime.Value).ToString(@"hh\:mm\:ss");
             }
-            else
+            else if (!_hasSessionStats)
             {
                 UptimeText = "00:00:00";
             }
@@ -345,7 +390,7 @@ namespace CvAut.WpfApp.Services
 
         /// <summary>
         /// Đọc tệp thống kê của làng hiện tại (`profiles/Stats_{villageId}.json`),
-        /// thực hiện tính toán tài nguyên thu được, tỷ lệ thắng (từ số Sao đạt được), 
+        /// thực hiện tính toán tài nguyên thu được, tỷ lệ thắng (từ số Sao đạt được),
         /// tốc độ cướp trung bình mỗi giờ và dung lượng bộ nhớ RAM ứng dụng đang tiêu thụ.
         /// </summary>
         private void RefreshStats()
@@ -363,34 +408,24 @@ namespace CvAut.WpfApp.Services
                     MemoryUsageText = "0.0 MB";
                 }
 
-                // Đọc dữ liệu thống kê từ tệp JSON tương ứng với ID làng hiện tại
-                string statsFile = Path.Combine("profiles", $"Stats_{_currentVillage}.json");
-                JsonObject stats = ReadJsonObject(statsFile);
+                StatsSnapshot current = ReadStatsSnapshot(_currentVillage);
+                bool showSessionStats = IsRunning || _hasSessionStats;
+                StatsSnapshot baseline = showSessionStats ? GetSessionBaseline(_currentVillage) : current;
+                StatsSnapshot session = current.Subtract(baseline);
+                TrackBattleHistory(session);
 
-                int gold = GetInt(stats, "gold", 0);
-                int elixir = GetInt(stats, "elixir", 0);
-                int de = GetInt(stats, "de", 0);
-                int attacks = GetInt(stats, "attacks", 0);
+                GoldGained = session.Gold;
+                ElixirGained = session.Elixir;
+                DarkElixirGained = session.DarkElixir;
+                AttacksCount = session.Attacks;
 
-                GoldGained = gold;
-                ElixirGained = elixir;
-                DarkElixirGained = de;
-                AttacksCount = attacks;
+                Star0Count = session.Star0;
+                Star1Count = session.Star1;
+                Star2Count = session.Star2;
+                Star3Count = session.Star3;
 
-                // Tính toán tỷ lệ tấn công thành công (đạt 1/2/3 sao) dựa trên thống kê số sao thu được
-                JsonObject starsObj = GetObject(stats, "stars");
-                int s0 = GetInt(starsObj, "0", 0);
-                int s1 = GetInt(starsObj, "1", 0);
-                int s2 = GetInt(starsObj, "2", 0);
-                int s3 = GetInt(starsObj, "3", 0);
-
-                Star0Count = s0;
-                Star1Count = s1;
-                Star2Count = s2;
-                Star3Count = s3;
-
-                int totalAttacks = attacks;
-                int successful = s1 + s2 + s3;
+                int totalAttacks = session.Attacks;
+                int successful = session.Star1 + session.Star2 + session.Star3;
                 if (totalAttacks > 0)
                 {
                     double rate = (double)successful / totalAttacks * 100.0;
@@ -401,17 +436,11 @@ namespace CvAut.WpfApp.Services
                     SuccessRateText = "100%";
                 }
 
-                // Tính toán lượng tài nguyên trung bình cướp được mỗi giờ (Gold/Elixir/DE per Hour)
-                long lastUpdateTs = GetInt(stats, "last_update_ts", 0);
-                double hours = Math.Max(1.0 / 60.0, (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - lastUpdateTs) / 3600.0);
-                if (lastUpdateTs <= 0)
-                {
-                    hours = 1.0;
-                }
+                double hours = GetSessionHours();
 
-                AvgGoldPerHour = (long)Math.Round(gold / hours);
-                AvgElixirPerHour = (long)Math.Round(elixir / hours);
-                AvgDarkElixirPerHour = (long)Math.Round(de / hours);
+                AvgGoldPerHour = (long)Math.Round(session.Gold / hours);
+                AvgElixirPerHour = (long)Math.Round(session.Elixir / hours);
+                AvgDarkElixirPerHour = (long)Math.Round(session.DarkElixir / hours);
 
                 // Kích hoạt sự kiện thông báo cập nhật số liệu
                 StatsUpdated?.Invoke();
@@ -420,6 +449,103 @@ namespace CvAut.WpfApp.Services
             {
                 // Bỏ qua các lỗi xung đột truy cập tệp khi tệp đang bị ghi đồng thời bởi luồng FSM
             }
+        }
+
+        private void CaptureSessionBaseline(int village)
+        {
+            _sessionBaselines[village] = ReadStatsSnapshot(village);
+            _lastObservedSessionStats = StatsSnapshot.Empty;
+        }
+
+        private void TrackBattleHistory(StatsSnapshot session)
+        {
+            if (!IsRunning && !_hasSessionStats) return;
+
+            StatsSnapshot previous = _lastObservedSessionStats ?? StatsSnapshot.Empty;
+            if (session.Attacks <= previous.Attacks)
+            {
+                _lastObservedSessionStats = session;
+                return;
+            }
+
+            int attackDelta = session.Attacks - previous.Attacks;
+            long goldDelta = Math.Max(0, session.Gold - previous.Gold);
+            long elixirDelta = Math.Max(0, session.Elixir - previous.Elixir);
+            long darkElixirDelta = Math.Max(0, session.DarkElixir - previous.DarkElixir);
+            int stars = EstimateLatestStars(session, previous);
+
+            if (attackDelta <= 1)
+            {
+                _sessionBattleHistory.Add(new BattleLootPoint(DateTime.Now, goldDelta, elixirDelta, darkElixirDelta, stars));
+            }
+            else
+            {
+                // If the UI missed multiple file updates, split the delta evenly so the chart stays truthful enough.
+                for (int i = 0; i < attackDelta; i++)
+                {
+                    _sessionBattleHistory.Add(new BattleLootPoint(
+                        DateTime.Now,
+                        goldDelta / attackDelta,
+                        elixirDelta / attackDelta,
+                        darkElixirDelta / attackDelta,
+                        stars));
+                }
+            }
+
+            const int maxHistoryPoints = 30;
+            if (_sessionBattleHistory.Count > maxHistoryPoints)
+            {
+                _sessionBattleHistory.RemoveRange(0, _sessionBattleHistory.Count - maxHistoryPoints);
+            }
+
+            _lastObservedSessionStats = session;
+        }
+
+        private static int EstimateLatestStars(StatsSnapshot current, StatsSnapshot previous)
+        {
+            if (current.Star3 > previous.Star3) return 3;
+            if (current.Star2 > previous.Star2) return 2;
+            if (current.Star1 > previous.Star1) return 1;
+            if (current.Star0 > previous.Star0) return 0;
+            return 0;
+        }
+
+        private StatsSnapshot GetSessionBaseline(int village)
+        {
+            if (!_sessionBaselines.TryGetValue(village, out StatsSnapshot? baseline))
+            {
+                baseline = ReadStatsSnapshot(village);
+                _sessionBaselines[village] = baseline;
+            }
+
+            return baseline;
+        }
+
+        private StatsSnapshot ReadStatsSnapshot(int village)
+        {
+            string statsFile = Path.Combine("profiles", $"Stats_{village}.json");
+            JsonObject stats = ReadJsonObject(statsFile);
+            JsonObject starsObj = GetObject(stats, "stars");
+
+            return new StatsSnapshot(
+                GetInt(stats, "gold", 0),
+                GetInt(stats, "elixir", 0),
+                GetInt(stats, "de", 0),
+                GetInt(stats, "attacks", 0),
+                GetInt(starsObj, "0", 0),
+                GetInt(starsObj, "1", 0),
+                GetInt(starsObj, "2", 0),
+                GetInt(starsObj, "3", 0));
+        }
+
+        private double GetSessionHours()
+        {
+            if (_runStartTime == null)
+            {
+                return 1.0;
+            }
+
+            return Math.Max(1.0 / 60.0, (DateTime.Now - _runStartTime.Value).TotalHours);
         }
 
         /// <summary>
@@ -431,7 +557,7 @@ namespace CvAut.WpfApp.Services
         }
 
         // Các phương thức tiện ích hỗ trợ thao tác tệp cấu hình JSON
-        
+
         /// <summary>
         /// Trả về đường dẫn tệp cấu hình lưu trữ thông tin cấu hình cho một làng cụ thể.
         /// </summary>
@@ -498,6 +624,32 @@ namespace CvAut.WpfApp.Services
                 return o;
             }
             return new JsonObject();
+        }
+
+        private sealed record StatsSnapshot(
+            long Gold,
+            long Elixir,
+            long DarkElixir,
+            int Attacks,
+            int Star0,
+            int Star1,
+            int Star2,
+            int Star3)
+        {
+            public static StatsSnapshot Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0);
+
+            public StatsSnapshot Subtract(StatsSnapshot baseline)
+            {
+                return new StatsSnapshot(
+                    Math.Max(0, Gold - baseline.Gold),
+                    Math.Max(0, Elixir - baseline.Elixir),
+                    Math.Max(0, DarkElixir - baseline.DarkElixir),
+                    Math.Max(0, Attacks - baseline.Attacks),
+                    Math.Max(0, Star0 - baseline.Star0),
+                    Math.Max(0, Star1 - baseline.Star1),
+                    Math.Max(0, Star2 - baseline.Star2),
+                    Math.Max(0, Star3 - baseline.Star3));
+            }
         }
 
         // CƠ CHẾ LỌC VÀ DỊCH NHẬT KÝ LOG

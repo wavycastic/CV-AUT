@@ -1,5 +1,8 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using CvAut.WpfApp.ViewModels;
 using Wpf.Ui.Controls;
 
@@ -18,10 +21,10 @@ namespace CvAut.WpfApp.Views
         public MainWindow()
         {
             InitializeComponent();
-            
+
             // Thiết lập sự kiện khi cửa sổ được tải hoàn tất
             Loaded += MainWindow_Loaded;
-            
+
             // Cho phép kéo thả cửa sổ thông qua thanh tiêu đề AppTitleBar
             AppTitleBar.MouseLeftButtonDown += AppTitleBar_MouseLeftButtonDown;
         }
@@ -46,13 +49,65 @@ namespace CvAut.WpfApp.Views
             var messageBox = new Wpf.Ui.Controls.MessageBox
             {
                 Owner = this,
-                Title = "Thông báo quan trọng",
-                Content = "Phần mềm này hoàn toàn MIỄN PHÍ.\nNếu bạn đã mua nó từ bất kỳ ai khác, điều đó có nghĩa là bạn đã bị lừa đảo!",
-                CloseButtonText = "Tôi đã hiểu",
+                Title = "Security Alert",
+                Content = "This software is 100% FREE.\nIf you paid any amount for this application, you have been scammed.",
+                CloseButtonText = "Acknowledge",
                 WindowStartupLocation = WindowStartupLocation.CenterOwner
             };
 
             await messageBox.ShowDialogAsync();
+        }
+
+        private void StrategyDockComboBox_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is ComboBox comboBox)
+            {
+                ConfigureDropDownToOpenUpward(comboBox);
+            }
+        }
+
+        private void StrategyDockComboBox_DropDownOpened(object sender, EventArgs e)
+        {
+            if (sender is ComboBox comboBox)
+            {
+                ConfigureDropDownToOpenUpward(comboBox);
+            }
+        }
+
+        private static void ConfigureDropDownToOpenUpward(ComboBox comboBox)
+        {
+            comboBox.ApplyTemplate();
+
+            if (FindPopup(comboBox) is not { } popup)
+            {
+                return;
+            }
+
+            popup.PlacementTarget = comboBox;
+            popup.Placement = PlacementMode.Top;
+            popup.VerticalOffset = -4;
+            popup.HorizontalOffset = 0;
+            popup.PopupAnimation = PopupAnimation.Fade;
+        }
+
+        private static Popup? FindPopup(DependencyObject parent)
+        {
+            if (parent is Popup popup)
+            {
+                return popup;
+            }
+
+            var childCount = VisualTreeHelper.GetChildrenCount(parent);
+            for (var i = 0; i < childCount; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (FindPopup(child) is { } childPopup)
+                {
+                    return childPopup;
+                }
+            }
+
+            return null;
         }
     }
 }

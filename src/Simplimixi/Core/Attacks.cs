@@ -31,13 +31,18 @@ namespace CvAut
 
         private const int ScreenWidth = 1600;
         private const double MatchThreshold = 0.52;
-        private const int TroopTabSelectDelayMs = 500;
+        private const int TroopTabSelectDelayMs = 160;
+        private const int SpellCastDelayMs = 650;
+        private const int FreezeCastDelayMs = 850;
+        private const int SpellPhaseDelayMs = 1200;
+        private const int HeroAbilityDelayMs = 2500;
         private const int DuplicateTabDistancePx = 45;
-        private const int RemainingTroopSettleDelayMs = 900;
+        private const int RemainingTroopSettleDelayMs = 540;
         private const int MaxRemainingDeployPasses = 3;
         private const int SpellTabMinSeparationPx = 45;
         private const double SpellTabAmbiguityScoreDelta = 0.06;
-        
+        private static readonly bool VerboseTemplateLogs = false;
+
         // Vùng ROI của thanh thả quân dưới đáy màn hình (chứa thẻ lính, phép, tướng)
         private static readonly Rect DeployBarRoi = Rect.FromLTRB(70, 720, 1180, 890);
 
@@ -116,8 +121,16 @@ namespace CvAut
         private Dictionary<string, List<Point>> _fallbackDeployCoords = new();
         private List<HeroInfo> _heroCoords = new();
         private Dictionary<string, Point> _tabs = new();
+        private readonly Dictionary<string, Point> _heroAbilityTabs = new(StringComparer.OrdinalIgnoreCase);
         private string _side = "left"; // Cánh tấn công ("left" hoặc "right")
         private readonly HashSet<string> _requiredTabs = new(StringComparer.OrdinalIgnoreCase);
+
+        private static bool IsStopRequested(CancellationToken token) => token.IsCancellationRequested;
+
+        private static bool InterruptibleSleep(int milliseconds, CancellationToken token)
+        {
+            return token.WaitHandle.WaitOne(milliseconds);
+        }
 
         /// <summary>
         /// Khởi tạo đối tượng Attacks điều khiển trận đánh.
@@ -207,7 +220,7 @@ namespace CvAut
         /// </summary>
         public void UpdateTabs()
         {
-            Console.WriteLine("[ATTACK-CS] Đang dò tìm các thẻ lính/phép ở dưới màn hình...");
+            Console.WriteLine("[ATTACK] Scanning deployment bar...");
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty()) return;
 
@@ -239,9 +252,9 @@ namespace CvAut
                 double threshold = isSpell ? 0.45 : MatchThreshold;
                 Point? coord = _vision.FindElement(screenshot, kvp.Value, threshold, DeployBarRoi, out double score);
 
-                if (isSpell)
+                if (isSpell && VerboseTemplateLogs)
                 {
-                    Console.WriteLine($"[TPL] {kvp.Key} primary scan: template='{kvp.Value}', threshold={threshold:F2}, score={score:F2}, found={(coord != null ? coord.Value.ToString() : "null")}");
+                    Console.WriteLine($"[TPL] {kvp.Key} primary scan completed.");
                 }
 
                 // Dò tìm dự phòng cho phép Đóng băng (Freeze) nếu tìm kiếm chính thất bại
@@ -259,7 +272,10 @@ namespace CvAut
                     foreach (string fallbackTemplate in fallbackTemplates)
                     {
                         coord = _vision.FindElement(screenshot, fallbackTemplate, fallbackThreshold, widerRoi, out double fallbackScore);
-                        Console.WriteLine($"[TPL] freeze fallback scan: template='{fallbackTemplate}', roi={widerRoi}, threshold={fallbackThreshold:F2}, score={fallbackScore:F2}, found={(coord != null ? coord.Value.ToString() : "null")}");
+                        if (VerboseTemplateLogs)
+                        {
+                            Console.WriteLine("[TPL] Freeze fallback scan completed.");
+                        }
                         score = fallbackScore;
                         if (coord != null)
                         {
@@ -273,34 +289,40 @@ namespace CvAut
                     // Lọc trùng lặp để tránh gán nhầm sang thẻ bên cạnh do khoảng cách quá gần
                     if (IsDuplicateTab(coord.Value, out string existingName))
                     {
-                        Console.WriteLine($"[TPL] {kvp.Key} duplicate of {existingName} at {coord.Value} (score={score:F2}) -> skipped");
+                        if (VerboseTemplateLogs)
+                        {
+                            Console.WriteLine($"[TPL] {kvp.Key} duplicate tab skipped.");
+                        }
                         continue;
                     }
 
                     _tabs[kvp.Key] = coord.Value;
-                    Console.WriteLine($"[ATTACK-CS] Đã phát hiện thẻ '{kvp.Key}' tại: {coord.Value} score={score:F2}");
+                    Console.WriteLine($"[ATTACK] {kvp.Key} ready.");
                 }
 
-                if (coord == null && _requiredTabs.Contains(kvp.Key))
+                if (coord == null && _requiredTabs.Contains(kvp.Key) && VerboseTemplateLogs)
                 {
-                    Console.WriteLine($"[TPL] {kvp.Key} not found (score={score:F2}, threshold={threshold:F2})");
+                    Console.WriteLine($"[TPL] {kvp.Key} not found.");
                 }
             }
 
             // Dò tìm xe công thành (Siege Machine) - có 2 trường hợp: Có quân (siege_with_troops) hoặc rỗng (empty_siege)
             Point? swt = _vision.FindElement(screenshot, "troops/siege_with_troops", MatchThreshold, DeployBarRoi, out double swtScore);
             Point? es = _vision.FindElement(screenshot, "troops/empty_siege", MatchThreshold, DeployBarRoi, out double esScore);
-            Console.WriteLine($"[DEBUG] siege_with_troops: max match = {swtScore:F3}");
-            Console.WriteLine($"[DEBUG] empty_siege: max match = {esScore:F3}");
+            if (VerboseTemplateLogs)
+            {
+                Console.WriteLine("[DEBUG] Siege scan completed.");
+                Console.WriteLine("[DEBUG] Empty siege scan completed.");
+            }
             if (swt != null)
             {
                 _tabs["siege_machine"] = swt.Value;
-                Console.WriteLine($"[ATTACK-CS] Đã phát hiện xe công thành có quân tại: {swt.Value} score={swtScore:F2}");
+                Console.WriteLine("[ATTACK] Siege machine ready.");
             }
             else if (es != null)
             {
                 _tabs["siege_machine"] = es.Value;
-                Console.WriteLine($"[ATTACK-CS] Đã phát hiện xe công thành rỗng tại: {es.Value} score={esScore:F2}");
+                Console.WriteLine("[ATTACK] Empty siege slot detected.");
             }
         }
 
@@ -332,11 +354,9 @@ namespace CvAut
         /// <summary>
         /// Bấm chọn thẻ và thả nhanh một số lượng quân chỉ định (như goblin sự kiện) theo tọa độ rải rác nhanh.
         /// </summary>
-        private void DeployOptionalQuickDrop(string troopKey, int limit = 10)
+        private void DeployOptionalQuickDrop(string troopKey, int limit = 10, CancellationToken token = default)
         {
-            Console.WriteLine($"[ATTACK-CS] Làm mới vị trí thẻ '{troopKey}' trước khi thả nhanh...");
-            UpdateTabs();
-
+            if (IsStopRequested(token)) return;
             if (!_tabs.TryGetValue(troopKey, out Point troopTab))
             {
                 return;
@@ -344,12 +364,12 @@ namespace CvAut
 
             if (!_deployCoords.TryGetValue("dragon", out List<Point>? dragonCoords) || dragonCoords.Count == 0)
             {
-                Console.WriteLine($"[ATTACK-CS] Không có tọa độ rải nhanh cho '{troopKey}'.");
+                Console.WriteLine($"[ATTACK] Quick drop unavailable for {troopKey}.");
                 return;
             }
 
             _adb.Tap(troopTab.X, troopTab.Y);
-            Thread.Sleep(TroopTabSelectDelayMs);
+            if (InterruptibleSleep(TroopTabSelectDelayMs, token)) return;
 
             int tapLimit = Math.Max(0, limit);
             var quickTaps = new List<Point>(tapLimit);
@@ -358,35 +378,49 @@ namespace CvAut
                 quickTaps.Add(JitterCoord(dragonCoords[i % dragonCoords.Count]));
             }
 
-            Console.WriteLine($"[ATTACK-CS] Thả nhanh '{troopKey}' ({tapLimit} taps)...");
-            _adb.TapSequence(quickTaps);
+            Console.WriteLine($"[ATTACK] Quick deploying {troopKey} ({tapLimit} taps)...");
+            _adb.TapSequenceSafeFast(quickTaps, batchSize: 5, batchDelayMs: 60, token);
+        }
+
+        private void DeployIfPresent(string troopKey, CancellationToken token = default)
+        {
+            if (_tabs.ContainsKey(troopKey))
+            {
+                DeployTroops(troopKey, token);
+            }
+        }
+
+        private void DeployQuickIfPresent(string troopKey, int limit = 10, CancellationToken token = default)
+        {
+            if (_tabs.ContainsKey(troopKey))
+            {
+                DeployOptionalQuickDrop(troopKey, limit, token);
+            }
         }
 
         /// <summary>
         /// Thả một loại quân chỉ định. Bấm chọn thẻ quân và nhấp thả một chuỗi tọa độ (TapSequence).
         /// </summary>
-        public void DeployTroops(string troopKey)
+        public void DeployTroops(string troopKey, CancellationToken token = default)
         {
+            if (IsStopRequested(token)) return;
             string key = troopKey.ToLower();
-            Console.WriteLine($"[ATTACK-CS] Làm mới vị trí thẻ '{troopKey}' trước khi thả quân...");
-            UpdateTabs();
-
             if (!_tabs.TryGetValue(key, out Point tab))
             {
-                Console.WriteLine($"[ATTACK-CS] Bỏ qua: Thẻ '{troopKey}' không tìm thấy.");
+                Console.WriteLine($"[ATTACK] Skipping {troopKey}: tab not found.");
                 return;
             }
 
             if (!_deployCoords.TryGetValue(key, out List<Point>? coords) || coords.Count == 0)
             {
-                Console.WriteLine($"[ATTACK-CS] Bỏ qua: Không có tọa độ thả lính cho '{troopKey}'.");
+                Console.WriteLine($"[ATTACK] Skipping {troopKey}: deployment pattern unavailable.");
                 return;
             }
 
-            Console.WriteLine($"[ATTACK-CS] Chọn thẻ '{troopKey}' -> Đang thả quân ({coords.Count} taps)...");
+            Console.WriteLine($"[ATTACK] Deploying {troopKey} ({coords.Count} taps)...");
             Stopwatch sw = Stopwatch.StartNew();
             _adb.Tap(tab.X, tab.Y);
-            Thread.Sleep(TroopTabSelectDelayMs);
+            if (InterruptibleSleep(TroopTabSelectDelayMs, token)) return;
 
             var taps = new List<Point>(coords.Count);
             foreach (var pt in coords)
@@ -394,10 +428,10 @@ namespace CvAut
                 taps.Add(JitterCoord(pt));
             }
 
-            _adb.TapSequence(taps);
+            _adb.TapSequenceSafeFast(taps, batchSize: 5, batchDelayMs: 60, token);
 
             sw.Stop();
-            Console.WriteLine($"[ATTACK-CS DEBUG] '{troopKey}' deploy elapsed={sw.ElapsedMilliseconds}ms.");
+            if (VerboseTemplateLogs) Console.WriteLine($"[ATTACK DEBUG] {troopKey} deploy took {sw.ElapsedMilliseconds}ms.");
         }
 
         /// <summary>
@@ -409,7 +443,7 @@ namespace CvAut
             string key = troopKey.ToLower();
             if (!_tabs.TryGetValue(key, out Point tab))
             {
-                Console.WriteLine($"[ATTACK-CS] Không kiểm tra quân còn lại: Thẻ '{troopKey}' không tìm thấy.");
+                Console.WriteLine($"[ATTACK] Remaining check skipped for {troopKey}: tab not found.");
                 return;
             }
 
@@ -417,7 +451,7 @@ namespace CvAut
             {
                 if (!_deployCoords.TryGetValue(key, out fallbackCoords) || fallbackCoords.Count == 0)
                 {
-                    Console.WriteLine($"[ATTACK-CS] Không có điểm rải bổ sung cho '{troopKey}'.");
+                    Console.WriteLine($"[ATTACK] Backup deploy pattern unavailable for {troopKey}.");
                     return;
                 }
             }
@@ -428,17 +462,17 @@ namespace CvAut
                 int remaining = ReadRemainingTroopCount(key, out double confidence);
                 if (remaining < 0)
                 {
-                    Console.WriteLine($"[ATTACK-CS] Không đọc được số quân còn lại của '{troopKey}', bỏ qua rải bù.");
+                    Console.WriteLine($"[ATTACK] Remaining count unavailable for {troopKey}; skipping backup deploy.");
                     return;
                 }
 
                 if (remaining == 0)
                 {
-                    Console.WriteLine($"[ATTACK-CS] '{troopKey}' đã rải hết.");
+                    Console.WriteLine($"[ATTACK] {troopKey} fully deployed.");
                     return;
                 }
 
-                Console.WriteLine($"[ATTACK-CS WARNING] '{troopKey}' còn x{remaining} trên thanh quân (conf={confidence:F2}). Rải bù pass {pass}/{MaxRemainingDeployPasses}...");
+                Console.WriteLine($"[ATTACK WARNING] {troopKey} may remain; running backup deploy {pass}/{MaxRemainingDeployPasses}.");
                 _adb.Tap(tab.X, tab.Y);
                 Thread.Sleep(TroopTabSelectDelayMs);
 
@@ -457,7 +491,7 @@ namespace CvAut
             int finalRemaining = ReadRemainingTroopCount(key, out double finalConfidence);
             if (finalRemaining > 0)
             {
-                Console.WriteLine($"[ATTACK-CS WARNING] Sau rải bù, '{troopKey}' vẫn còn x{finalRemaining} (conf={finalConfidence:F2}).");
+                Console.WriteLine($"[ATTACK WARNING] {troopKey} may still remain after backup deploy.");
             }
         }
 
@@ -530,12 +564,12 @@ namespace CvAut
         /// Thả toàn bộ Tướng (Heroes) hiện có trên DeployBar theo các vị trí thả chỉ định.
         /// Bỏ qua xe công thành vì xe được kích hoạt riêng qua DeployTroops("siege_machine").
         /// </summary>
-        public void DeployHeroes()
+        public void DeployHeroes(CancellationToken token = default)
         {
-            Console.WriteLine("[ATTACK-CS] Làm mới vị trí thẻ tướng trước khi triển khai...");
-            UpdateTabs();
+            if (IsStopRequested(token)) return;
+            _heroAbilityTabs.Clear();
 
-            Console.WriteLine("[ATTACK-CS] Đang triển khai quân tướng...");
+            Console.WriteLine("[ATTACK] Deploying heroes...");
             Stopwatch sw = Stopwatch.StartNew();
             foreach (var hero in _heroCoords)
             {
@@ -544,39 +578,43 @@ namespace CvAut
 
                 if (_tabs.TryGetValue(hero.Name, out Point tab))
                 {
+                    _heroAbilityTabs[hero.Name] = tab;
                     _adb.Tap(tab.X, tab.Y);
+                    if (InterruptibleSleep(72, token)) return;
                     Point jittered = JitterCoord(hero.Coord);
                     _adb.Tap(jittered.X, jittered.Y);
+                    if (InterruptibleSleep(72, token)) return;
                 }
             }
 
             sw.Stop();
-            Console.WriteLine($"[ATTACK-CS DEBUG] Heroes deploy elapsed={sw.ElapsedMilliseconds}ms.");
+            if (VerboseTemplateLogs) Console.WriteLine($"[ATTACK DEBUG] Heroes deploy took {sw.ElapsedMilliseconds}ms.");
         }
 
         /// <summary>
         /// Bấm chọn thẻ và thả phép (Spell) tại các điểm chỉ định, có độ trễ giữa các lần thả để tránh thả chồng chéo.
         /// </summary>
-        public void DeploySpells(string spellKey)
+        public void DeploySpells(string spellKey, CancellationToken token = default)
         {
+            if (IsStopRequested(token)) return;
             if (!TryResolveSpellDeployment(spellKey, out Point tab, out List<Point> coords, out int delay))
             {
                 return;
             }
 
-            Console.WriteLine($"[ATTACK-CS] Chọn thẻ phép '{spellKey}' -> Đang thả phép ({coords.Count} spells)...");
+            Console.WriteLine($"[ATTACK] Casting {spellKey} ({coords.Count} spells)...");
             Stopwatch sw = Stopwatch.StartNew();
             _adb.Tap(tab.X, tab.Y);
 
             foreach (var pt in coords)
             {
-                Thread.Sleep(delay);
+                if (InterruptibleSleep(delay, token)) return;
                 Point jittered = JitterCoord(pt);
                 _adb.Tap(jittered.X, jittered.Y);
             }
 
             sw.Stop();
-            Console.WriteLine($"[ATTACK-CS DEBUG] '{spellKey}' spell elapsed={sw.ElapsedMilliseconds}ms.");
+            if (VerboseTemplateLogs) Console.WriteLine($"[ATTACK DEBUG] {spellKey} casting took {sw.ElapsedMilliseconds}ms.");
         }
 
         /// <summary>
@@ -587,15 +625,11 @@ namespace CvAut
             string key = spellKey.ToLower();
             tab = default;
             coords = new List<Point>();
-            // Phép cuồng nộ thả nhanh hơn (delay 1s), phép băng thả chậm hơn để khống chế (delay 2s)
-            delay = key == "rage" ? 1000 : 2000;
-
-            Console.WriteLine($"[ATTACK-CS] Làm mới vị trí thẻ phép '{spellKey}' trước khi thả...");
-            UpdateTabs();
+            delay = key == "rage" ? SpellCastDelayMs : FreezeCastDelayMs;
 
             if (!_tabs.TryGetValue(key, out tab))
             {
-                Console.WriteLine($"[ATTACK-CS] Bỏ qua: Thẻ phép '{spellKey}' không tìm thấy.");
+                Console.WriteLine($"[ATTACK] Skipping {spellKey}: spell tab not found.");
                 return false;
             }
 
@@ -611,18 +645,21 @@ namespace CvAut
         /// <summary>
         /// Nhấp lại liên tục vào các thẻ Tướng để kích hoạt kỹ năng đặc biệt (Special Ability/Iron Fist/Royal Cloak...) của họ.
         /// </summary>
-        public void RetapHeroes()
+        public void RetapHeroes(CancellationToken token = default)
         {
-            Console.WriteLine("[ATTACK-CS] Làm mới vị trí thẻ tướng trước khi kích hoạt kỹ năng...");
-            UpdateTabs();
-
-            Console.WriteLine("[ATTACK-CS] Đang kích hoạt kỹ năng đặc biệt của Tướng...");
+            if (IsStopRequested(token)) return;
+            Console.WriteLine("[ATTACK] Activating hero abilities...");
             string[] tags = { "warden", "queen", "bk", "prince", "rc" };
             foreach (var tag in tags)
             {
-                if (_tabs.TryGetValue(tag, out Point tab))
+                if (_heroAbilityTabs.TryGetValue(tag, out Point tab) || _tabs.TryGetValue(tag, out tab))
                 {
                     _adb.Tap(tab.X, tab.Y);
+                    if (InterruptibleSleep(108, token)) return;
+                }
+                else
+                {
+                    Console.WriteLine($"[ATTACK] Skipping {tag} ability: tab unavailable.");
                 }
             }
         }
@@ -632,14 +669,15 @@ namespace CvAut
         /// Tự động sinh ngẫu nhiên hướng tấn công là cánh Trái hay cánh Phải để đa dạng hóa hành vi.
         /// </summary>
         /// <param name="attackStrategy">Chiến thuật tấn công ("Dragon_Attack" hoặc "ElectroDragon_Attack").</param>
-        public void Run(string attackStrategy = "Dragon_Attack")
+        public void Run(string attackStrategy = "Dragon_Attack", CancellationToken token = default)
         {
+            if (IsStopRequested(token)) return;
             // Ngẫu nhiên chọn hướng tấn công trái/phải
             _side = _rand.Next(0, 2) == 0 ? "left" : "right";
             InitializePatterns();
 
             Console.WriteLine($"\n==============================================");
-            Console.WriteLine($"[ATTACK-CS] Thực thi: {attackStrategy} | Tấn công cánh: {_side.ToUpper()}");
+            Console.WriteLine($"[ATTACK] Running {attackStrategy} from {_side.ToUpper()} side.");
             Console.WriteLine($"==============================================");
 
             if (attackStrategy == "Dragon_Attack")
@@ -656,36 +694,36 @@ namespace CvAut
                 }
 
                 UpdateTabs();
-                
-                // Kịch bản rải Rồng và kiểm tra thả hết lính
-                DeployTroops("dragon");
-                EnsureTroopFullyDeployed("dragon");
-                
-                // Thả quân hỗ trợ
-                DeployTroops("ice_minion");
-                DeployTroops("ice_golem");
-                DeployTroops("azure_dragon");
 
-                // Thả nhanh quân sự kiện phụ trợ
-                DeployOptionalQuickDrop("event_goblin");
-                DeployOptionalQuickDrop("nguoimay", 50);
-                DeployOptionalQuickDrop("phuthuycuoichoi", 50);
+                // Kịch bản rải Rồng và kiểm tra thả hết lính
+                DeployTroops("dragon", token);
+                if (IsStopRequested(token)) return;
+
+                // Thả quân hỗ trợ nếu có trên thanh quân.
+                DeployIfPresent("ice_minion", token);
+                DeployIfPresent("ice_golem", token);
+                DeployIfPresent("azure_dragon", token);
+
+                // Thả nhanh quân sự kiện phụ trợ nếu có.
+                DeployQuickIfPresent("event_goblin", token: token);
+                DeployQuickIfPresent("nguoimay", 50, token);
+                DeployQuickIfPresent("phuthuycuoichoi", 50, token);
+                if (IsStopRequested(token)) return;
 
                 // Thả Balloon đi kèm để dọn bẫy bay và hút sát thương
-                DeployTroops("balloon");
-                EnsureTroopFullyDeployed("balloon");
-                
+                DeployTroops("balloon", token);
+                if (IsStopRequested(token)) return;
+
                 // Thả xe công thành và Tướng
-                DeployTroops("siege_machine");
-                DeployHeroes();
-                
-                // Thả phép hỗ trợ
-                DeploySpells("rage");
-                DeploySpells("freeze");
-                
-                // Kiểm tra lại lần cuối để rải nốt số lính còn kẹt
-                EnsureTroopFullyDeployed("dragon");
-                EnsureTroopFullyDeployed("balloon");
+                DeployTroops("siege_machine", token);
+                DeployHeroes(token);
+
+                // Chờ quân/tướng vào nhịp trước khi thả phép hỗ trợ.
+                if (InterruptibleSleep(SpellPhaseDelayMs, token)) return;
+                DeploySpells("rage", token);
+                DeploySpells("freeze", token);
+
+                // TapSequence đã rải toàn bộ điểm chính, bỏ OCR rải bù để giữ nhịp tấn công nhanh.
             }
             else if (attackStrategy == "ElectroDragon_Attack")
             {
@@ -701,37 +739,41 @@ namespace CvAut
                 }
 
                 UpdateTabs();
-                
-                // Rải Rồng điện (E-Drag)
-                DeployTroops("e_drag");
-                DeployTroops("ice_minion");
-                DeployTroops("ice_golem");
-                DeployTroops("azure_dragon");
 
-                DeployOptionalQuickDrop("event_goblin");
-                DeployOptionalQuickDrop("nguoimay", 50);
-                DeployOptionalQuickDrop("phuthuycuoichoi", 50);
+                // Rải Rồng điện (E-Drag)
+                DeployTroops("e_drag", token);
+                if (IsStopRequested(token)) return;
+                DeployIfPresent("ice_minion", token);
+                DeployIfPresent("ice_golem", token);
+                DeployIfPresent("azure_dragon", token);
+
+                DeployQuickIfPresent("event_goblin", token: token);
+                DeployQuickIfPresent("nguoimay", 50, token);
+                DeployQuickIfPresent("phuthuycuoichoi", 50, token);
+                if (IsStopRequested(token)) return;
 
                 // Rải Balloon
-                DeployTroops("balloon");
-                EnsureTroopFullyDeployed("balloon");
-                
-                DeployTroops("siege_machine");
-                DeployHeroes();
-                
-                DeploySpells("rage");
-                DeploySpells("freeze");
+                DeployTroops("balloon", token);
+                if (IsStopRequested(token)) return;
+
+                DeployTroops("siege_machine", token);
+                DeployHeroes(token);
+
+                if (InterruptibleSleep(SpellPhaseDelayMs, token)) return;
+                DeploySpells("rage", token);
+                DeploySpells("freeze", token);
             }
             else
             {
                 _requiredTabs.Clear();
                 UpdateTabs();
-                Console.WriteLine($"[ATTACK-CS ERROR] Chiến thuật không xác định: {attackStrategy}");
+                Console.WriteLine($"[ATTACK ERROR] Unknown strategy: {attackStrategy}");
             }
 
-            // Kích hoạt kỹ năng đặc biệt của Tướng
-            RetapHeroes();
-            Console.WriteLine("[ATTACK-CS] Kịch bản cướp trận hoàn tất.");
+            // Cho tướng giao tranh một lúc rồi mới kích hoạt kỹ năng.
+            if (InterruptibleSleep(HeroAbilityDelayMs, token)) return;
+            RetapHeroes(token);
+            Console.WriteLine("[ATTACK] Deployment complete.");
         }
     }
 }

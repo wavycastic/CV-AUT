@@ -6,108 +6,261 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              mc:Ignorable="d"
              d:DesignHeight="640"
-             d:DesignWidth="520">
-    <Grid Margin="12,8,12,8">
+             d:DesignWidth="720">
+    <UserControl.Resources>
+        <Style x:Key="StatCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource GlassCardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource GlassCardStrokeBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="16" />
+        </Style>
+
+        <Style x:Key="PanelCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource GlassPanelBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource GlassCardStrokeBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+        </Style>
+
+        <Style x:Key="MetricLabelStyle" TargetType="ui:TextBlock">
+            <Setter Property="FontTypography" Value="Caption" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Style="{StaticResource PageRevealStyle}" Margin="12,6,12,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="10" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="10" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="16,8,16,12">
-            <ui:TextBlock FontTypography="Title" Text="Statistics" />
-            <ui:TextBlock Margin="0,2,0,0"
-                          Appearance="Secondary"
-                          FontTypography="Caption"
+        <StackPanel Grid.Row="0" Margin="16,6,16,0">
+            <ui:TextBlock FontSize="42"
+                          FontWeight="Black"
+                          Text="Statistics" />
+            <ui:TextBlock Margin="0,-2,0,0"
+                          FontTypography="Body"
                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                          Text="Session loot, attacks and bot performance overview." />
+                          Text="Overview of your battle performance" />
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="16,4,16,16" MaxWidth="430" HorizontalAlignment="Stretch">
-                <Border Style="{StaticResource GamingCardStyle}" Padding="14">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <ui:TextBlock FontTypography="Caption" Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}" Text="LIVE SESSION" />
-                            <ui:TextBlock Margin="0,4,0,0" FontTypography="BodyStrong" Text="Performance snapshot" />
-                            <ui:TextBlock Margin="0,4,0,0" FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding UptimeText, StringFormat=Uptime {0}}" />
-                        </StackPanel>
-                        <Border Grid.Column="1" Width="54" Height="54" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="12">
-                            <ui:SymbolIcon HorizontalAlignment="Center" VerticalAlignment="Center" Symbol="Poll24" FontSize="28" Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}" />
-                        </Border>
-                    </Grid>
-                </Border>
+        <Grid Grid.Row="2" Margin="16,0,16,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.25*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-                <Grid Margin="0,0,0,16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Padding="16" MinHeight="124" Style="{StaticResource StatCardStyle}">
+                <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="8" />
+                        <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-
-                    <Border Grid.Row="0" Grid.Column="0" Padding="12" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="8">
-                        <StackPanel>
-                            <Image Width="24" Height="24" HorizontalAlignment="Left" Source="pack://siteoforigin:,,,/Templates/icon_gold.png" />
-                            <ui:TextBlock Margin="0,8,0,0" FontTypography="Subtitle" Text="{Binding GoldGainedText}" />
-                                                        <ui:TextBlock FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AvgGoldPerHourText}" />
-                        </StackPanel>
-                    </Border>
-                    <Border Grid.Row="0" Grid.Column="2" Padding="12" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="8">
-                        <StackPanel>
-                            <Image Width="24" Height="24" HorizontalAlignment="Left" Source="pack://siteoforigin:,,,/Templates/icon_elixir.png" />
-                            <ui:TextBlock Margin="0,8,0,0" FontTypography="Subtitle" Text="{Binding ElixirGainedText}" />
-                                                        <ui:TextBlock FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AvgElixirPerHourText}" />
-                        </StackPanel>
-                    </Border>
-                    <Border Grid.Row="2" Grid.Column="0" Padding="12" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="8">
-                        <StackPanel>
-                            <Image Width="24" Height="24" HorizontalAlignment="Left" Source="pack://siteoforigin:,,,/Templates/icon_de.png" />
-                            <ui:TextBlock Margin="0,8,0,0" FontTypography="Subtitle" Text="{Binding DarkElixirGainedText}" />
-                                                        <ui:TextBlock FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AvgDarkElixirPerHourText}" />
-                        </StackPanel>
-                    </Border>
-                    <Border Grid.Row="2" Grid.Column="2" Padding="12" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="8">
-                        <StackPanel>
-                            <ui:SymbolIcon Symbol="Shield24" FontSize="24" Foreground="{StaticResource ReadyBrush}" />
-                            <ui:TextBlock Margin="0,8,0,0" FontTypography="Subtitle" Text="{Binding AttacksCountText}" />
-                                                        <ui:TextBlock FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="Attacks" />
-                        </StackPanel>
-                    </Border>
-                </Grid>
-
-                <Border Style="{StaticResource GamingCardStyle}" Padding="14">
-                    <StackPanel>
-                        <ui:TextBlock FontTypography="Caption" Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}" Text="SESSION BREAKDOWN" />
-                        <Border Margin="0,12,0,0" Padding="12" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="8">
-                            <StackPanel>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <ui:TextBlock Grid.Column="0" FontTypography="BodyStrong" Text="Attack success" />
-                                    <ui:TextBlock Grid.Column="1" FontTypography="BodyStrong" Foreground="{StaticResource ReadyBrush}" Text="{Binding SuccessRateText}" />
-                                </Grid>
-                                <ProgressBar Margin="0,10,0,0" Height="6" Value="{Binding SuccessRateValue, Mode=OneWay}" Maximum="100" />
-                            </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Border Width="42" Height="42" Style="{StaticResource PanelCardStyle}">
+                            <Image Width="30"
+                                   Height="30"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Source="pack://siteoforigin:,,,/assets/Templates/icon_attack.png" />
                         </Border>
-                        <Border Margin="0,10,0,0" Padding="12,10" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="8">
-                            <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Margin="0,0,10,0" Symbol="DataHistogram24" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                <ui:TextBlock FontTypography="BodyStrong" Text="{Binding StarBreakdownText}" />
-                            </StackPanel>
-                        </Border>
+                        <ui:TextBlock Margin="12,0,0,0"
+                                      VerticalAlignment="Center"
+                                      FontTypography="Caption"
+                                      Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}"
+                                      Text="TOTAL BATTLES" />
                     </StackPanel>
-                </Border>
-            </StackPanel>
-        </ScrollViewer>
+                    <ui:TextBlock Grid.Row="1"
+                                  Margin="0,4,0,0"
+                                  VerticalAlignment="Center"
+                                  FontSize="44"
+                                  FontWeight="Bold"
+                                  Text="{Binding AttacksCountText}" />
+                    <ui:TextBlock Grid.Row="2"
+                                  Style="{StaticResource MetricLabelStyle}"
+                                  Text="Battles this session" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Padding="14,12" Style="{StaticResource StatCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Image Width="34" Height="34" Source="pack://siteoforigin:,,,/assets/Templates/icon_gold.png" />
+                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                            <ui:TextBlock Style="{StaticResource MetricLabelStyle}" Text="Gold" />
+                            <ui:TextBlock FontSize="24" FontWeight="Bold" Text="{Binding GoldGainedText}" />
+                            <ui:TextBlock Style="{StaticResource MetricLabelStyle}" Text="{Binding AvgGoldPerHourText}" />
+                        </StackPanel>
+                    </Grid>
+                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                        <Polyline Stretch="Fill"
+                                  Stroke="{StaticResource GlassCardStrokeBrush}"
+                                  StrokeThickness="2"
+                                  Points="0,26 132,26" />
+                        <Polyline Stretch="Fill"
+                                  Stroke="#FFFFA31A"
+                                  StrokeThickness="2"
+                                  Points="{Binding GoldSparklinePoints}">
+                            <Polyline.Style>
+                                <Style TargetType="Polyline">
+                                    <Setter Property="Opacity" Value="0" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasGoldStats}" Value="True">
+                                            <Setter Property="Opacity" Value="1" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Polyline.Style>
+                        </Polyline>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="4" Padding="14,12" Style="{StaticResource StatCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Image Width="34" Height="34" Source="pack://siteoforigin:,,,/assets/Templates/icon_elixir.png" />
+                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                            <ui:TextBlock Style="{StaticResource MetricLabelStyle}" Text="Elixir" />
+                            <ui:TextBlock FontSize="24" FontWeight="Bold" Text="{Binding ElixirGainedText}" />
+                            <ui:TextBlock Style="{StaticResource MetricLabelStyle}" Text="{Binding AvgElixirPerHourText}" />
+                        </StackPanel>
+                    </Grid>
+                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                        <Polyline Stretch="Fill"
+                                  Stroke="{StaticResource GlassCardStrokeBrush}"
+                                  StrokeThickness="2"
+                                  Points="0,26 132,26" />
+                        <Polyline Stretch="Fill"
+                                  Stroke="#FFFF3BD5"
+                                  StrokeThickness="2"
+                                  Points="{Binding ElixirSparklinePoints}">
+                            <Polyline.Style>
+                                <Style TargetType="Polyline">
+                                    <Setter Property="Opacity" Value="0" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasElixirStats}" Value="True">
+                                            <Setter Property="Opacity" Value="1" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Polyline.Style>
+                        </Polyline>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="6" Padding="14,12" Style="{StaticResource StatCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Image Width="34" Height="34" Source="pack://siteoforigin:,,,/assets/Templates/icon_de.png" />
+                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                            <ui:TextBlock Style="{StaticResource MetricLabelStyle}" Text="Dark Elixir" />
+                            <ui:TextBlock FontSize="24" FontWeight="Bold" Text="{Binding DarkElixirGainedText}" />
+                            <ui:TextBlock Style="{StaticResource MetricLabelStyle}" Text="{Binding AvgDarkElixirPerHourText}" />
+                        </StackPanel>
+                    </Grid>
+                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                        <Polyline Stretch="Fill"
+                                  Stroke="{StaticResource GlassCardStrokeBrush}"
+                                  StrokeThickness="2"
+                                  Points="0,26 132,26" />
+                        <Polyline Stretch="Fill"
+                                  Stroke="#FFB977FF"
+                                  StrokeThickness="2"
+                                  Points="{Binding DarkElixirSparklinePoints}">
+                            <Polyline.Style>
+                                <Style TargetType="Polyline">
+                                    <Setter Property="Opacity" Value="0" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasDarkElixirStats}" Value="True">
+                                            <Setter Property="Opacity" Value="1" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Polyline.Style>
+                        </Polyline>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="4" Margin="16,0,16,0" Padding="18,14" Style="{StaticResource StatCardStyle}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="10" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <ui:TextBlock VerticalAlignment="Center"
+                              FontTypography="BodyStrong"
+                              Text="STAR RESULT" />
+
+                <Rectangle Grid.Row="1"
+                           Height="1"
+                           Margin="0,6,0,0"
+                           Fill="{StaticResource GlassCardStrokeBrush}" />
+
+                <UniformGrid Grid.Row="2" Columns="4">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Image Width="56" Height="56" Source="pack://siteoforigin:,,,/assets/Templates/icon_0 star.png" />
+                        <ui:TextBlock HorizontalAlignment="Center" FontSize="30" FontWeight="Bold" Text="{Binding Star0CountText}" />
+                        <ui:TextBlock HorizontalAlignment="Center" Foreground="{StaticResource DangerBrush}" Text="0 star" />
+                    </StackPanel>
+
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Image Width="56" Height="56" Source="pack://siteoforigin:,,,/assets/Templates/icon_1 star.png" />
+                        <ui:TextBlock HorizontalAlignment="Center" FontSize="30" FontWeight="Bold" Text="{Binding Star1CountText}" />
+                        <ui:TextBlock HorizontalAlignment="Center" Foreground="{StaticResource WarningBrush}" Text="1 star" />
+                    </StackPanel>
+
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Image Width="56" Height="56" Source="pack://siteoforigin:,,,/assets/Templates/icon_2 star.png" />
+                        <ui:TextBlock HorizontalAlignment="Center" FontSize="30" FontWeight="Bold" Text="{Binding Star2CountText}" />
+                        <ui:TextBlock HorizontalAlignment="Center" Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}" Text="2 stars" />
+                    </StackPanel>
+
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Image Width="56" Height="56" Source="pack://siteoforigin:,,,/assets/Templates/icon_3 star.png" />
+                        <ui:TextBlock HorizontalAlignment="Center" FontSize="30" FontWeight="Bold" Text="{Binding Star3CountText}" />
+                        <ui:TextBlock HorizontalAlignment="Center" Foreground="{StaticResource ReadyBrush}" Text="3 stars" />
+                    </StackPanel>
+                </UniformGrid>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

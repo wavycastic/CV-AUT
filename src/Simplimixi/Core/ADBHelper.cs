@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using OpenCvSharp;
 using SharpAdbClient;
 using Point = OpenCvSharp.Point;
@@ -25,10 +26,10 @@ namespace CvAut
         private readonly DeviceData _device;
         private readonly string _host;
         private readonly int _port;
-        
+
         // Đường dẫn tuyệt đối tới công cụ adb.exe đi kèm trong thư mục ứng dụng
         private readonly string _adbExePath = Path.Combine(AppContext.BaseDirectory, "adb", "adb.exe");
-        
+
         // Client HTTP dùng để gửi lệnh điều khiển JSON-RPC tới server UIAutomator2 trên thiết bị Android
         private static readonly HttpClient UiAutomatorHttp = new HttpClient();
         private Process? _uiautomatorProcess;
@@ -52,7 +53,7 @@ namespace CvAut
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ADB WARNING] Không thể khởi động server ADB: {ex.Message}");
+                Console.WriteLine($"[ADB WARNING] Failed to start ADB server: {ex.Message}");
             }
 
             _deviceAddress = $"{host}:{port}";
@@ -60,7 +61,7 @@ namespace CvAut
             // 1. Ưu tiên đúng địa chỉ cổng cấu hình cụ thể để tránh điều khiển nhầm giả lập khác đang mở.
             if (TryConnectAndSelectDevice(_host, _port, out _device))
             {
-                Console.WriteLine($"[ADB] Đã kết nối đến thiết bị cấu hình: {_deviceAddress}");
+                Console.WriteLine("[ADB] Device connected.");
                 return;
             }
 
@@ -72,7 +73,7 @@ namespace CvAut
                 if (TryConnectAndSelectDevice(_host, p, out _device))
                 {
                     _deviceAddress = $"{_host}:{p}";
-                    Console.WriteLine($"[ADB] Tự động dò tìm và kết nối thành công tới cổng dự phòng: {_deviceAddress}");
+                    Console.WriteLine("[ADB] Device connected via fallback port.");
                     return;
                 }
             }
@@ -85,18 +86,18 @@ namespace CvAut
                 {
                     _device = connectedDevices[0];
                     _deviceAddress = _device.Serial;
-                    Console.WriteLine($"[ADB] Tự động phát hiện thiết bị đang hoạt động: {_deviceAddress}");
+                    Console.WriteLine("[ADB] Active device detected.");
                     return;
                 }
             }
             catch (Exception)
             {
-                Console.WriteLine("[ADB WARNING] Không thể lấy danh sách thiết bị từ AdbClient.");
+                Console.WriteLine("[ADB WARNING] Unable to read ADB device list.");
             }
 
             // Mặc định tạo dữ liệu thiết bị trống nếu hoàn toàn không kết nối được (để tránh NullReference)
             _device = new DeviceData { Serial = _deviceAddress };
-            Console.WriteLine($"[ADB WARNING] Không có thiết bị nào kết nối. Đã mặc định serial: {_deviceAddress}");
+            Console.WriteLine("[ADB WARNING] No connected device detected; using configured target.");
         }
 
         /// <summary>
@@ -264,6 +265,42 @@ namespace CvAut
         }
 
         /// <summary>
+        /// Rải tap nhanh theo từng batch nhỏ để giảm miss input khi game hoặc giả lập phản hồi chậm.
+        /// </summary>
+        public void TapSequenceSafeFast(IEnumerable<Point> points, int batchSize = 4, int batchDelayMs = 90)
+        {
+            TapSequenceSafeFast(points, batchSize, batchDelayMs, CancellationToken.None);
+        }
+
+        public void TapSequenceSafeFast(IEnumerable<Point> points, int batchSize, int batchDelayMs, CancellationToken token)
+        {
+            var batch = new List<Point>(Math.Max(1, batchSize));
+            foreach (Point point in points)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                batch.Add(point);
+                if (batch.Count >= batchSize)
+                {
+                    TapSequence(batch);
+                    batch.Clear();
+                    if (token.WaitHandle.WaitOne(batchDelayMs))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            if (batch.Count > 0 && !token.IsCancellationRequested)
+            {
+                TapSequence(batch);
+            }
+        }
+
+        /// <summary>
         /// Thực hiện thao tác vuốt (Swipe) từ tọa độ nguồn đến tọa độ đích với thời gian thực hiện chỉ định.
         /// </summary>
         public void Swipe(int x1, int y1, int x2, int y2, int durationMs = 300)
@@ -288,7 +325,7 @@ namespace CvAut
                 return true;
             }
 
-            Console.WriteLine("[ADB WARNING] UIAutomator2 pinch-in không chạy được. Thử fallback ADB swipe đồng thời...");
+            Console.WriteLine("[ADB WARNING] Pinch gesture unavailable; using swipe fallback.");
             bool anySuccess = false;
 
             // 2. Chạy fallback vuốt song song ngầm bằng lệnh sh
@@ -385,7 +422,7 @@ namespace CvAut
             string? jarPath = FindUiAutomatorJar();
             if (jarPath == null)
             {
-                Console.WriteLine("[ADB WARNING] Không tìm thấy u2.jar của UIAutomator2 trong repo hoặc thư mục Simplicity.");
+                Console.WriteLine("[ADB WARNING] UIAutomator2 package not found.");
                 return false;
             }
 
@@ -397,7 +434,7 @@ namespace CvAut
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(destJar)!);
                     File.Copy(jarPath, destJar, overwrite: true);
-                    Console.WriteLine($"[ADB] Đã cache u2.jar vào thư mục build: {destJar}");
+                    Console.WriteLine("[ADB] UIAutomator2 package cached.");
                 }
                 catch { }
             }
@@ -460,12 +497,12 @@ namespace CvAut
         {
             try
             {
-                var payload = new
+                var payload = new Dictionary<string, object?>
                 {
-                    jsonrpc = "2.0",
-                    id = 1,
-                    method,
-                    @params = parameters
+                    ["jsonrpc"] = "2.0",
+                    ["id"] = 1,
+                    ["method"] = method,
+                    ["params"] = parameters
                 };
 
                 string json = JsonSerializer.Serialize(payload);
@@ -495,7 +532,7 @@ namespace CvAut
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ADB WARNING] UIAutomator2 RPC không thành công: {ex.Message}");
+                Console.WriteLine($"[ADB WARNING] UIAutomator2 RPC failed: {ex.Message}");
                 return false;
             }
         }
@@ -572,7 +609,7 @@ namespace CvAut
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ADB WARNING] Không chạy được adb {arguments}: {ex.Message}");
+                Console.WriteLine($"[ADB WARNING] ADB command failed: {ex.Message}");
                 return null;
             }
         }
@@ -613,7 +650,7 @@ namespace CvAut
 
                     if (process.ExitCode != 0)
                     {
-                        Console.WriteLine($"[ADB WARNING] Lỗi chụp màn hình ADB lần {attempt}: {stderr.Trim()}");
+                        Console.WriteLine($"[ADB WARNING] Screenshot capture failed (attempt {attempt}).");
                         Thread.Sleep(1000);
                         continue;
                     }
@@ -621,7 +658,7 @@ namespace CvAut
                     byte[] imageBytes = ms.ToArray();
                     if (imageBytes.Length == 0)
                     {
-                        Console.WriteLine($"[ADB WARNING] ADB trả ảnh rỗng lần {attempt}.");
+                        Console.WriteLine($"[ADB WARNING] Screenshot was empty (attempt {attempt}).");
                         Thread.Sleep(1000);
                         continue;
                     }
@@ -630,7 +667,7 @@ namespace CvAut
                     using Mat decoded = Cv2.ImDecode(imageBytes, ImreadModes.Color);
                     if (decoded.Empty())
                     {
-                        Console.WriteLine($"[ADB WARNING] Không decode được ảnh màn hình lần {attempt}.");
+                        Console.WriteLine($"[ADB WARNING] Screenshot decode failed (attempt {attempt}).");
                         Thread.Sleep(1000);
                         continue;
                     }
@@ -642,7 +679,7 @@ namespace CvAut
                     Cv2.MeanStdDev(gray, out _, out Scalar stddev);
                     if (stddev.Val0 < 3.0)
                     {
-                        Console.WriteLine($"[ADB WARNING] Ảnh màn hình gần như blank lần {attempt} (std={stddev.Val0:F2}).");
+                        Console.WriteLine($"[ADB WARNING] Screenshot appears blank (attempt {attempt}).");
                         Thread.Sleep(1000);
                         continue;
                     }
@@ -651,7 +688,7 @@ namespace CvAut
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[ADB ERROR] Không thể chụp màn hình giả lập lần {attempt}: {ex.Message}");
+                    Console.WriteLine($"[ADB ERROR] Screenshot capture failed (attempt {attempt}): {ex.Message}");
                     Thread.Sleep(1000);
                 }
             }

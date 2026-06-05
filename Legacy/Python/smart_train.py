@@ -57,7 +57,7 @@ class SmartTrain:
         # Standard ROI: (76, 57, 565, 156) matches army_window.png template
         window_found = self.vision.find_element(screenshot, "ui/army_window_crop", threshold=0.6)
         if window_found:
-            print("✅ [SMART] Army window successfully verified.")
+            print("[SMART] Army window successfully verified.")
             return True
             
         print("[SMART WARN] Army window not detected.")
@@ -76,7 +76,7 @@ class SmartTrain:
         balloon_ok = self.vision.find_element(screenshot, "troops/balloon", threshold=0.7)
         
         if dragon_ok and balloon_ok:
-            print("✅ [SMART] Troops validation passed.")
+            print("[SMART] Troops validation passed.")
             return True
             
         print("[SMART WARN] Missing main troops. Retraining required.")
@@ -93,7 +93,7 @@ class SmartTrain:
         freeze_ok = self.vision.find_element(screenshot, "spells/freeze", threshold=0.7)
         
         if rage_ok and freeze_ok:
-            print("✅ [SMART] Spells validation passed.")
+            print("[SMART] Spells validation passed.")
             return True
             
         print("[SMART WARN] Spells incomplete. Production required.")
@@ -108,7 +108,7 @@ class SmartTrain:
             
         slammer_ok = self.vision.find_element(screenshot, "ui/treasure_event", threshold=0.6) # placeholder template matching
         if slammer_ok:
-            print("✅ [SMART] Siege machine confirmed ready.")
+            print("[SMART] Siege machine confirmed ready.")
             return True
             
         print("[SMART WARN] Stone Slammer missing.")
@@ -116,7 +116,7 @@ class SmartTrain:
 
     def train_troops(self, cfg: dict) -> None:
         """Executes troop training clicks."""
-        print("🍳 [TRAIN] Initiating fresh troop training load...")
+        print("[TRAIN] Initiating fresh troop training load...")
         
         # 1. Clear old incorrect troops in queue (Trash)
         self.adb.tap(self.TAP_CLEAR_ARMY[0], self.TAP_CLEAR_ARMY[1])
@@ -143,11 +143,11 @@ class SmartTrain:
         # 4. Close tab
         self.adb.tap(self.CLOSE_ARMY_TAB[0], self.CLOSE_ARMY_TAB[1])
         time.sleep(1)
-        print("✅ [TRAIN] Troops queued successfully.")
+        print("[TRAIN] Troops queued successfully.")
 
     def train_spells(self, cfg: dict) -> None:
         """Executes spell training clicks."""
-        print("🍳 [TRAIN] Initiating spell production load...")
+        print("[TRAIN] Initiating spell production load...")
         
         # 1. Clear old spells (Trash)
         self.adb.tap(self.TAP_CLEAR_SPELL[0], self.TAP_CLEAR_SPELL[1])
@@ -173,11 +173,11 @@ class SmartTrain:
         # 4. Close spells tab
         self.adb.tap(self.CLOSE_SPELL_TAB[0], self.CLOSE_SPELL_TAB[1])
         time.sleep(1)
-        print("✅ [TRAIN] Spells queued successfully.")
+        print("[TRAIN] Spells queued successfully.")
 
     def train_slammer(self, cfg: dict) -> None:
         """Produces siege machine."""
-        print("🍳 [TRAIN] Queuing Stone Slammer production...")
+        print("[TRAIN] Queuing Stone Slammer production...")
         
         # 1. Clear queue
         self.adb.tap(self.TAP_CLEAR_SIEGE[0], self.TAP_CLEAR_SIEGE[1])
@@ -196,7 +196,7 @@ class SmartTrain:
         # 4. Close siege tab
         self.adb.tap(self.CLOSE_SIEGE_TAB[0], self.CLOSE_SIEGE_TAB[1])
         time.sleep(1)
-        print("✅ [TRAIN] Stone Slammer queued.")
+        print("[TRAIN] Stone Slammer queued.")
 
     def run(self, cfg: dict) -> None:
         """Runs the complete smart train loop."""
@@ -211,7 +211,7 @@ class SmartTrain:
         siege_ok = self.validate_siege()
         
         if troops_ok and spells_ok and siege_ok:
-            print("✅ [SMART] Army composition correct. No training needed.")
+            print("[SMART] Army composition correct. No training needed.")
         else:
             # Rebuild missing or incorrect items
             if not troops_ok:

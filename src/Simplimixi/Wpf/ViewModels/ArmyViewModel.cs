@@ -14,31 +14,33 @@ namespace CvAut.WpfApp.ViewModels
     {
         // Dịch vụ quản lý bot
         private readonly IBotService _botService;
-        
+
         // Chiến thuật tấn công đang được chọn (Dragon / Electro Dragon)
         private string _selectedAttackStrategy = "Dragon";
-        
+
         // Tên xem trước chiến thuật trên UI
         private string _attackPreview = "DRAGON";
-        
+
         // Mô tả chi tiết chiến thuật
         private string _attackDescription = "DRAGON ATTACK";
-        
+
         // Đường dẫn ảnh mẫu minh họa sơ đồ thả quân của chiến thuật
-        private string _attackImagePath = "pack://siteoforigin:,,,/Templates/attacks/Dragon_attack.png";
-        
+        private string _attackImagePath = "pack://siteoforigin:,,,/assets/Templates/attacks/Dragon_attack.png";
+
         // Thành phần đội hình lính và phép dự kiến (ví dụ: 13 Dragon / 15 Balloons...)
         private string _attackComposition = "13 Dragon / 15 Balloons / 4 Rage / 3 Freeze";
-        
+
         // Thành phần hỗ trợ đi kèm (như Tướng, xe công thành, lính xin Clan)
         private string _attackSupport = "Any Siege / All heroes / CC rage + freeze";
-        
+
+        private List<ArmyCardViewModel> _attackCards = new();
+
         // Chế độ huấn luyện thông minh (đếm lính thiếu trong doanh trại để luyện bù)
         private bool _isSmartTrain = true;
-        
+
         // Chế độ huấn luyện nhanh (bấm vào Slot Quick Train có sẵn)
         private bool _isQuickTrain;
-        
+
         // Số thứ tự Slot Quick Train muốn sử dụng (thường là 1, 2 hoặc 3)
         private int _quickSlot = 1;
 
@@ -108,6 +110,12 @@ namespace CvAut.WpfApp.ViewModels
             set => SetProperty(ref _attackSupport, value);
         }
 
+        public List<ArmyCardViewModel> AttackCards
+        {
+            get => _attackCards;
+            set => SetProperty(ref _attackCards, value);
+        }
+
         /// <summary>
         /// Kích hoạt chế độ huấn luyện lính thông minh (Smart Train).
         /// </summary>
@@ -163,6 +171,7 @@ namespace CvAut.WpfApp.ViewModels
         {
             _botService = botService;
             LoadConfig();
+            UpdateAttackStrategyInfo();
         }
 
         /// <summary>
@@ -231,18 +240,35 @@ namespace CvAut.WpfApp.ViewModels
             {
                 AttackPreview = "ELECTRO DRAGON";
                 AttackDescription = "ELECTRO DRAGON ATTACK";
-                AttackImagePath = "pack://siteoforigin:,,,/Templates/attacks/ElectroDragon_Attack.png";
+                AttackImagePath = "pack://siteoforigin:,,,/assets/Templates/attacks/ElectroDragon_Attack.png";
                 AttackComposition = "10 E-Drag / 15 Balloons / 4 Rage / 3 Freeze";
                 AttackSupport = "Any Siege / All heroes / CC rage + freeze";
+                AttackCards = BuildAttackCards("E-Drag", "x10", "pack://siteoforigin:,,,/assets/Templates/troops/E_Drag.png");
             }
             else
             {
                 AttackPreview = "DRAGON";
                 AttackDescription = "DRAGON ATTACK";
-                AttackImagePath = "pack://siteoforigin:,,,/Templates/attacks/Dragon_attack.png";
+                AttackImagePath = "pack://siteoforigin:,,,/assets/Templates/attacks/Dragon_attack.png";
                 AttackComposition = "13 Dragon / 15 Balloons / 4 Rage / 3 Freeze";
                 AttackSupport = "Any Siege / All heroes / CC rage + freeze";
+                AttackCards = BuildAttackCards("Dragon", "x13", "pack://siteoforigin:,,,/assets/Templates/troops/dragon.png");
             }
+        }
+
+        private static List<ArmyCardViewModel> BuildAttackCards(string mainTroopName, string mainTroopCount, string mainTroopPath)
+        {
+            return new List<ArmyCardViewModel>
+            {
+                new(mainTroopName, mainTroopCount, mainTroopPath),
+                new("Balloon", "x15", "pack://siteoforigin:,,,/assets/Templates/troops/balloon.png"),
+                new("Rage", "x4", "pack://siteoforigin:,,,/assets/Templates/spells/rage.png"),
+                new("Freeze", "x3", "pack://siteoforigin:,,,/assets/Templates/spells/freeze.png"),
+                new("King", "Hero", "pack://siteoforigin:,,,/assets/Templates/heroes/bk.png"),
+                new("Queen", "Hero", "pack://siteoforigin:,,,/assets/Templates/heroes/queen.png"),
+                new("Warden", "Hero", "pack://siteoforigin:,,,/assets/Templates/heroes/warden.png"),
+                new("Champion", "Hero", "pack://siteoforigin:,,,/assets/Templates/heroes/rc.png"),
+            };
         }
 
         /// <summary>
@@ -256,5 +282,19 @@ namespace CvAut.WpfApp.ViewModels
             }
             return defaultValue;
         }
+    }
+
+    public sealed class ArmyCardViewModel
+    {
+        public ArmyCardViewModel(string name, string count, string imagePath)
+        {
+            Name = name;
+            Count = count;
+            ImagePath = imagePath;
+        }
+
+        public string Name { get; }
+        public string Count { get; }
+        public string ImagePath { get; }
     }
 }

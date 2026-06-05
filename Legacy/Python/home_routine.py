@@ -52,10 +52,10 @@ class HomeRoutine:
             stderr=subprocess.DEVNULL
         )
         
-        print("⏳ [RECOVERY] Waiting 10 seconds for game to load...")
+        print("[RECOVERY] Waiting 10 seconds for game to load...")
         time.sleep(10)
         
-        print("👆 [RECOVERY] Dismissing initial pop-ups...")
+        print("[RECOVERY] Dismissing initial pop-ups...")
         # Simulates clicking at (146, 487) to close normal login popups/ads
         self.adb.tap(146, 487)
         time.sleep(1)
@@ -65,7 +65,7 @@ class HomeRoutine:
         Verifies if the bot is on the main village base, reboots if timed out.
         Reconstructed from the original ensure_home_base.pyc.
         """
-        print("🧠 [BASE] Checking if we're on the home base screen...")
+        print("[BASE] Checking if we're on the home base screen...")
         start_time = time.time()
         
         while time.time() - start_time < max_wait:
@@ -74,13 +74,13 @@ class HomeRoutine:
                 # detect_home_base equivalent: check for ui/home_page
                 base_found = self.vision.find_element(screenshot, "ui/home_page", threshold=0.7)
                 if base_found:
-                    print("✅ [BASE] Home base confirmed.")
+                    print("[BASE] Home base confirmed.")
                     return True
             
-            print("⏳ [BASE] Still not on home base. Retrying in 5s...")
+            print("[BASE] Still not on home base. Retrying in 5s...")
             time.sleep(5)
             
-        print("❌ [BASE] Failed to detect home base. Initiating reboot sequence...")
+        print("[BASE] Failed to detect home base. Initiating reboot sequence...")
         self.boot_recovery()
         # Recursive verification with lower timeout
         return self.ensure_home_base(max_wait=20)
@@ -90,7 +90,7 @@ class HomeRoutine:
         Executes the local zoom_out.ahk script to zoom out the MEmu camera without stealing focus.
         Optimized Win32 thread message sender.
         """
-        print("🔍 [ZOOM] Executing AutoHotkey zoom out...")
+        print("[ZOOM] Executing AutoHotkey zoom out...")
         base_dir = os.path.dirname(os.path.abspath(__file__))
         ahk_exe = os.path.join(base_dir, "AutoHotkey64.exe")
         ahk_script = os.path.join(base_dir, "zoom_out.ahk")
@@ -101,7 +101,7 @@ class HomeRoutine:
                     [ahk_exe, ahk_script],
                     creationflags=self.create_no_window
                 )
-                print("✅ [ZOOM] AHK Zoom-out script triggered successfully.")
+                print("[ZOOM] AHK Zoom-out script triggered successfully.")
             except Exception as e:
                 print(f"[ZOOM ERROR] Failed to run AutoHotkey: {e}")
         else:
@@ -120,7 +120,7 @@ class HomeRoutine:
         # Scan for gold/elixir collectors template
         collector_pos = self.vision.find_element(screenshot, "ui/collectors", threshold=0.65)
         if collector_pos:
-            print(f"💰 [COLLECTORS] Harvesting collectors at {collector_pos}")
+            print(f"[COLLECTORS] Harvesting collectors at {collector_pos}")
             self.adb.tap(collector_pos[0], collector_pos[1])
         else:
             print("[COLLECTORS] No collectors detected or templates missing.")
@@ -130,7 +130,7 @@ class HomeRoutine:
         Switches between different accounts using the game's Supercell ID list interface.
         Reconstructed and optimized from the original ready_villages.pyc.
         """
-        print(f"🔄 [SWITCH] Switching to Village_{idx}...")
+        print(f"[SWITCH] Switching to Village_{idx}...")
         
         # 1. Tap the Settings Gear icon (at 1534, 649 on standard base)
         self.adb.tap(1534, 649)
@@ -165,5 +165,5 @@ class HomeRoutine:
         self.adb.tap(coord[0], coord[1])
         time.sleep(6) # Wait for Clash of Clans to reload and render the new village
         
-        print(f"✅ [SWITCH] Switched to Village_{idx} successfully.")
+        print(f"[SWITCH] Switched to Village_{idx} successfully.")
         return True
