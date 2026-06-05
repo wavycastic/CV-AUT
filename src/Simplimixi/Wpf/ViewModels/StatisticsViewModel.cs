@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
+using System.Windows.Media;
 using CvAut.WpfApp.Services;
 
 namespace CvAut.WpfApp.ViewModels
@@ -19,10 +24,10 @@ namespace CvAut.WpfApp.ViewModels
         public StatisticsViewModel(IBotService botService)
         {
             _botService = botService;
-            
+
             // Đăng ký sự kiện làm mới dữ liệu thống kê
             _botService.StatsUpdated += Refresh;
-            
+
             // Thực hiện nạp dữ liệu ban đầu
             Refresh();
         }
@@ -59,6 +64,18 @@ namespace CvAut.WpfApp.ViewModels
         /// </summary>
         public string AvgDarkElixirPerHourText => FormatNumber(_botService.AvgDarkElixirPerHour) + "/h";
 
+        public bool HasGoldStats => _botService.SessionBattleHistory.Count > 0;
+
+        public bool HasElixirStats => _botService.SessionBattleHistory.Count > 0;
+
+        public bool HasDarkElixirStats => _botService.SessionBattleHistory.Count > 0;
+
+        public PointCollection GoldSparklinePoints => CreateSparklinePoints(_botService.SessionBattleHistory.Select(point => point.Gold));
+
+        public PointCollection ElixirSparklinePoints => CreateSparklinePoints(_botService.SessionBattleHistory.Select(point => point.Elixir));
+
+        public PointCollection DarkElixirSparklinePoints => CreateSparklinePoints(_botService.SessionBattleHistory.Select(point => point.DarkElixir));
+
         /// <summary>
         /// Tổng số trận tấn công.
         /// </summary>
@@ -79,6 +96,8 @@ namespace CvAut.WpfApp.ViewModels
         /// </summary>
         public string UptimeText => _botService.UptimeText;
 
+        public string StatusText => _botService.StatusText;
+
         /// <summary>
         /// Bộ nhớ RAM tiến trình chiếm dụng.
         /// </summary>
@@ -88,6 +107,14 @@ namespace CvAut.WpfApp.ViewModels
         /// Chuỗi phân rã kết quả sao trận đánh (ví dụ: "5 triple / 3 double / 2 single / 1 fail").
         /// </summary>
         public string StarBreakdownText => $"{_botService.Star3Count} triple / {_botService.Star2Count} double / {_botService.Star1Count} single / {_botService.Star0Count} fail";
+
+        public string Star0CountText => _botService.Star0Count.ToString();
+
+        public string Star1CountText => _botService.Star1Count.ToString();
+
+        public string Star2CountText => _botService.Star2Count.ToString();
+
+        public string Star3CountText => _botService.Star3Count.ToString();
 
         /// <summary>
         /// Thông báo cho giao diện WPF cập nhật toàn bộ các thuộc tính hiển thị liên quan đến thống kê.
@@ -100,12 +127,58 @@ namespace CvAut.WpfApp.ViewModels
             OnPropertyChanged(nameof(AvgGoldPerHourText));
             OnPropertyChanged(nameof(AvgElixirPerHourText));
             OnPropertyChanged(nameof(AvgDarkElixirPerHourText));
+            OnPropertyChanged(nameof(HasGoldStats));
+            OnPropertyChanged(nameof(HasElixirStats));
+            OnPropertyChanged(nameof(HasDarkElixirStats));
+            OnPropertyChanged(nameof(GoldSparklinePoints));
+            OnPropertyChanged(nameof(ElixirSparklinePoints));
+            OnPropertyChanged(nameof(DarkElixirSparklinePoints));
             OnPropertyChanged(nameof(AttacksCountText));
             OnPropertyChanged(nameof(SuccessRateText));
             OnPropertyChanged(nameof(SuccessRateValue));
             OnPropertyChanged(nameof(UptimeText));
+            OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(MemoryUsageText));
             OnPropertyChanged(nameof(StarBreakdownText));
+            OnPropertyChanged(nameof(Star0CountText));
+            OnPropertyChanged(nameof(Star1CountText));
+            OnPropertyChanged(nameof(Star2CountText));
+            OnPropertyChanged(nameof(Star3CountText));
+        }
+
+        private static PointCollection CreateSparklinePoints(IEnumerable<long> sourceValues)
+        {
+            const double width = 132.0;
+            const double height = 40.0;
+            const double midY = 24.0;
+
+            long[] values = sourceValues.TakeLast(30).ToArray();
+            if (values.Length == 0)
+            {
+                return new PointCollection();
+            }
+
+            if (values.Length == 1)
+            {
+                return new PointCollection(new[] { new Point(42, midY), new Point(90, midY) });
+            }
+
+            long min = values.Min();
+            long max = values.Max();
+            if (max == min)
+            {
+                double step = width / (values.Length - 1);
+                return new PointCollection(values.Select((_, index) => new Point(index * step, midY)));
+            }
+
+            double range = max - min;
+            double xStep = width / (values.Length - 1);
+            return new PointCollection(values.Select((value, index) =>
+            {
+                double normalized = (value - min) / range;
+                double y = height - (normalized * (height - 8.0)) - 4.0;
+                return new Point(index * xStep, y);
+            }));
         }
 
         /// <summary>

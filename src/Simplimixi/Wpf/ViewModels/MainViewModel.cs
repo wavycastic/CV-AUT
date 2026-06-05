@@ -7,7 +7,7 @@ using CvAut.WpfApp.Services;
 namespace CvAut.WpfApp.ViewModels
 {
     /// <summary>
-    /// ViewModel chính (Shell ViewModel) cho giao diện WPF của Simplimixi.
+    /// ViewModel chính (Shell ViewModel) cho giao diện WPF của SimpliMixi.
     /// Quản lý việc chuyển hướng giữa các View con, trạng thái hoạt động của bot,
     /// liên kết dữ liệu (Data Binding) với các thành phần điều khiển trên Window chính và đồng bộ với BotService.
     /// </summary>
@@ -15,36 +15,38 @@ namespace CvAut.WpfApp.ViewModels
     {
         // Dịch vụ quản lý bot
         private readonly IBotService _botService;
-        
+
         // ViewModel con đang được hiển thị hiện tại trên vùng nội dung chính
         private ViewModelBase _currentViewModel;
-        
-        // Chuỗi văn bản hiển thị trạng thái bot (RUNNING, PAUSED, IDLE)
-        private string _statusPillText = "IDLE";
-        
+        // ID định danh Tab hiện đang được chọn (ví dụ: "general", "army",...)
+        private string _currentTab = "general";
+
+        // Chuỗi văn bản hiển thị trạng thái bot (RUNNING, PAUSED, NOT RUNNING)
+        private string _statusPillText = "NOT RUNNING";
+
         // Màu sắc đại diện cho trạng thái bot trên UI (ví dụ: Xanh lá cho RUNNING, Vàng cho PAUSED)
         private System.Windows.Media.Brush _statusPillBrush;
-        
+
         // Thời gian bot đã chạy liên tục
         private string _uptimeText = "00:00:00";
-        
+
         // Lượng RAM hệ thống tiến trình đang chiếm dụng
         private string _memoryUsageText = "0.0 MB";
-        
+
         // Tỷ lệ tấn công thành công
         private string _successRateText = "100%";
-        
+
         // Số trận cướp đã thực hiện
         private int _attacksCount;
-        
+
         // Nhãn văn bản trên nút Tạm dừng (PAUSE / RESUME)
         private string _pauseButtonText = "PAUSE";
-        
+
         // ID làng hiện tại đang chọn (từ 1 đến 5)
         private int _currentVillage = 1;
 
         // Sub ViewModels (Các ViewModel con quản lý các Tab/Trang giao diện tương ứng)
-        
+
         /// <summary>
         /// ViewModel quản lý Cài đặt Chung (General settings).
         /// </summary>
@@ -81,7 +83,7 @@ namespace CvAut.WpfApp.ViewModels
         public LogsViewModel LogsVM { get; }
 
         // Navigation Commands (Lệnh chuyển đổi giữa các màn hình con)
-        
+
         /// <summary>
         /// Lệnh chuyển sang màn hình Cài đặt Chung.
         /// </summary>
@@ -118,7 +120,7 @@ namespace CvAut.WpfApp.ViewModels
         public ICommand NavigateLogsCommand { get; }
 
         // Bot Control Commands (Lệnh điều khiển hoạt động của Bot)
-        
+
         /// <summary>
         /// Lệnh kích hoạt chạy Bot.
         /// </summary>
@@ -135,7 +137,7 @@ namespace CvAut.WpfApp.ViewModels
         public ICommand TogglePauseCommand { get; }
 
         // Village switching commands (Lệnh chuyển đổi qua lại giữa 5 cấu hình làng)
-        
+
         /// <summary>
         /// Lệnh chuyển về làng phía trước.
         /// </summary>
@@ -147,7 +149,7 @@ namespace CvAut.WpfApp.ViewModels
         public ICommand NextVillageCommand { get; }
 
         // Properties (Thuộc tính Data Binding)
-        
+
         /// <summary>
         /// ViewModel con hiện tại đang được hiển thị trong NavigationView của MainWindow.
         /// </summary>
@@ -158,7 +160,16 @@ namespace CvAut.WpfApp.ViewModels
         }
 
         /// <summary>
-        /// Văn bản trạng thái bot (IDLE, RUNNING, PAUSED).
+        /// ID định danh của Tab/Trang hiện tại đang được hiển thị trên giao diện.
+        /// </summary>
+        public string CurrentTab
+        {
+            get => _currentTab;
+            set => SetProperty(ref _currentTab, value);
+        }
+
+        /// <summary>
+        /// Văn bản trạng thái bot (IDLE, RUNNING, PAUSED, STOPPING).
         /// </summary>
         public string StatusPillText
         {
@@ -253,7 +264,7 @@ namespace CvAut.WpfApp.ViewModels
         /// <summary>
         /// Điều kiện để kích hoạt nút Dừng Bot (khi bot đang chạy).
         /// </summary>
-        public bool IsEndButtonEnabled => _botService.IsRunning;
+        public bool IsEndButtonEnabled => _botService.IsRunning && _botService.StatusText != "STOPPING";
 
         /// <summary>
         /// Điều kiện để kích hoạt nút Tạm dừng Bot (khi bot đang chạy).
@@ -269,8 +280,8 @@ namespace CvAut.WpfApp.ViewModels
             _botService = botService;
 
             // Khởi tạo các trang ViewModel con
-            GeneralVM = new GeneralViewModel(_botService);
             ArmyVM = new ArmyViewModel(_botService);
+            GeneralVM = new GeneralViewModel(_botService, ArmyVM);
             MultiVillageVM = new MultiVillageViewModel(_botService);
             ClanGamesVM = new ClanGamesViewModel(_botService);
             ClanCapitalVM = new ClanCapitalViewModel(_botService);
@@ -288,13 +299,13 @@ namespace CvAut.WpfApp.ViewModels
             _botService.StatsUpdated += OnBotStatsUpdated;
 
             // Đăng ký các lệnh chuyển trang (Navigation)
-            NavigateGeneralCommand = new RelayCommand(() => CurrentViewModel = GeneralVM);
-            NavigateArmyCommand = new RelayCommand(() => CurrentViewModel = ArmyVM);
-            NavigateMultiVillageCommand = new RelayCommand(() => CurrentViewModel = MultiVillageVM);
-            NavigateClanGamesCommand = new RelayCommand(() => CurrentViewModel = ClanGamesVM);
-            NavigateClanCapitalCommand = new RelayCommand(() => CurrentViewModel = ClanCapitalVM);
-            NavigateStatisticsCommand = new RelayCommand(() => CurrentViewModel = StatisticsVM);
-            NavigateLogsCommand = new RelayCommand(() => CurrentViewModel = LogsVM);
+            NavigateGeneralCommand = new RelayCommand(() => NavigateTo(GeneralVM, "general"));
+            NavigateArmyCommand = new RelayCommand(() => NavigateTo(ArmyVM, "army"));
+            NavigateMultiVillageCommand = new RelayCommand(() => NavigateTo(MultiVillageVM, "multivillage"));
+            NavigateClanGamesCommand = new RelayCommand(() => NavigateTo(ClanGamesVM, "clangames"));
+            NavigateClanCapitalCommand = new RelayCommand(() => NavigateTo(ClanCapitalVM, "clancapital"));
+            NavigateStatisticsCommand = new RelayCommand(() => NavigateTo(StatisticsVM, "statistics"));
+            NavigateLogsCommand = new RelayCommand(() => NavigateTo(LogsVM, "logs"));
 
             // Đăng ký các lệnh điều khiển bot
             StartCommand = new RelayCommand(StartBot);
@@ -316,6 +327,17 @@ namespace CvAut.WpfApp.ViewModels
             // Cập nhật trạng thái và thống kê ban đầu
             OnBotStatusChanged();
             OnBotStatsUpdated();
+        }
+
+        /// <summary>
+        /// Điều hướng sang trang (ViewModel) chỉ định đồng thời cập nhật thuộc tính tab tương ứng.
+        /// </summary>
+        /// <param name="viewModel">ViewModel đích muốn điều hướng tới.</param>
+        /// <param name="tab">Tên định danh của tab tương ứng.</param>
+        private void NavigateTo(ViewModelBase viewModel, string tab)
+        {
+            CurrentViewModel = viewModel;
+            CurrentTab = tab;
         }
 
         /// <summary>
@@ -350,18 +372,24 @@ namespace CvAut.WpfApp.ViewModels
         /// </summary>
         private void OnBotStatusChanged()
         {
-            StatusPillText = _botService.StatusText;
-            
-            // Xanh neon lá cây cho RUNNING, Cam cho PAUSED, Xám nhạt cho IDLE
-            if (StatusPillText == "RUNNING")
+            string serviceStatus = _botService.StatusText;
+            StatusPillText = serviceStatus;
+
+            // Xanh neon lá cây cho RUNNING, Cam cho PAUSED/STOPPING, Xám nhạt cho IDLE
+            if (serviceStatus == "RUNNING")
             {
                 StatusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(74, 222, 128)); // #4ADE80
                 PauseButtonText = "PAUSE";
             }
-            else if (StatusPillText == "PAUSED")
+            else if (serviceStatus == "PAUSED")
             {
                 StatusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 204, 21)); // #FACC15
                 PauseButtonText = "RESUME";
+            }
+            else if (serviceStatus == "STOPPING")
+            {
+                StatusPillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(251, 146, 60)); // #FB923C
+                PauseButtonText = "PAUSE";
             }
             else // IDLE
             {

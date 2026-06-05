@@ -4,9 +4,11 @@ Convert a high-resolution PNG into a multi-size ICO without losing quality.
 Requires: pip install pillow
 """
 
-from PIL import Image
 import sys
 from pathlib import Path
+
+from PIL import Image
+
 
 def png_to_ico(png_path: Path, ico_path: Path = None, sizes=None):
     """
@@ -21,7 +23,15 @@ def png_to_ico(png_path: Path, ico_path: Path = None, sizes=None):
         # Common icon sizes; include your original resolution if it’s square:
         orig = Image.open(png_path)
         w, h = orig.size
-        icon_sizes = [(w, h), (256,256), (128,128), (64,64), (48,48), (32,32), (16,16)]
+        icon_sizes = [
+            (w, h),
+            (256, 256),
+            (128, 128),
+            (64, 64),
+            (48, 48),
+            (32, 32),
+            (16, 16),
+        ]
         # filter out duplicates and sizes larger than the source
         sizes = sorted({s for s in icon_sizes if s[0] <= w and s[1] <= h}, reverse=True)
     else:
@@ -32,7 +42,8 @@ def png_to_ico(png_path: Path, ico_path: Path = None, sizes=None):
 
     # Save multi-size ICO
     img.save(ico_path, format="ICO", sizes=sizes)
-    print(f"✅ Saved {ico_path} with sizes: {sizes}")
+    print(f"Saved {ico_path} with sizes: {sizes}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

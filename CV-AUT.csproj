@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>CvAut</RootNamespace>
+    <StartupObject>CvAut.Program</StartupObject>
+    <AssemblyName>SimpliMixi</AssemblyName>
+    <Product>SimpliMixi</Product>
+    <Version>0.5.0</Version>
+    <AssemblyVersion>0.5.0.0</AssemblyVersion>
+    <FileVersion>0.5.0.0</FileVersion>
+    <ApplicationIcon>Assets\AppIcon\SimpliMixi.ico</ApplicationIcon>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src\Simplimixi\Core\**\*.cs" />
+    <Compile Include="src\Simplimixi\Wpf\**\*.cs" />
+    <ApplicationDefinition Include="src\Simplimixi\Wpf\App.xaml" />
+    <Page Include="src\Simplimixi\Wpf\**\*.xaml" Exclude="src\Simplimixi\Wpf\App.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenCvSharp4" Version="4.9.0.20240103" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.9.0.20240103" />
+    <PackageReference Include="SharpAdbClient" Version="2.3.3" />
+    <PackageReference Include="WPF-UI" Version="3.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="adb\**\*" Link="adb\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Assets\Templates\**\*" Link="assets\Templates\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Assets\Templates\icon_attack.png">
+      <Link>assets\Templates\icon_attack.png</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <Resource Include="Assets\Backgrounds\**\*" />
+    <Resource Include="Assets\AppIcon\League_Badge_big_witch.png" />
+    <Resource Include="Assets\AppIcon\SimpliMixiIcon.png" />
+    <None Include="Legacy\Python\test_config.json" Link="Config\test_config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

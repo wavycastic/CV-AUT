@@ -130,7 +130,7 @@ namespace CvAut
                 _adb.Tap(candidate.X, candidate.Y);
                 Thread.Sleep(1000);
                 
-                // Bấm tâm màn hình để hiển thị menu nâng cấp
+                // Bấm điểm rìa an toàn để tắt các menu cản trở nếu có
                 _adb.Tap(HomeMenuPoint.X, HomeMenuPoint.Y);
                 Thread.Sleep(1000);
 
@@ -247,7 +247,7 @@ namespace CvAut
         private void PrepareWallSearch()
         {
             Thread.Sleep(500);
-            _adb.Tap(HomeMenuPoint.X, HomeMenuPoint.Y); // Tap tâm để tắt các menu cản trở
+            _adb.Tap(HomeMenuPoint.X, HomeMenuPoint.Y); // Tap điểm rìa an toàn để tắt các menu cản trở
             Thread.Sleep(1000);
 
             // Vuốt kéo bản đồ 6 lần về hướng rìa bản đồ

@@ -30,7 +30,7 @@ namespace CvAut
 
         // Vùng ROI dùng để xác thực cửa sổ Quân đội đang mở thành công
         private static readonly Rect ArmyWindowRoi = new(76, 57, 489, 99);
-        
+
         // Vùng ROI của nút Sử dụng Đội hình mẫu 1 và 2 (Quick Slot 1 & 2)
         private static readonly Rect QuickSlot1Roi = Rect.FromLTRB(1364, 189, 1574, 425);
         private static readonly Rect QuickSlot2Roi = Rect.FromLTRB(1368, 486, 1572, 735);
@@ -39,11 +39,11 @@ namespace CvAut
         private static readonly Rect ArmyRoi = Rect.FromLTRB(682, 228, 1573, 383);
         private static readonly Rect SpellRoi = Rect.FromLTRB(689, 461, 1250, 600);
         private static readonly Rect SiegeRoi = Rect.FromLTRB(1256, 457, 1554, 608);
-        
+
         // Vùng ROI hiển thị chỉ số sức chứa lính hiện tại (ví dụ: "240/240")
         private static readonly Rect SpaceRoi = Rect.FromLTRB(750, 195, 826, 225);
         private static readonly Rect ArmySpaceSecondaryRoi = Rect.FromLTRB(751, 183, 858, 230);
-        
+
         // Vùng ROI hiển thị sức chứa phép hiện tại
         private static readonly Rect SpellSpaceRoi = Rect.FromLTRB(731, 398, 810, 464);
 
@@ -53,6 +53,7 @@ namespace CvAut
         private static readonly Rect TrashSiegeRoi = Rect.FromLTRB(1511, 406, 1577, 458);
 
         private const double ValidationIconThreshold = 0.70;
+        private const double InitialValidationThreshold = 0.92;
 
         // Tọa độ chạm nút xóa hàng chờ
         private static readonly Point TapClearArmy = new(1546, 209);
@@ -107,21 +108,21 @@ namespace CvAut
         /// <returns>True nếu thực hiện thành công, ngược lại False.</returns>
         public bool QuickTrain(int quickSlot = 1)
         {
-            Console.WriteLine($"[quick_train] Bắt đầu dùng Army Recipe slot {quickSlot}...");
+            Console.WriteLine($"[QUICK TRAIN] Using army recipe slot {quickSlot}...");
 
             if (!ValidateArmyWindow())
             {
-                Console.WriteLine("[quick_train] Army window not detected - aborting");
+                Console.WriteLine("[QUICK TRAIN] Army window not detected.");
                 return false;
             }
 
             _adb.Tap(ArmyRecipePane.X, ArmyRecipePane.Y);
-            Thread.Sleep(500);
+            Thread.Sleep(200);
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
             {
-                Console.WriteLine("[quick_train] failed to capture screenshot after opening recipes");
+                Console.WriteLine("[QUICK TRAIN] Screenshot unavailable.");
                 CloseArmyWindowIfPossible();
                 return false;
             }
@@ -130,23 +131,23 @@ namespace CvAut
             // Tìm nút 'Train' (use_button) trong slot chỉ định
             if (!TryFindTemplate(shot, "use_button.png", slotRoi, out Point useButton, out double useScore))
             {
-                Console.WriteLine("[quick_train] use_button template missing or invalid");
+                Console.WriteLine("[QUICK TRAIN] Recipe action unavailable.");
                 CloseArmyWindowIfPossible();
                 return false;
             }
 
-            Console.WriteLine($"[quick_train] use_button match score = {useScore:F3}");
+
             if (useScore >= 0.90)
             {
                 _adb.Tap(useButton.X, useButton.Y);
-                Thread.Sleep(600);
+                Thread.Sleep(250);
 
                 // Xác nhận lại việc ghi đè/luyện quân nếu xuất hiện popup yêu cầu
                 using Mat? confirmShot = _adb.TakeScreenshot();
                 if (confirmShot != null && !confirmShot.Empty()
                     && TryFindTemplate(confirmShot, "use_army_recipe_window.png", null, out _, out double confirmScore))
                 {
-                    Console.WriteLine($"[quick_train] recipe window match score = {confirmScore:F3}");
+
                     if (confirmScore >= 0.90)
                     {
                         _adb.Tap(ConfirmRecipeUse.X, ConfirmRecipeUse.Y);
@@ -154,9 +155,9 @@ namespace CvAut
                 }
             }
 
-            Thread.Sleep(500);
+            Thread.Sleep(150);
             CloseArmyWindowIfPossible();
-            Thread.Sleep(500);
+            Thread.Sleep(150);
             return true;
         }
 
@@ -168,52 +169,54 @@ namespace CvAut
         /// 4. Đóng giao diện thông tin Quân đội.
         /// </summary>
         /// <param name="cfg">Tài liệu JSON chứa cấu hình chiến thuật đang chạy.</param>
-        public void SmartTrain(JsonElement cfg)
+        public bool SmartTrain(JsonElement cfg)
         {
             Console.WriteLine("\n--- [SMART] Starting Smart Train Sequence ---");
 
             if (!ValidateArmyWindow())
             {
                 Console.WriteLine("[SMART] Army window not detected - skipping Army training");
-                return;
+                return true;
             }
 
             Console.WriteLine("Army window detected");
 
             // Xác thực tính sẵn sàng của đội hình
-            bool armyOk = ValidateTroops(cfg);
-            bool spellOk = ValidateSpells();
-            bool siegeOk = ValidateSiege();
+            ArmySpec spec = GetArmySpec(cfg);
+            bool armyOk = ValidateTroops(spec);
+            bool spellOk = ValidateSpells(spec);
+            bool siegeOk = ValidateSiege(spec);
 
             if (armyOk && spellOk && siegeOk)
             {
                 Console.WriteLine("[SMART] All valid - no training needed");
                 CloseArmyWindowIfPossible();
                 Thread.Sleep(1000);
-                return;
+                return true;
             }
 
             // Nếu lính chưa đủ, thực hiện luyện lính
             if (!armyOk)
             {
-                TrainTroops(cfg);
+                armyOk = TrainTroops(cfg);
             }
 
             // Nếu phép chưa đủ, thực hiện chế tạo phép
             if (!spellOk)
             {
-                TrainSpells();
+                spellOk = TrainSpells();
             }
 
             // Nếu thiếu xe công thành, thực hiện chế tạo xe
             if (!siegeOk)
             {
-                TrainSlammer();
+                siegeOk = TrainSlammer();
             }
 
             Console.WriteLine("[SMART] Training complete - closing Army tab");
             CloseArmyWindowIfPossible();
             Thread.Sleep(1000);
+            return true;
         }
 
         /// <summary>
@@ -227,17 +230,17 @@ namespace CvAut
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
             {
-                Console.WriteLine("[WINDOW CHECK] failed to capture screenshot");
+                Console.WriteLine("[WINDOW] Screenshot unavailable.");
                 return false;
             }
 
             if (!TryFindTemplate(shot, "army_window.png", ArmyWindowRoi, out _, out double score))
             {
-                Console.WriteLine("[WINDOW CHECK] missing template or invalid army ROI");
+                Console.WriteLine("[WINDOW] Army window check unavailable.");
                 return false;
             }
 
-            Console.WriteLine($"[WINDOW CHECK] army window match score = {score:F3}");
+
             return score >= 0.60;
         }
 
@@ -252,9 +255,10 @@ namespace CvAut
         /// <summary>
         /// Kiểm tra xem số lượng và chủng loại lính trong doanh trại hiện tại có khớp với chiến thuật cấu hình hay không.
         /// </summary>
-        private bool ValidateTroops(JsonElement cfg)
+        /// <param name="spec">Đội hình cấu hình mong muốn (ArmySpec).</param>
+        private bool ValidateTroops(ArmySpec spec)
         {
-            Console.WriteLine("[SMART] Validating current troops...");
+            Console.WriteLine("[SMART] Checking troops...");
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -262,31 +266,28 @@ namespace CvAut
                 return false;
             }
 
-            ArmySpec spec = GetArmySpec(cfg);
             using Mat army = Crop(shot, ArmyRoi);
-            foreach (string troop in spec.Troops)
+            bool mainOk = TryMatch("Army Troops", spec.Main, army, InitialValidationThreshold, out _, out _)
+                || TryMatch("s_troops", spec.Main, army, InitialValidationThreshold, out _, out _);
+            bool balloonOk = TryMatch("Army Troops", "balloon", army, InitialValidationThreshold, out _, out _);
+            if (!mainOk || !balloonOk)
             {
-                // Thư mục chứa template lính (Rồng điện nằm ở s_troops, Rồng thường/Balloon ở Army Troops)
-                string subdir = troop.Equals("electro_dragon", StringComparison.OrdinalIgnoreCase) ? "s_troops" : "Army Troops";
-                if (!TryMatch(subdir, troop, army, 0.86, out Point center, out double score))
-                {
-                    Console.WriteLine($"[VALIDATION] {subdir}/{troop}: score={score:F3}, center=({center.X},{center.Y}) => missing; retraining.");
-                    return false;
-                }
-
-                Console.WriteLine($"[VALIDATION] {subdir}/{troop}: score={score:F3}, center=({center.X},{center.Y}) => ok");
+                Console.WriteLine("[SMART] troop composition missing; retraining.");
+                return false;
             }
 
-            Console.WriteLine("[VALIDATION] composition ok");
-            return true;
+            bool full = IsFullCapacity(shot, SpaceRoi, "army");
+            Console.WriteLine(full ? "[SMART] Troop composition ready." : "[SMART] Troop capacity not full; retraining.");
+            return full;
         }
 
         /// <summary>
-        /// Kiểm tra xem lượng phép Cuồng nộ và Đóng băng trong nhà phép có đủ để đánh trận không.
+        /// Kiểm tra spell hiện có phải đúng đội hình yêu cầu. Nếu thấy spell lạ, bắt buộc dọn hàng chờ và train lại.
         /// </summary>
-        private bool ValidateSpells()
+        /// <param name="spec">Đội hình cấu hình mong muốn (ArmySpec).</param>
+        private bool ValidateSpells(ArmySpec spec)
         {
-            Console.WriteLine("[SMART] Validating spells...");
+            Console.WriteLine("[SMART] Checking spells...");
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -295,27 +296,28 @@ namespace CvAut
             }
 
             using Mat spells = Crop(shot, SpellRoi);
-            foreach (string spell in new[] { "rage", "freeze" })
+            foreach (string spell in spec.Spells)
             {
-                if (!TryMatch("Spells", spell, spells, 0.86, out Point center, out double score))
+                if (!TryMatch("Spells", spell, spells, InitialValidationThreshold, out _, out _))
                 {
-                    Console.WriteLine($"[SPELL VALIDATION] Spells/{spell}: score={score:F3}, center=({center.X},{center.Y}) => missing; retraining.");
+                    Console.WriteLine($"[SMART] {spell} missing; retraining.");
                     return false;
                 }
 
-                Console.WriteLine($"[SPELL VALIDATION] Spells/{spell}: score={score:F3}, center=({center.X},{center.Y}) => ok");
+                Console.WriteLine($"[SMART] {spell} ready.");
             }
 
-            Console.WriteLine("[SPELL VALIDATION] composition ok");
-            return true;
+            bool full = IsFullCapacity(shot, SpellSpaceRoi, "spell");
+            Console.WriteLine(full ? "[SMART] Spell composition ready." : "[SMART] Spell capacity not full; retraining.");
+            return full;
         }
 
         /// <summary>
         /// Kiểm tra xem xe công thành Stone Slammer có sẵn sàng hay không.
         /// </summary>
-        private bool ValidateSiege()
+        private bool ValidateSiege(ArmySpec spec)
         {
-            Console.WriteLine("[SMART] Validating siege machines...");
+            Console.WriteLine("[SMART] Checking siege machine...");
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -324,14 +326,14 @@ namespace CvAut
             }
 
             using Mat siege = Crop(shot, SiegeRoi);
-            if (TryMatch("Siege Machines", "slammer", siege, 0.86, out Point center, out double score))
+            if (TryMatch("Siege Machines", spec.Siege, siege, InitialValidationThreshold, out _, out _))
             {
-                Console.WriteLine($"[SIEGE] Siege Machines/slammer: score={score:F3}, center=({center.X},{center.Y}) => ok");
-                Console.WriteLine("[SIEGE] composition ok");
+                Console.WriteLine($"[SMART] {spec.Siege} ready.");
+                Console.WriteLine("[SMART] Siege composition ready.");
                 return true;
             }
 
-            Console.WriteLine($"[SIEGE] Siege Machines/slammer: score={score:F3}, center=({center.X},{center.Y}) => missing; will rebuild");
+            Console.WriteLine($"[SMART] {spec.Siege} missing; rebuilding.");
             return false;
         }
 
@@ -373,10 +375,16 @@ namespace CvAut
         /// 3. Tính toán số lượng Rồng/Rồng điện và Balloon tối ưu nhất cho dung lượng đó (theo tỉ lệ 80% lính chính).
         /// 4. Click liên tục các icon lính tương ứng để xếp hàng huấn luyện.
         /// </summary>
-        private void TrainTroops(JsonElement cfg)
+        private bool TrainTroops(JsonElement cfg)
         {
             ArmySpec spec = GetArmySpec(cfg);
-            Console.WriteLine("[TRAIN] Initiating fresh troop training load...");
+            Console.WriteLine("[TRAIN] Rebuilding troop queue...");
+
+            using Mat? currentShot = _adb.TakeScreenshot();
+            if (currentShot != null && !currentShot.Empty() && IsCurrentTroopLoadCorrect(currentShot, spec))
+            {
+                return true;
+            }
 
             ClearQueue(TrashArmyRoi, TapClearArmy, ConfirmTapArmy);
 
@@ -388,13 +396,13 @@ namespace CvAut
             int limit = shot == null || shot.Empty() ? 260 : MeasureArmySpace(shot) ?? 260;
             (int mainCount, int balloonCount) = GetExpectedTroopCounts(spec, limit);
 
-            Console.WriteLine($"[TRAIN] {mainCount}x{spec.Main}, {balloonCount}xballoon (limit={limit})");
+            Console.WriteLine($"[TRAIN] Queueing troops: {mainCount}x {spec.Main}, {balloonCount}x balloon.");
             TapIconInTab(spec.Main, mainCount);
             TapIconInTab("balloon", balloonCount);
 
             _adb.Tap(CloseArmyTab.X, CloseArmyTab.Y);
             Thread.Sleep(1000);
-            Console.WriteLine("[TRAIN] Troops queued successfully.");
+            return true;
         }
 
         /// <summary>
@@ -404,9 +412,15 @@ namespace CvAut
         /// 3. Tính toán số lượng phép Cuồng nộ và Đóng băng.
         /// 4. Click chế tạo phép tương ứng.
         /// </summary>
-        private void TrainSpells()
+        private bool TrainSpells()
         {
-            Console.WriteLine("[TRAIN] Initiating spell production load...");
+            Console.WriteLine("[TRAIN] Rebuilding spell queue...");
+
+            using Mat? currentShot = _adb.TakeScreenshot();
+            if (currentShot != null && !currentShot.Empty() && IsCurrentSpellLoadCorrect(currentShot))
+            {
+                return true;
+            }
 
             ClearQueue(TrashSpellRoi, TapClearSpell, ConfirmTapSpell);
 
@@ -416,45 +430,197 @@ namespace CvAut
             int limit = MeasureSpellSpace() ?? 11;
             (int rageCount, int freezeCount) = GetExpectedSpellCounts(limit);
 
-            Console.WriteLine($"[TRAIN] {rageCount}xrage, {freezeCount}xfreeze (limit={limit})");
+            Console.WriteLine($"[TRAIN] Queueing spells: {rageCount}x rage, {freezeCount}x freeze.");
             TapIconInTab("rage", rageCount);
             TapIconInTab("freeze", freezeCount);
 
             _adb.Tap(CloseSpellTab.X, CloseSpellTab.Y);
             Thread.Sleep(1000);
-            Console.WriteLine("[TRAIN] Spells queued successfully.");
+            return true;
         }
 
         /// <summary>
         /// Thực hiện chế tạo xe công thành Stone Slammer.
         /// </summary>
-        private void TrainSlammer()
+        private bool TrainSlammer()
         {
-            Console.WriteLine("[TRAIN] Queuing Stone Slammer production...");
+            Console.WriteLine("[TRAIN] Queueing siege machine...");
+
+            using Mat? currentShot = _adb.TakeScreenshot();
+            if (currentShot != null && !currentShot.Empty() && IsCurrentSiegeLoadCorrect(currentShot))
+            {
+                return true;
+            }
 
             ClearQueue(TrashSiegeRoi, TapClearSiege, ConfirmTapSiege);
 
             _adb.Tap(OpenSiegeTab.X, OpenSiegeTab.Y);
             Thread.Sleep(1000);
 
-            Console.WriteLine("[TRAIN] 3xslammer");
+            Console.WriteLine("[TRAIN] Queueing 3x slammer.");
             // Xếp hàng chế tạo tối đa 3 xe
             TapIconInTab("slammer", 3);
 
             _adb.Tap(CloseSiegeTab.X, CloseSiegeTab.Y);
             Thread.Sleep(1000);
-            Console.WriteLine("[TRAIN] Stone Slammer queued.");
+            return true;
+        }
+
+        private bool IsCurrentTroopLoadCorrect(Mat shot, ArmySpec spec)
+        {
+            using Mat army = Crop(shot, ArmyRoi);
+            bool compositionOk = true;
+            var troopCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string troop in spec.Troops)
+            {
+                if (!TryMatch("Army Troops", troop, army, ValidationIconThreshold, out Point center, out _)
+                    && !TryMatch("s_troops", troop, army, ValidationIconThreshold, out center, out _))
+                {
+                    Console.WriteLine($"[VALIDATION] '{troop}' missing - retraining.");
+                    compositionOk = false;
+                    break;
+                }
+
+                troopCounts[troop] = ReadIconCountOrZero(shot, ArmyRoi, center);
+            }
+
+            if (compositionOk)
+            {
+                Console.WriteLine("[VALIDATION] composition ok");
+            }
+            else
+            {
+                Console.WriteLine("[VALIDATION] will train fresh load");
+            }
+
+            int limit = MeasureArmySpace(shot) ?? -1;
+            int primaryCount = troopCounts.GetValueOrDefault(spec.Main, 0);
+            int balloonCount = troopCounts.GetValueOrDefault("balloon", 0);
+            int used = SpaceCost[spec.Main] * primaryCount + SpaceCost["balloon"] * balloonCount;
+            int threshold = spec.Main.Equals("electro_dragon", StringComparison.OrdinalIgnoreCase) ? 7 : 9;
+
+            if (compositionOk && primaryCount >= threshold && used == limit)
+            {
+                Console.WriteLine($"[TRAIN] army correct: {primaryCount}x{spec.Main} + {balloonCount}xballoon = {used}/{limit}, skipping training.");
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsCurrentSpellLoadCorrect(Mat shot)
+        {
+            using Mat spells = Crop(shot, SpellRoi);
+            bool compositionOk = true;
+            var spellCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string spell in new[] { "rage", "freeze" })
+            {
+                if (!TryMatch("Spells", spell, spells, ValidationIconThreshold, out Point center, out _))
+                {
+                    Console.WriteLine($"[SPELL VALIDATION] '{spell}' missing - retraining.");
+                    compositionOk = false;
+                    break;
+                }
+
+                spellCounts[spell] = ReadIconCountOrZero(shot, SpellRoi, center);
+            }
+
+            if (compositionOk)
+            {
+                Console.WriteLine("[SPELL VALIDATION] composition ok");
+            }
+            else
+            {
+                Console.WriteLine("[SPELL VALIDATION] will train fresh load");
+            }
+
+            int limit = MeasureSpellSpaceFromShot(shot) ?? 11;
+            int rageCount = spellCounts.GetValueOrDefault("rage", 0);
+            int freezeCount = spellCounts.GetValueOrDefault("freeze", 0);
+            if (freezeCount > 9)
+            {
+                freezeCount %= 10;
+            }
+
+            int used = 2 * rageCount + freezeCount;
+            if (compositionOk && rageCount >= 3 && used == limit)
+            {
+                Console.WriteLine($"[TRAIN] spells correct: {rageCount}xrage + {freezeCount}xfreeze = {used}/{limit}, skipping training.");
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsCurrentSiegeLoadCorrect(Mat shot)
+        {
+            using Mat siege = Crop(shot, SiegeRoi);
+            if (!TryMatch("Siege Machines", "slammer", siege, 0.80, out Point center, out _))
+            {
+                Console.WriteLine("[SIEGE] 'slammer' missing - will rebuild");
+                return false;
+            }
+
+            int slammerCount = ReadIconCountOrZero(shot, SiegeRoi, center);
+            Console.WriteLine("[SIEGE] composition ok");
+            if (slammerCount >= 1)
+            {
+                Console.WriteLine($"[TRAIN] slammer correct: {slammerCount}xslammer, skipping training.");
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsFullCapacity(Mat shot, Rect roi, string label)
+        {
+            if (!TryReadFraction(shot, roi, out int current, out int capacity))
+            {
+                Console.WriteLine($"[SMART] {label} capacity unreadable.");
+                return false;
+            }
+
+            return current == capacity && current != 0;
+        }
+
+        private bool TryReadFraction(Mat shot, Rect roi, out int current, out int capacity)
+        {
+            current = 0;
+            capacity = 0;
+
+            if (!_vision.TryExtractNumericalMetrics(shot, roi, out int value, out double confidence, useRgbThresh: true)
+                && !_vision.TryExtractNumericalMetrics(shot, roi, out value, out confidence))
+            {
+                return false;
+            }
+
+            string digits = value.ToString();
+            if (digits.Length < 2 || digits.Length % 2 != 0)
+            {
+                return false;
+            }
+
+            int half = digits.Length / 2;
+            return int.TryParse(digits[..half], out current)
+                && int.TryParse(digits[half..], out capacity)
+                && confidence >= 0.50;
+        }
+
+        private int ReadIconCountOrZero(Mat shot, Rect sectionRoi, Point centerInSection)
+        {
+            Rect countRoi = CountRoiForIcon(shot, sectionRoi, centerInSection);
+            if (!_vision.TryExtractNumericalMetrics(shot, countRoi, out int actual, out double confidence, useRgbThresh: true)
+                || confidence < 0.50)
+            {
+                return 0;
+            }
+
+            return actual;
         }
 
         private void ClearQueue(Rect roi, Point tapCoord, Point confirmCoord)
-        {
-            ClearIfTrash(roi, tapCoord, confirmCoord);
-        }
-
-        /// <summary>
-        /// Phát hiện xem nút dọn hàng chờ (Trash Icon) có tồn tại hay không. Nếu có, thực hiện nhấp xóa và xác nhận.
-        /// </summary>
-        private void ClearIfTrash(Rect roi, Point tapCoord, Point confirmCoord)
         {
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -463,13 +629,12 @@ namespace CvAut
             }
 
             using Mat crop = Crop(shot, roi);
-            // Tìm kiếm nút sọt rác màu đỏ
             if (!TryMatch("to_train", "trash_icon", crop, 0.80, out _, out _))
             {
                 return;
             }
 
-            Console.WriteLine("[TRASH] cleaning troops...");
+            Console.WriteLine("[TRASH] cleaning troops... ");
             _adb.Tap(tapCoord.X, tapCoord.Y);
             Thread.Sleep(1000);
             _adb.Tap(confirmCoord.X, confirmCoord.Y);
@@ -492,19 +657,15 @@ namespace CvAut
                 return;
             }
 
-            // Dò tìm vị trí của icon lính/phép để chạm chính xác
-            if (!TryMatch("to_train", name, shot, 0.70, out Point center, out double score))
+            if (!TryMatch("to_train", name, shot, ValidationIconThreshold, out Point center, out _))
             {
-                Console.WriteLine($"[TRAIN] {name}.png not found in tab (score={score:F3})");
+                Console.WriteLine($"[TRAIN] {name}.png not found in tab");
                 return;
             }
 
-            Console.WriteLine($"[TRAIN] {name}: score={score:F3} center=({center.X},{center.Y}) count={count}");
             for (int i = 0; i < count; i++)
             {
-                Console.WriteLine($"[TRAIN] tap {i + 1}/{count} -> ({center.X},{center.Y}) score={score:F3}");
                 _adb.Tap(center.X, center.Y);
-                Thread.Sleep(100); // Tránh chạm quá nhanh khiến hệ thống game phản hồi không kịp
             }
         }
 
@@ -519,11 +680,11 @@ namespace CvAut
             if (_vision.TryExtractNumericalMetrics(shot, SpaceRoi, out int limit, out double confidence, useRgbThresh: true)
                 && limit >= 120)
             {
-                Console.WriteLine($"[SPACE CHECK] Available space = {limit}, confidence={confidence:F2}");
+                Console.WriteLine($"[TRAIN] Army capacity detected: {limit}.");
                 return limit;
             }
 
-            Console.WriteLine("Failed to get the correct army space. ");
+            Console.WriteLine("[TRAIN] Army capacity OCR fallback.");
             return MeasureArmySpaceSecondary(shot);
         }
 
@@ -569,11 +730,11 @@ namespace CvAut
             if (bestIndex >= 0 && bestScore >= 0.90)
             {
                 int space = spaceMap[bestIndex];
-                Console.WriteLine($"[SPACE secondary] match=army_space_{bestIndex}  score={bestScore:F3}  => space={space}");
+                Console.WriteLine($"[TRAIN] Army capacity fallback: {space}.");
                 return space;
             }
 
-            Console.WriteLine($"[SPACE secondary] no confident match (best={bestScore:F3}), skipping.");
+            Console.WriteLine("[TRAIN] Army capacity unavailable.");
             return null;
         }
 
@@ -624,7 +785,7 @@ namespace CvAut
 
             if (bestLimit == null || bestScore < 0.85)
             {
-                Console.WriteLine($"[SPELL SPACE CHECK] no good match (best={bestScore:F3}), defaulting to 11");
+                Console.WriteLine("[TRAIN] Spell capacity unavailable; using default.");
                 return 11;
             }
 
@@ -645,7 +806,7 @@ namespace CvAut
             Rect countRoi = CountRoiForIcon(shot, sectionRoi, centerInSection);
             if (!_vision.TryExtractNumericalMetrics(shot, countRoi, out int actual, out double confidence, useRgbThresh: true))
             {
-                Console.WriteLine($"[COUNT OCR] {label}: unknown, keeping template fallback");
+                Console.WriteLine($"[SMART] {label} count unreadable; using template fallback.");
                 return true;
             }
 
@@ -653,11 +814,11 @@ namespace CvAut
             int normalized = NormalizeBadgeCount(actual, expected);
             if (normalized != actual)
             {
-                Console.WriteLine($"[COUNT OCR] {label}: read={actual}, normalized={normalized}, expected>={expected}, confidence={confidence:F2}");
+                Console.WriteLine($"[SMART] {label} count adjusted.");
             }
             else
             {
-                Console.WriteLine($"[COUNT OCR] {label}: read={actual}, expected>={expected}, confidence={confidence:F2}");
+                Console.WriteLine($"[SMART] {label} count verified.");
             }
 
             if (confidence < 0.58)
@@ -667,7 +828,7 @@ namespace CvAut
 
             if (normalized < expected)
             {
-                Console.WriteLine($"[COUNT OCR] {label} missing count - will train fresh load");
+                Console.WriteLine($"[SMART] {label} count low; rebuilding.");
                 return false;
             }
 
@@ -733,6 +894,41 @@ namespace CvAut
             return (rageCount, freezeCount);
         }
 
+        /// <summary>
+        /// Quét toàn bộ danh sách các template phép trong thư mục Spells và trả về danh sách các phép đang có trên thanh trạng thái.
+        /// </summary>
+        /// <param name="spells">Ma trận ảnh chứa khu vực hiển thị phép.</param>
+        /// <param name="threshold">Ngưỡng độ tin cậy để khớp mẫu phép.</param>
+        /// <returns>Danh sách tên các loại phép đã phát hiện.</returns>
+        private IEnumerable<string> DetectSpells(Mat spells, double threshold)
+        {
+            return DetectTemplates("Spells", spells, threshold, "[SPELL VALIDATION]");
+        }
+
+        private IEnumerable<string> DetectSiegeMachines(Mat siege, double threshold)
+        {
+            return DetectTemplates("Siege Machines", siege, threshold, "[SIEGE]");
+        }
+
+        private IEnumerable<string> DetectTemplates(string subdir, Mat haystack, double threshold, string logPrefix)
+        {
+            string root = Path.Combine(_templateRoot, subdir);
+            if (!Directory.Exists(root))
+            {
+                yield break;
+            }
+
+            foreach (string templatePath in Directory.EnumerateFiles(root, "*.png", SearchOption.TopDirectoryOnly))
+            {
+                string name = Path.GetFileNameWithoutExtension(templatePath);
+                if (TryMatch(subdir, name, haystack, threshold, out Point center, out double score))
+                {
+                    Console.WriteLine($"{logPrefix} Detected {subdir}/{name}: score={score:F3}, center=({center.X},{center.Y})");
+                    yield return name;
+                }
+            }
+        }
+
         private bool TryFindTemplate(Mat screenshot, string templateName, Rect? roi, out Point center, out double score)
         {
             center = default;
@@ -772,6 +968,11 @@ namespace CvAut
 
         private bool TryMatch(string subdir, string name, Mat haystack, double threshold, out Point center, out double score)
         {
+            return TryMatchInRoi(subdir, name, haystack, null, threshold, out center, out score);
+        }
+
+        private bool TryMatchInRoi(string subdir, string name, Mat haystack, Rect? roi, double threshold, out Point center, out double score)
+        {
             center = default;
             score = 0;
 
@@ -782,16 +983,18 @@ namespace CvAut
             }
 
             using Mat template = Cv2.ImRead(templatePath, ImreadModes.Color);
-            if (template.Empty() || template.Width > haystack.Width || template.Height > haystack.Height)
+            Rect searchRect = roi == null ? new Rect(0, 0, haystack.Width, haystack.Height) : ImageUtils.ClampRect(roi.Value, haystack.Width, haystack.Height);
+            if (template.Empty() || template.Width > searchRect.Width || template.Height > searchRect.Height)
             {
                 return false;
             }
 
+            using Mat searchArea = new(haystack, searchRect);
             using Mat result = new();
-            Cv2.MatchTemplate(haystack, template, result, TemplateMatchModes.CCoeffNormed);
+            Cv2.MatchTemplate(searchArea, template, result, TemplateMatchModes.CCoeffNormed);
             Cv2.MinMaxLoc(result, out _, out score, out _, out Point maxLoc);
 
-            center = new Point(maxLoc.X + template.Width / 2, maxLoc.Y + template.Height / 2);
+            center = new Point(searchRect.X + maxLoc.X + template.Width / 2, searchRect.Y + maxLoc.Y + template.Height / 2);
             bool matched = score >= threshold;
             string verdict = matched ? "ok" : "low";
             Console.WriteLine($"[TEMPLATE] {subdir}/{name}: score={score:F3}, threshold={threshold:F2}, center=({center.X},{center.Y}) => {verdict}");

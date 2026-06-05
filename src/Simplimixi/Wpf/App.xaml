@@ -15,14 +15,104 @@
             <SolidColorBrush x:Key="WarningBrush" Color="#FACC15" />
             <SolidColorBrush x:Key="DangerBrush" Color="#EF4444" />
             <SolidColorBrush x:Key="ReadyBrush" Color="#1AD699" />
+            <SolidColorBrush x:Key="GlassCardBackgroundBrush" Color="#B01A202A" />
+            <SolidColorBrush x:Key="GlassCardStrokeBrush" Color="#26FFFFFF" />
+            <SolidColorBrush x:Key="GlassPanelBackgroundBrush" Color="#B01A202A" />
+
+            <Style x:Key="PageRevealStyle" TargetType="FrameworkElement">
+                <Setter Property="Opacity" Value="0" />
+                <Setter Property="RenderTransform">
+                    <Setter.Value>
+                        <TranslateTransform Y="22" />
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                 To="1"
+                                                 Duration="0:0:0.28" />
+                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                 To="0"
+                                                 Duration="0:0:0.42">
+                                    <DoubleAnimation.EasingFunction>
+                                        <BackEase Amplitude="0.18" EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Style.Triggers>
+            </Style>
 
             <Style x:Key="GamingCardStyle" TargetType="Border">
-                <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}"/>
+                <Setter Property="Background" Value="{StaticResource GlassCardBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource GlassCardStrokeBrush}"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="CornerRadius" Value="16"/>
                 <Setter Property="Padding" Value="20"/>
                 <Setter Property="Margin" Value="0,0,0,16"/>
+                <Setter Property="Opacity" Value="0"/>
+                <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+                <Setter Property="RenderTransform">
+                    <Setter.Value>
+                        <TransformGroup>
+                            <ScaleTransform ScaleX="0.985" ScaleY="0.985" />
+                            <TranslateTransform Y="18" />
+                        </TransformGroup>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                 To="1"
+                                                 Duration="0:0:0.24" />
+                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                                 To="1"
+                                                 Duration="0:0:0.34" />
+                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                                 To="1"
+                                                 Duration="0:0:0.34" />
+                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)"
+                                                 To="0"
+                                                 Duration="0:0:0.34">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Trigger.EnterActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                                     To="1.018"
+                                                     Duration="0:0:0.16" />
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                                     To="1.018"
+                                                     Duration="0:0:0.16" />
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </Trigger.EnterActions>
+                        <Trigger.ExitActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"
+                                                     To="1"
+                                                     Duration="0:0:0.18" />
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"
+                                                     To="1"
+                                                     Duration="0:0:0.18" />
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </Trigger.ExitActions>
+                    </Trigger>
+                </Style.Triggers>
             </Style>
 
             <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">

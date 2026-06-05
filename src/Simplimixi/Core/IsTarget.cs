@@ -46,11 +46,11 @@ namespace CvAut
         /// <returns>Bộ ba số nguyên biểu thị lượng (Vàng, Dầu hồng, Dầu đen) nhận diện được.</returns>
         public static (int Gold, int Elixir, int DarkElixir) ExtractResources(ADBHelper adb, VisionEngine vision)
         {
-            Console.WriteLine("[SCOUT-CS] Đang chụp màn hình giả lập để quét tài nguyên...");
+            Console.WriteLine("[SCOUT] Reading target resources...");
             using Mat? screenshot = adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty())
             {
-                Console.WriteLine("[SCOUT-CS ERROR] Không thể chụp ảnh màn hình hoặc ảnh trống.");
+                Console.WriteLine("[SCOUT ERROR] Screenshot unavailable.");
                 return (0, 0, 0);
             }
 
@@ -81,7 +81,7 @@ namespace CvAut
             int elixir = results.GetValueOrDefault("Elixir", 0);
             int darkElixir = results.GetValueOrDefault("Dark Elixir", 0);
 
-            Console.WriteLine($"[SCOUT-CS] Kết quả quét -> Vàng: {gold:N0} | Dầu hồng: {elixir:N0} | Dầu đen: {darkElixir:N0}");
+            Console.WriteLine($"[SCOUT] Resources: Gold={gold:N0}, Elixir={elixir:N0}, Dark={darkElixir:N0}");
             return (gold, elixir, darkElixir);
         }
 
@@ -102,11 +102,11 @@ namespace CvAut
         /// <returns>Bộ ba số nguyên biểu thị lượng tài nguyên làng chính.</returns>
         public static (int Gold, int Elixir, int DarkElixir) ExtractHomeResources(ADBHelper adb, VisionEngine vision)
         {
-            Console.WriteLine("[SCOUT-CS] Đang chụp màn hình giả lập để quét tài nguyên LÀNG CHÍNH...");
+            Console.WriteLine("[SCOUT] Reading home resources...");
             using Mat? screenshot = adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty())
             {
-                Console.WriteLine("[SCOUT-CS ERROR] Không thể chụp ảnh màn hình hoặc ảnh trống.");
+                Console.WriteLine("[SCOUT ERROR] Screenshot unavailable.");
                 return (0, 0, 0);
             }
 
@@ -127,7 +127,7 @@ namespace CvAut
             int elixir = results.GetValueOrDefault("Elixir", 0);
             int darkElixir = results.GetValueOrDefault("Dark Elixir", 0);
 
-            Console.WriteLine($"[SCOUT-CS] Kết quả quét Làng chính -> Vàng: {gold:N0} | Dầu hồng: {elixir:N0} | Dầu đen: {darkElixir:N0}");
+            Console.WriteLine($"[SCOUT] Home resources: Gold={gold:N0}, Elixir={elixir:N0}, Dark={darkElixir:N0}");
             return (gold, elixir, darkElixir);
         }
     }

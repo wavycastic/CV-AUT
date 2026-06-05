@@ -7,13 +7,9 @@
              mc:Ignorable="d"
              d:DesignHeight="700"
              d:DesignWidth="520">
-    <Grid Margin="12,8,12,8">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <StackPanel Grid.Row="0" Margin="16,8,16,12">
+    <StackPanel Style="{StaticResource PageRevealStyle}"
+                Margin="12,8,12,8">
+        <StackPanel Margin="16,8,16,12">
             <ui:TextBlock FontTypography="Title" Text="Army" />
             <ui:TextBlock Margin="0,2,0,0"
                           Appearance="Secondary"
@@ -22,10 +18,7 @@
                           Text="Simplicity-style army, spell and attack setup." />
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1"
-                      HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="16,4,16,16" MaxWidth="430" HorizontalAlignment="Stretch">
+        <StackPanel Margin="16,4,16,16" MaxWidth="430" HorizontalAlignment="Stretch">
                 <!-- Army deck preview -->
                 <Border Style="{StaticResource GamingCardStyle}" Margin="0,0,0,16" Padding="14">
                     <StackPanel>
@@ -46,7 +39,7 @@
                             </StackPanel>
                             <Border Grid.Column="1"
                                     Padding="10,5"
-                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                    Background="{StaticResource GlassPanelBackgroundBrush}"
                                     CornerRadius="12">
                                 <TextBlock FontSize="10"
                                            FontWeight="Bold"
@@ -56,51 +49,51 @@
                         </Grid>
 
                         <UniformGrid Columns="4" Rows="2">
-                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Border Margin="3" Padding="7" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                                 <StackPanel>
-                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/troops/dragon.png" />
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/assets/Templates/troops/dragon.png" />
                                     <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="DRAGON" />
                                 </StackPanel>
                             </Border>
-                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Border Margin="3" Padding="7" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                                 <StackPanel>
-                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/troops/E_Drag.png" />
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/assets/Templates/troops/E_Drag.png" />
                                     <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="E-DRAG" />
                                 </StackPanel>
                             </Border>
-                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Border Margin="3" Padding="7" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                                 <StackPanel>
-                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/troops/balloon.png" />
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/assets/Templates/troops/balloon.png" />
                                     <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="LOONS" />
                                 </StackPanel>
                             </Border>
-                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Border Margin="3" Padding="7" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                                 <StackPanel>
-                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/troops/icon_siege.png" />
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/assets/Templates/troops/icon_siege.png" />
                                     <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="SIEGE" />
                                 </StackPanel>
                             </Border>
-                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Border Margin="3" Padding="7" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                                 <StackPanel>
-                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/heroes/bk.png" />
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/assets/Templates/heroes/bk.png" />
                                     <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="KING" />
                                 </StackPanel>
                             </Border>
-                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Border Margin="3" Padding="7" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                                 <StackPanel>
-                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/heroes/queen.png" />
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/assets/Templates/heroes/queen.png" />
                                     <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="QUEEN" />
                                 </StackPanel>
                             </Border>
-                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Border Margin="3" Padding="7" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                                 <StackPanel>
-                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/spells/rage.png" />
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/assets/Templates/spells/rage.png" />
                                     <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="RAGE" />
                                 </StackPanel>
                             </Border>
-                            <Border Margin="3" Padding="7" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                            <Border Margin="3" Padding="7" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                                 <StackPanel>
-                                    <Image Height="38" Source="pack://siteoforigin:,,,/Templates/spells/freeze.png" />
+                                    <Image Height="38" Source="pack://siteoforigin:,,,/assets/Templates/spells/freeze.png" />
                                     <TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="8" FontWeight="Bold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="FREEZE" />
                                 </StackPanel>
                             </Border>
@@ -117,7 +110,7 @@
                                 <ColumnDefinition Width="156" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Image Width="22" Height="22" Margin="0,0,10,0" Source="pack://siteoforigin:,,,/Templates/icon_attack.png" />
+                                <Image Width="22" Height="22" Margin="0,0,10,0" Source="pack://siteoforigin:,,,/assets/Templates/icon_attack.png" />
                                 <StackPanel>
                                     <ui:TextBlock FontTypography="Caption" Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}" Text="ATTACK PLAN" />
                                     <ui:TextBlock FontTypography="BodyStrong" Text="Strategy" />
@@ -132,8 +125,8 @@
 
                         <Border Margin="0,12,0,0"
                                 Padding="12"
-                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                Background="{StaticResource GlassPanelBackgroundBrush}"
+                                BorderBrush="{StaticResource GlassCardStrokeBrush}"
                                 BorderThickness="1"
                                 CornerRadius="10">
                             <Grid>
@@ -141,29 +134,29 @@
                                     <ColumnDefinition Width="94" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Border Grid.Column="0" Padding="8" Background="{DynamicResource ControlFillColorTertiaryBrush}" CornerRadius="10">
+                                <Border Grid.Column="0" Padding="8" Background="{StaticResource GlassPanelBackgroundBrush}" CornerRadius="10">
                                     <Image Height="72" Stretch="Uniform" Source="{Binding AttackImagePath}" />
                                 </Border>
                                 <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
                                     <TextBlock FontSize="18" FontWeight="Bold" Foreground="{StaticResource ReadyBrush}" Text="{Binding AttackPreview}" />
                                     <TextBlock Margin="0,4,0,0" FontSize="11.5" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AttackDescription}" TextWrapping="Wrap" />
-                                    <Border Margin="0,10,0,0" Padding="8,6" Background="{DynamicResource ControlFillColorTertiaryBrush}" CornerRadius="8">
+                                    <Border Margin="0,10,0,0" Padding="8,6" Background="{StaticResource GlassPanelBackgroundBrush}" CornerRadius="8">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <Image Grid.Column="0" Width="16" Height="16" Margin="0,0,7,0" Source="pack://siteoforigin:,,,/Templates/troops/balloon.png" />
+                                            <Image Grid.Column="0" Width="16" Height="16" Margin="0,0,7,0" Source="pack://siteoforigin:,,,/assets/Templates/troops/balloon.png" />
                                             <TextBlock Grid.Column="1" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AttackComposition}" TextWrapping="Wrap" />
                                         </Grid>
                                     </Border>
-                                    <Border Margin="0,6,0,0" Padding="8,6" Background="{DynamicResource ControlFillColorTertiaryBrush}" CornerRadius="8">
+                                    <Border Margin="0,6,0,0" Padding="8,6" Background="{StaticResource GlassPanelBackgroundBrush}" CornerRadius="8">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <Image Grid.Column="0" Width="16" Height="16" Margin="0,0,7,0" Source="pack://siteoforigin:,,,/Templates/icon_clan_castle.png" />
+                                            <Image Grid.Column="0" Width="16" Height="16" Margin="0,0,7,0" Source="pack://siteoforigin:,,,/assets/Templates/icon_clan_castle.png" />
                                             <TextBlock Grid.Column="1" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AttackSupport}" TextWrapping="Wrap" />
                                         </Grid>
                                     </Border>
@@ -180,14 +173,14 @@
                                       Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}"
                                       Text="TRAIN MODE" />
 
-                        <Border Margin="0,10,0,0" Padding="12,10" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                        <Border Margin="0,10,0,0" Padding="12,10" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Image Width="22" Height="22" Margin="0,0,10,0" Source="pack://siteoforigin:,,,/Templates/start_button.png" />
+                                    <Image Width="22" Height="22" Margin="0,0,10,0" Source="pack://siteoforigin:,,,/assets/Templates/start_button.png" />
                                     <StackPanel>
                                         <ui:TextBlock FontTypography="BodyStrong" Text="Smart auto train" />
                                         <ui:TextBlock Appearance="Secondary" FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="Let bot rebuild army by template matching." />
@@ -197,14 +190,14 @@
                             </Grid>
                         </Border>
 
-                        <Border Margin="0,10,0,0" Padding="12,10" Background="{DynamicResource ControlFillColorSecondaryBrush}" BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1" CornerRadius="10">
+                        <Border Margin="0,10,0,0" Padding="12,10" Background="{StaticResource GlassPanelBackgroundBrush}" BorderBrush="{StaticResource GlassCardStrokeBrush}" BorderThickness="1" CornerRadius="10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Image Width="22" Height="22" Margin="0,0,10,0" Source="pack://siteoforigin:,,,/Templates/icon_hourglass.png" />
+                                    <Image Width="22" Height="22" Margin="0,0,10,0" Source="pack://siteoforigin:,,,/assets/Templates/icon_hourglass.png" />
                                     <StackPanel>
                                         <ui:TextBlock FontTypography="BodyStrong" Text="Quick train slot" />
                                         <ui:TextBlock Appearance="Secondary" FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="Use an in-game quick army preset." />
@@ -216,8 +209,8 @@
 
                         <Border Margin="0,10,0,0"
                                 Padding="12,10"
-                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                Background="{StaticResource GlassPanelBackgroundBrush}"
+                                BorderBrush="{StaticResource GlassCardStrokeBrush}"
                                 BorderThickness="1"
                                 CornerRadius="10"
                                 IsEnabled="{Binding IsQuickSlotEnabled}">
@@ -239,7 +232,6 @@
                         </Border>
                     </StackPanel>
                 </Border>
-            </StackPanel>
-        </ScrollViewer>
-    </Grid>
+        </StackPanel>
+    </StackPanel>
 </UserControl>
