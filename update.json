@@ -1,7 +1,7 @@
 {
-  "version": "0.6.0",
-  "url": "https://simplimixi.pages.dev/SimpliMixi-v0.6.0-Setup.exe",
+  "version": "0.6.1",
+  "url": "https://simplimixi.pages.dev/SimpliMixi-v0.6.1-Setup.exe",
   "force_update": false,
   "min_supported_version": "0.5.1",
-  "notes": "- TEST: Kiểm tra popup cập nhật từ 0.5.1 lên 0.6.0.\n- Đây là bản update tùy chọn, người dùng vẫn có thể bấm Nhắc lại sau.\n- Khi release thật, đổi url sang link setup 0.6.0 chính thức."
+  "notes": "- Sửa lỗi nhận nhầm màn hình kết quả trận thành popup mất kết nối, khiến Clash of Clans bị khởi động lại sau battle.\n- Cải thiện luồng chờ kết thúc trận bằng cách ưu tiên xác nhận result screen trước khi chạy fallback reload_dialog_shape.\n- Cập nhật bộ cài và gói phát hành SimpliMixi v0.6.1."
 }
