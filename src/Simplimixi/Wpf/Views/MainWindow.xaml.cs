@@ -1,8 +1,10 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using CvAut.WpfApp.Services;
 using CvAut.WpfApp.ViewModels;
 using Wpf.Ui.Controls;
 
@@ -22,8 +24,8 @@ namespace CvAut.WpfApp.Views
         {
             InitializeComponent();
 
-            // Thiết lập sự kiện khi cửa sổ được tải hoàn tất
-            Loaded += MainWindow_Loaded;
+            // Thiết lập sự kiện khi cửa sổ được vẽ và hiển thị hoàn tất
+            ContentRendered += MainWindow_ContentRendered;
 
             // Cho phép kéo thả cửa sổ thông qua thanh tiêu đề AppTitleBar
             AppTitleBar.MouseLeftButtonDown += AppTitleBar_MouseLeftButtonDown;
@@ -41,21 +43,41 @@ namespace CvAut.WpfApp.Views
         }
 
         /// <summary>
-        /// Xử lý sự kiện Loaded để hiển thị một hộp thoại (MessageBox) thông báo cho người dùng
-        /// về tính chất miễn phí của phần mềm nhằm chống lừa đảo.
+        /// Xử lý sự kiện ContentRendered để thực hiện kiểm tra cập nhật và hiển thị một hộp thoại thông báo
+        /// cho người dùng về tính chất miễn phí của phần mềm nhằm chống lừa đảo.
         /// </summary>
-        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        private async void MainWindow_ContentRendered(object? sender, EventArgs e)
         {
-            var messageBox = new Wpf.Ui.Controls.MessageBox
-            {
-                Owner = this,
-                Title = "Security Alert",
-                Content = "This software is 100% FREE.\nIf you paid any amount for this application, you have been scammed.",
-                CloseButtonText = "Acknowledge",
-                WindowStartupLocation = WindowStartupLocation.CenterOwner
-            };
+            ContentRendered -= MainWindow_ContentRendered;
 
-            await messageBox.ShowDialogAsync();
+            await CheckForUpdateAsync();
+        }
+
+        private async Task CheckForUpdateAsync()
+        {
+            try
+            {
+                var updateDecision = await new UpdateService().CheckForUpdateAsync();
+                if (updateDecision == null)
+                {
+                    return;
+                }
+
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    var updateDialog = new UpdateDialog(updateDecision)
+                    {
+                        Owner = this
+                    };
+
+                    updateDialog.ShowDialog();
+                });
+            }
+            catch (Exception ex)
+            {
+                UpdateService.WriteLog($"check_failed error=\"{ex}\"");
+                Console.WriteLine($"[UPDATE] status=skip reason=check_failed error=\"{ex.Message}\"");
+            }
         }
 
         private void StrategyDockComboBox_Loaded(object sender, RoutedEventArgs e)

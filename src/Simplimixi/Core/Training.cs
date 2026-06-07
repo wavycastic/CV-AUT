@@ -108,11 +108,11 @@ namespace CvAut
         /// <returns>True nếu thực hiện thành công, ngược lại False.</returns>
         public bool QuickTrain(int quickSlot = 1)
         {
-            Console.WriteLine($"[QUICK TRAIN] Using army recipe slot {quickSlot}...");
+            Console.WriteLine($"[TRAIN] phase=quick_train slot={quickSlot} status=start");
 
             if (!ValidateArmyWindow())
             {
-                Console.WriteLine("[QUICK TRAIN] Army window not detected.");
+                Console.WriteLine("[TRAIN] phase=quick_train status=fail reason=army_window_not_detected");
                 return false;
             }
 
@@ -122,7 +122,7 @@ namespace CvAut
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
             {
-                Console.WriteLine("[QUICK TRAIN] Screenshot unavailable.");
+                Console.WriteLine("[TRAIN] phase=quick_train status=fail reason=screenshot_failed");
                 CloseArmyWindowIfPossible();
                 return false;
             }
@@ -131,7 +131,7 @@ namespace CvAut
             // Tìm nút 'Train' (use_button) trong slot chỉ định
             if (!TryFindTemplate(shot, "use_button.png", slotRoi, out Point useButton, out double useScore))
             {
-                Console.WriteLine("[QUICK TRAIN] Recipe action unavailable.");
+                Console.WriteLine("[TRAIN] phase=quick_train status=fail reason=recipe_action_unavailable");
                 CloseArmyWindowIfPossible();
                 return false;
             }
@@ -169,27 +169,30 @@ namespace CvAut
         /// 4. Đóng giao diện thông tin Quân đội.
         /// </summary>
         /// <param name="cfg">Tài liệu JSON chứa cấu hình chiến thuật đang chạy.</param>
-        public bool SmartTrain(JsonElement cfg)
+        /// <param name="attackStrategy">Chiến thuật tấn công chỉ định (tùy chọn).</param>
+        public bool SmartTrain(JsonElement cfg, string? attackStrategy = null)
         {
-            Console.WriteLine("\n--- [SMART] Starting Smart Train Sequence ---");
+            string selectedAttack = GetAttackKey(cfg, attackStrategy);
+            Console.WriteLine($"[TRAIN] phase=smart_train status=start strategy={selectedAttack}");
 
             if (!ValidateArmyWindow())
             {
-                Console.WriteLine("[SMART] Army window not detected - skipping Army training");
+                Console.WriteLine("[TRAIN] phase=smart_train status=skip reason=army_window_not_detected");
                 return true;
             }
 
-            Console.WriteLine("Army window detected");
+            Console.WriteLine("[TRAIN] phase=smart_train status=pending details=\"army_window_detected\"");
 
             // Xác thực tính sẵn sàng của đội hình
-            ArmySpec spec = GetArmySpec(cfg);
+            ArmySpec spec = GetArmySpec(cfg, attackStrategy);
+            Console.WriteLine($"[TRAIN] phase=smart_train status=pending strategy={selectedAttack} main_troop={spec.Main}");
             bool armyOk = ValidateTroops(spec);
             bool spellOk = ValidateSpells(spec);
             bool siegeOk = ValidateSiege(spec);
 
             if (armyOk && spellOk && siegeOk)
             {
-                Console.WriteLine("[SMART] All valid - no training needed");
+                Console.WriteLine("[TRAIN] phase=smart_train status=success reason=all_valid");
                 CloseArmyWindowIfPossible();
                 Thread.Sleep(1000);
                 return true;
@@ -198,7 +201,7 @@ namespace CvAut
             // Nếu lính chưa đủ, thực hiện luyện lính
             if (!armyOk)
             {
-                armyOk = TrainTroops(cfg);
+                armyOk = TrainTroops(cfg, attackStrategy);
             }
 
             // Nếu phép chưa đủ, thực hiện chế tạo phép
@@ -213,7 +216,7 @@ namespace CvAut
                 siegeOk = TrainSlammer();
             }
 
-            Console.WriteLine("[SMART] Training complete - closing Army tab");
+            Console.WriteLine("[TRAIN] phase=smart_train status=complete");
             CloseArmyWindowIfPossible();
             Thread.Sleep(1000);
             return true;
@@ -230,13 +233,13 @@ namespace CvAut
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
             {
-                Console.WriteLine("[WINDOW] Screenshot unavailable.");
+                Console.WriteLine("[TRAIN] phase=validate_window status=fail reason=screenshot_failed");
                 return false;
             }
 
             if (!TryFindTemplate(shot, "army_window.png", ArmyWindowRoi, out _, out double score))
             {
-                Console.WriteLine("[WINDOW] Army window check unavailable.");
+                Console.WriteLine("[TRAIN] phase=validate_window status=fail reason=template_match_failed");
                 return false;
             }
 
@@ -258,7 +261,7 @@ namespace CvAut
         /// <param name="spec">Đội hình cấu hình mong muốn (ArmySpec).</param>
         private bool ValidateTroops(ArmySpec spec)
         {
-            Console.WriteLine("[SMART] Checking troops...");
+            Console.WriteLine("[TRAIN] phase=validate_troops status=start");
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -272,12 +275,12 @@ namespace CvAut
             bool balloonOk = TryMatch("Army Troops", "balloon", army, InitialValidationThreshold, out _, out _);
             if (!mainOk || !balloonOk)
             {
-                Console.WriteLine("[SMART] troop composition missing; retraining.");
+                Console.WriteLine("[TRAIN] phase=validate_troops status=fail reason=composition_missing");
                 return false;
             }
 
             bool full = IsFullCapacity(shot, SpaceRoi, "army");
-            Console.WriteLine(full ? "[SMART] Troop composition ready." : "[SMART] Troop capacity not full; retraining.");
+            Console.WriteLine(full ? "[TRAIN] phase=validate_troops status=success details=\"composition_ready\"" : "[TRAIN] phase=validate_troops status=fail reason=capacity_not_full");
             return full;
         }
 
@@ -287,7 +290,7 @@ namespace CvAut
         /// <param name="spec">Đội hình cấu hình mong muốn (ArmySpec).</param>
         private bool ValidateSpells(ArmySpec spec)
         {
-            Console.WriteLine("[SMART] Checking spells...");
+            Console.WriteLine("[TRAIN] phase=validate_spells status=start");
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -300,15 +303,15 @@ namespace CvAut
             {
                 if (!TryMatch("Spells", spell, spells, InitialValidationThreshold, out _, out _))
                 {
-                    Console.WriteLine($"[SMART] {spell} missing; retraining.");
+                    Console.WriteLine($"[TRAIN] phase=validate_spells status=fail reason=\"spell_missing_{spell}\"");
                     return false;
                 }
 
-                Console.WriteLine($"[SMART] {spell} ready.");
+                Console.WriteLine($"[TRAIN] phase=validate_spells status=pending details=\"spell_ready_{spell}\"");
             }
 
             bool full = IsFullCapacity(shot, SpellSpaceRoi, "spell");
-            Console.WriteLine(full ? "[SMART] Spell composition ready." : "[SMART] Spell capacity not full; retraining.");
+            Console.WriteLine(full ? "[TRAIN] phase=validate_spells status=success details=\"composition_ready\"" : "[TRAIN] phase=validate_spells status=fail reason=capacity_not_full");
             return full;
         }
 
@@ -317,7 +320,7 @@ namespace CvAut
         /// </summary>
         private bool ValidateSiege(ArmySpec spec)
         {
-            Console.WriteLine("[SMART] Checking siege machine...");
+            Console.WriteLine("[TRAIN] phase=validate_siege status=start");
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -328,12 +331,12 @@ namespace CvAut
             using Mat siege = Crop(shot, SiegeRoi);
             if (TryMatch("Siege Machines", spec.Siege, siege, InitialValidationThreshold, out _, out _))
             {
-                Console.WriteLine($"[SMART] {spec.Siege} ready.");
-                Console.WriteLine("[SMART] Siege composition ready.");
+                Console.WriteLine($"[TRAIN] phase=validate_siege status=pending details=\"siege_ready_{spec.Siege}\"");
+                Console.WriteLine("[TRAIN] phase=validate_siege status=success details=\"composition_ready\"");
                 return true;
             }
 
-            Console.WriteLine($"[SMART] {spec.Siege} missing; rebuilding.");
+            Console.WriteLine($"[TRAIN] phase=validate_siege status=fail reason=\"siege_missing_{spec.Siege}\"");
             return false;
         }
 
@@ -345,19 +348,19 @@ namespace CvAut
             string templateRoot = Path.Combine(templatesPath, "Smart_Auto_train");
             if (!File.Exists(imagePath))
             {
-                Console.WriteLine($"[DIAG] saved Army Window image not found: {imagePath}");
+                Console.WriteLine($"[TRAIN] phase=diagnose status=fail reason=image_not_found details=\"{imagePath}\"");
                 return;
             }
 
             using Mat shot = Cv2.ImRead(imagePath, ImreadModes.Color);
             if (shot.Empty())
             {
-                Console.WriteLine($"[DIAG] saved Army Window image is empty/unreadable: {imagePath}");
+                Console.WriteLine($"[TRAIN] phase=diagnose status=fail reason=image_empty details=\"{imagePath}\"");
                 return;
             }
 
-            Console.WriteLine($"[DIAG] Analyzing saved Army Window image: {imagePath}");
-            Console.WriteLine($"[DIAG] Image size: {shot.Width}x{shot.Height}");
+            Console.WriteLine($"[TRAIN] phase=diagnose status=start details=\"{imagePath}\"");
+            Console.WriteLine($"[TRAIN] phase=diagnose status=pending width={shot.Width} height={shot.Height}");
 
             VisionEngine vision = new(templatesPath);
             DiagnoseTemplate(shot, templateRoot, vision, ArmyRoi, "Army Troops", "dragon", ValidationIconThreshold);
@@ -375,10 +378,11 @@ namespace CvAut
         /// 3. Tính toán số lượng Rồng/Rồng điện và Balloon tối ưu nhất cho dung lượng đó (theo tỉ lệ 80% lính chính).
         /// 4. Click liên tục các icon lính tương ứng để xếp hàng huấn luyện.
         /// </summary>
-        private bool TrainTroops(JsonElement cfg)
+        private bool TrainTroops(JsonElement cfg, string? attackStrategy = null)
         {
-            ArmySpec spec = GetArmySpec(cfg);
-            Console.WriteLine("[TRAIN] Rebuilding troop queue...");
+            string selectedAttack = GetAttackKey(cfg, attackStrategy);
+            ArmySpec spec = GetArmySpec(cfg, attackStrategy);
+            Console.WriteLine($"[TRAIN] phase=train_troops status=start strategy={selectedAttack} main_troop={spec.Main} details=\"rebuilding_queue\"");
 
             using Mat? currentShot = _adb.TakeScreenshot();
             if (currentShot != null && !currentShot.Empty() && IsCurrentTroopLoadCorrect(currentShot, spec))
@@ -396,7 +400,7 @@ namespace CvAut
             int limit = shot == null || shot.Empty() ? 260 : MeasureArmySpace(shot) ?? 260;
             (int mainCount, int balloonCount) = GetExpectedTroopCounts(spec, limit);
 
-            Console.WriteLine($"[TRAIN] Queueing troops: {mainCount}x {spec.Main}, {balloonCount}x balloon.");
+            Console.WriteLine($"[TRAIN] phase=train_troops status=pending action=queue count={mainCount} troop={spec.Main} balloon_count={balloonCount}");
             TapIconInTab(spec.Main, mainCount);
             TapIconInTab("balloon", balloonCount);
 
@@ -414,7 +418,7 @@ namespace CvAut
         /// </summary>
         private bool TrainSpells()
         {
-            Console.WriteLine("[TRAIN] Rebuilding spell queue...");
+            Console.WriteLine("[TRAIN] phase=train_spells status=start details=\"rebuilding_queue\"");
 
             using Mat? currentShot = _adb.TakeScreenshot();
             if (currentShot != null && !currentShot.Empty() && IsCurrentSpellLoadCorrect(currentShot))
@@ -430,7 +434,7 @@ namespace CvAut
             int limit = MeasureSpellSpace() ?? 11;
             (int rageCount, int freezeCount) = GetExpectedSpellCounts(limit);
 
-            Console.WriteLine($"[TRAIN] Queueing spells: {rageCount}x rage, {freezeCount}x freeze.");
+            Console.WriteLine($"[TRAIN] phase=train_spells status=pending action=queue rage_count={rageCount} freeze_count={freezeCount}");
             TapIconInTab("rage", rageCount);
             TapIconInTab("freeze", freezeCount);
 
@@ -444,7 +448,7 @@ namespace CvAut
         /// </summary>
         private bool TrainSlammer()
         {
-            Console.WriteLine("[TRAIN] Queueing siege machine...");
+            Console.WriteLine("[TRAIN] phase=train_siege status=start details=\"rebuilding_queue\"");
 
             using Mat? currentShot = _adb.TakeScreenshot();
             if (currentShot != null && !currentShot.Empty() && IsCurrentSiegeLoadCorrect(currentShot))
@@ -457,7 +461,7 @@ namespace CvAut
             _adb.Tap(OpenSiegeTab.X, OpenSiegeTab.Y);
             Thread.Sleep(1000);
 
-            Console.WriteLine("[TRAIN] Queueing 3x slammer.");
+            Console.WriteLine("[TRAIN] phase=train_siege status=pending action=queue count=3 siege=slammer");
             // Xếp hàng chế tạo tối đa 3 xe
             TapIconInTab("slammer", 3);
 
@@ -477,7 +481,7 @@ namespace CvAut
                 if (!TryMatch("Army Troops", troop, army, ValidationIconThreshold, out Point center, out _)
                     && !TryMatch("s_troops", troop, army, ValidationIconThreshold, out center, out _))
                 {
-                    Console.WriteLine($"[VALIDATION] '{troop}' missing - retraining.");
+                    Console.WriteLine($"[TRAIN] phase=validate_troops status=fail reason=\"troop_missing_{troop}\"");
                     compositionOk = false;
                     break;
                 }
@@ -487,11 +491,11 @@ namespace CvAut
 
             if (compositionOk)
             {
-                Console.WriteLine("[VALIDATION] composition ok");
+                Console.WriteLine("[TRAIN] phase=validate_troops status=success details=\"composition_ok\"");
             }
             else
             {
-                Console.WriteLine("[VALIDATION] will train fresh load");
+                Console.WriteLine("[TRAIN] phase=validate_troops status=fail reason=fresh_load_required");
             }
 
             int limit = MeasureArmySpace(shot) ?? -1;
@@ -502,7 +506,7 @@ namespace CvAut
 
             if (compositionOk && primaryCount >= threshold && used == limit)
             {
-                Console.WriteLine($"[TRAIN] army correct: {primaryCount}x{spec.Main} + {balloonCount}xballoon = {used}/{limit}, skipping training.");
+                Console.WriteLine($"[TRAIN] phase=train_troops status=skip reason=already_correct count={primaryCount} troop={spec.Main} balloon_count={balloonCount} used={used} limit={limit}");
                 return true;
             }
 
@@ -519,7 +523,7 @@ namespace CvAut
             {
                 if (!TryMatch("Spells", spell, spells, ValidationIconThreshold, out Point center, out _))
                 {
-                    Console.WriteLine($"[SPELL VALIDATION] '{spell}' missing - retraining.");
+                    Console.WriteLine($"[TRAIN] phase=validate_spells status=fail reason=\"spell_missing_{spell}\"");
                     compositionOk = false;
                     break;
                 }
@@ -529,11 +533,11 @@ namespace CvAut
 
             if (compositionOk)
             {
-                Console.WriteLine("[SPELL VALIDATION] composition ok");
+                Console.WriteLine("[TRAIN] phase=validate_spells status=success details=\"composition_ok\"");
             }
             else
             {
-                Console.WriteLine("[SPELL VALIDATION] will train fresh load");
+                Console.WriteLine("[TRAIN] phase=validate_spells status=fail reason=fresh_load_required");
             }
 
             int limit = MeasureSpellSpaceFromShot(shot) ?? 11;
@@ -547,7 +551,7 @@ namespace CvAut
             int used = 2 * rageCount + freezeCount;
             if (compositionOk && rageCount >= 3 && used == limit)
             {
-                Console.WriteLine($"[TRAIN] spells correct: {rageCount}xrage + {freezeCount}xfreeze = {used}/{limit}, skipping training.");
+                Console.WriteLine($"[TRAIN] phase=train_spells status=skip reason=already_correct rage_count={rageCount} freeze_count={freezeCount} used={used} limit={limit}");
                 return true;
             }
 
@@ -559,15 +563,15 @@ namespace CvAut
             using Mat siege = Crop(shot, SiegeRoi);
             if (!TryMatch("Siege Machines", "slammer", siege, 0.80, out Point center, out _))
             {
-                Console.WriteLine("[SIEGE] 'slammer' missing - will rebuild");
+                Console.WriteLine("[TRAIN] phase=validate_siege status=fail reason=siege_missing");
                 return false;
             }
 
             int slammerCount = ReadIconCountOrZero(shot, SiegeRoi, center);
-            Console.WriteLine("[SIEGE] composition ok");
+            Console.WriteLine("[TRAIN] phase=validate_siege status=success details=\"composition_ok\"");
             if (slammerCount >= 1)
             {
-                Console.WriteLine($"[TRAIN] slammer correct: {slammerCount}xslammer, skipping training.");
+                Console.WriteLine($"[TRAIN] phase=train_siege status=skip reason=already_correct count={slammerCount} siege=slammer");
                 return true;
             }
 
@@ -578,7 +582,7 @@ namespace CvAut
         {
             if (!TryReadFraction(shot, roi, out int current, out int capacity))
             {
-                Console.WriteLine($"[SMART] {label} capacity unreadable.");
+                Console.WriteLine($"[TRAIN] phase=measure_{label}_space status=fail reason=ocr_failed");
                 return false;
             }
 
@@ -634,7 +638,7 @@ namespace CvAut
                 return;
             }
 
-            Console.WriteLine("[TRASH] cleaning troops... ");
+            Console.WriteLine("[TRAIN] phase=clear_queue status=start");
             _adb.Tap(tapCoord.X, tapCoord.Y);
             Thread.Sleep(1000);
             _adb.Tap(confirmCoord.X, confirmCoord.Y);
@@ -659,7 +663,7 @@ namespace CvAut
 
             if (!TryMatch("to_train", name, shot, ValidationIconThreshold, out Point center, out _))
             {
-                Console.WriteLine($"[TRAIN] {name}.png not found in tab");
+                Console.WriteLine($"[TRAIN] phase=queue_item status=fail reason=icon_not_found details=\"{name}\"");
                 return;
             }
 
@@ -680,11 +684,11 @@ namespace CvAut
             if (_vision.TryExtractNumericalMetrics(shot, SpaceRoi, out int limit, out double confidence, useRgbThresh: true)
                 && limit >= 120)
             {
-                Console.WriteLine($"[TRAIN] Army capacity detected: {limit}.");
+                Console.WriteLine($"[TRAIN] phase=measure_army_space status=success limit={limit}");
                 return limit;
             }
 
-            Console.WriteLine("[TRAIN] Army capacity OCR fallback.");
+            Console.WriteLine("[TRAIN] phase=measure_army_space status=pending details=\"ocr_failed_trying_fallback\"");
             return MeasureArmySpaceSecondary(shot);
         }
 
@@ -704,13 +708,13 @@ namespace CvAut
 
             for (int i = 0; i < spaceMap.Length; i++)
             {
-                string templatePath = Path.Combine(_templateRoot, $"army_space_{i}.png");
-                if (!File.Exists(templatePath))
+                string templateName = $"army_space_{i}.png";
+                if (!TemplateAssetLoader.Exists(_templateRoot, templateName))
                 {
                     continue;
                 }
 
-                using Mat template = Cv2.ImRead(templatePath, ImreadModes.Grayscale);
+                using Mat template = TemplateAssetLoader.Load(_templateRoot, templateName, ImreadModes.Grayscale);
                 if (template.Empty() || template.Width > regionGray.Width || template.Height > regionGray.Height)
                 {
                     continue;
@@ -730,11 +734,11 @@ namespace CvAut
             if (bestIndex >= 0 && bestScore >= 0.90)
             {
                 int space = spaceMap[bestIndex];
-                Console.WriteLine($"[TRAIN] Army capacity fallback: {space}.");
+                Console.WriteLine($"[TRAIN] phase=measure_army_space status=success limit={space} details=\"fallback_match\"");
                 return space;
             }
 
-            Console.WriteLine("[TRAIN] Army capacity unavailable.");
+            Console.WriteLine("[TRAIN] phase=measure_army_space status=fail reason=unavailable");
             return null;
         }
 
@@ -760,13 +764,13 @@ namespace CvAut
 
             foreach (int value in new[] { 6, 9, 11 })
             {
-                string templatePath = Path.Combine(_templateRoot, $"Spell_space_{value}.png");
-                if (!File.Exists(templatePath))
+                string templateName = $"Spell_space_{value}.png";
+                if (!TemplateAssetLoader.Exists(_templateRoot, templateName))
                 {
                     continue;
                 }
 
-                using Mat template = Cv2.ImRead(templatePath, ImreadModes.Color);
+                using Mat template = TemplateAssetLoader.Load(_templateRoot, templateName, ImreadModes.Color);
                 if (template.Empty() || template.Width > spaceImage.Width || template.Height > spaceImage.Height)
                 {
                     continue;
@@ -785,7 +789,7 @@ namespace CvAut
 
             if (bestLimit == null || bestScore < 0.85)
             {
-                Console.WriteLine("[TRAIN] Spell capacity unavailable; using default.");
+                Console.WriteLine("[TRAIN] phase=measure_spell_space status=fail reason=unavailable details=\"using_default_11\"");
                 return 11;
             }
 
@@ -806,7 +810,7 @@ namespace CvAut
             Rect countRoi = CountRoiForIcon(shot, sectionRoi, centerInSection);
             if (!_vision.TryExtractNumericalMetrics(shot, countRoi, out int actual, out double confidence, useRgbThresh: true))
             {
-                Console.WriteLine($"[SMART] {label} count unreadable; using template fallback.");
+                Console.WriteLine($"[TRAIN] phase=validate_{label}_count status=pending reason=ocr_failed details=\"using_fallback\"");
                 return true;
             }
 
@@ -814,11 +818,11 @@ namespace CvAut
             int normalized = NormalizeBadgeCount(actual, expected);
             if (normalized != actual)
             {
-                Console.WriteLine($"[SMART] {label} count adjusted.");
+                Console.WriteLine($"[TRAIN] phase=validate_{label}_count status=pending details=\"adjusted\"");
             }
             else
             {
-                Console.WriteLine($"[SMART] {label} count verified.");
+                Console.WriteLine($"[TRAIN] phase=validate_{label}_count status=success");
             }
 
             if (confidence < 0.58)
@@ -828,7 +832,7 @@ namespace CvAut
 
             if (normalized < expected)
             {
-                Console.WriteLine($"[SMART] {label} count low; rebuilding.");
+                Console.WriteLine($"[TRAIN] phase=validate_{label}_count status=fail reason=count_low");
                 return false;
             }
 
@@ -902,28 +906,22 @@ namespace CvAut
         /// <returns>Danh sách tên các loại phép đã phát hiện.</returns>
         private IEnumerable<string> DetectSpells(Mat spells, double threshold)
         {
-            return DetectTemplates("Spells", spells, threshold, "[SPELL VALIDATION]");
+            return DetectTemplates("Spells", spells, threshold);
         }
 
         private IEnumerable<string> DetectSiegeMachines(Mat siege, double threshold)
         {
-            return DetectTemplates("Siege Machines", siege, threshold, "[SIEGE]");
+            return DetectTemplates("Siege Machines", siege, threshold);
         }
 
-        private IEnumerable<string> DetectTemplates(string subdir, Mat haystack, double threshold, string logPrefix)
+        private IEnumerable<string> DetectTemplates(string subdir, Mat haystack, double threshold)
         {
-            string root = Path.Combine(_templateRoot, subdir);
-            if (!Directory.Exists(root))
+            foreach (string name in TemplateAssetLoader.EnumerateNames(_templateRoot, subdir))
             {
-                yield break;
-            }
-
-            foreach (string templatePath in Directory.EnumerateFiles(root, "*.png", SearchOption.TopDirectoryOnly))
-            {
-                string name = Path.GetFileNameWithoutExtension(templatePath);
                 if (TryMatch(subdir, name, haystack, threshold, out Point center, out double score))
                 {
-                    Console.WriteLine($"{logPrefix} Detected {subdir}/{name}: score={score:F3}, center=({center.X},{center.Y})");
+                    string phaseName = subdir.Replace(" ", "_").ToLower();
+                    Console.WriteLine($"[TRAIN] phase=detect_{phaseName} status=success name={name} score={score:F3} center=({center.X},{center.Y})");
                     yield return name;
                 }
             }
@@ -934,14 +932,13 @@ namespace CvAut
             center = default;
             score = 0;
 
-            string templatePath = Path.Combine(_templateRoot, templateName);
-            if (!File.Exists(templatePath))
+            if (!TemplateAssetLoader.Exists(_templateRoot, templateName))
             {
-                Console.WriteLine($"[quick_train WARNING] Missing template: {templatePath}");
+                Console.WriteLine($"[TRAIN] phase=find_template status=fail reason=missing_file details=\"{templateName}\"");
                 return false;
             }
 
-            using Mat template = Cv2.ImRead(templatePath, ImreadModes.Color);
+            using Mat template = TemplateAssetLoader.Load(_templateRoot, templateName, ImreadModes.Color);
             if (template.Empty())
             {
                 return false;
@@ -976,13 +973,13 @@ namespace CvAut
             center = default;
             score = 0;
 
-            string? templatePath = FindTemplatePath(name, subdir);
-            if (templatePath == null || haystack.Empty())
+            string templateName = Path.Combine(subdir, name);
+            if (!TemplateAssetLoader.Exists(_templateRoot, templateName) || haystack.Empty())
             {
                 return false;
             }
 
-            using Mat template = Cv2.ImRead(templatePath, ImreadModes.Color);
+            using Mat template = TemplateAssetLoader.Load(_templateRoot, templateName, ImreadModes.Color);
             Rect searchRect = roi == null ? new Rect(0, 0, haystack.Width, haystack.Height) : ImageUtils.ClampRect(roi.Value, haystack.Width, haystack.Height);
             if (template.Empty() || template.Width > searchRect.Width || template.Height > searchRect.Height)
             {
@@ -997,24 +994,24 @@ namespace CvAut
             center = new Point(searchRect.X + maxLoc.X + template.Width / 2, searchRect.Y + maxLoc.Y + template.Height / 2);
             bool matched = score >= threshold;
             string verdict = matched ? "ok" : "low";
-            Console.WriteLine($"[TEMPLATE] {subdir}/{name}: score={score:F3}, threshold={threshold:F2}, center=({center.X},{center.Y}) => {verdict}");
+            Console.WriteLine($"[TRAIN] phase=match_template subdir=\"{subdir}\" name=\"{name}\" score={score:F3} threshold={threshold:F2} center=({center.X},{center.Y}) status={verdict}");
             return matched;
         }
 
         private static void DiagnoseTemplate(Mat shot, string templateRoot, VisionEngine vision, Rect roi, string subdir, string name, double threshold)
         {
             using Mat haystack = Crop(shot, roi);
-            string? templatePath = FindTemplatePath(templateRoot, name, subdir);
-            if (templatePath == null)
+            string templateName = Path.Combine(subdir, name);
+            if (!TemplateAssetLoader.Exists(templateRoot, templateName))
             {
-                Console.WriteLine($"[DIAG] {subdir}/{name}: template missing");
+                Console.WriteLine($"[TRAIN] phase=diagnose subdir=\"{subdir}\" name=\"{name}\" status=fail reason=template_missing");
                 return;
             }
 
-            using Mat template = Cv2.ImRead(templatePath, ImreadModes.Color);
+            using Mat template = TemplateAssetLoader.Load(templateRoot, templateName, ImreadModes.Color);
             if (template.Empty() || template.Width > haystack.Width || template.Height > haystack.Height)
             {
-                Console.WriteLine($"[DIAG] {subdir}/{name}: template invalid or larger than ROI");
+                Console.WriteLine($"[TRAIN] phase=diagnose subdir=\"{subdir}\" name=\"{name}\" status=fail reason=invalid_dimensions");
                 return;
             }
 
@@ -1025,7 +1022,7 @@ namespace CvAut
             Point centerInSection = new(maxLoc.X + template.Width / 2, maxLoc.Y + template.Height / 2);
             Point centerAbsolute = new(roi.X + centerInSection.X, roi.Y + centerInSection.Y);
             string verdict = score >= threshold ? "ok" : "low";
-            Console.WriteLine($"[DIAG] {subdir}/{name}: score={score:F3}, threshold={threshold:F2}, centerAbs=({centerAbsolute.X},{centerAbsolute.Y}) => {verdict}");
+            Console.WriteLine($"[TRAIN] phase=diagnose subdir=\"{subdir}\" name=\"{name}\" score={score:F3} threshold={threshold:F2} center=({centerAbsolute.X},{centerAbsolute.Y}) status={verdict}");
 
             if (score < 0.60)
             {
@@ -1035,11 +1032,11 @@ namespace CvAut
             Rect countRoi = CountRoiForIcon(shot, roi, centerInSection);
             if (vision.TryExtractNumericalMetrics(shot, countRoi, out int actual, out double confidence, useRgbThresh: true))
             {
-                Console.WriteLine($"[DIAG COUNT OCR] {name}: read={actual}, confidence={confidence:F2}, roi=({countRoi.X},{countRoi.Y},{countRoi.Width},{countRoi.Height})");
+                Console.WriteLine($"[TRAIN] phase=diagnose_ocr name=\"{name}\" status=success read={actual} confidence={confidence:F2} roi=({countRoi.X},{countRoi.Y},{countRoi.Width},{countRoi.Height})");
             }
             else
             {
-                Console.WriteLine($"[DIAG COUNT OCR] {name}: unknown, roi=({countRoi.X},{countRoi.Y},{countRoi.Width},{countRoi.Height})");
+                Console.WriteLine($"[TRAIN] phase=diagnose_ocr name=\"{name}\" status=fail reason=unknown roi=({countRoi.X},{countRoi.Y},{countRoi.Width},{countRoi.Height})");
             }
 
             ScanCountCandidates(shot, roi, centerInSection, vision, name);
@@ -1081,12 +1078,12 @@ namespace CvAut
 
             if (best.Count == 0)
             {
-                Console.WriteLine($"[DIAG COUNT SCAN] {name}: no plausible candidates");
+                Console.WriteLine($"[TRAIN] phase=diagnose_scan name=\"{name}\" status=fail reason=no_candidates");
                 return;
             }
 
             string summary = string.Join("; ", best.Select(c => $"{c.Value}@{c.Confidence:F2}/({c.Roi.X},{c.Roi.Y},{c.Roi.Width},{c.Roi.Height})"));
-            Console.WriteLine($"[DIAG COUNT SCAN] {name}: {summary}");
+            Console.WriteLine($"[TRAIN] phase=diagnose_scan name=\"{name}\" status=success details=\"{summary}\"");
         }
 
         private string? FindTemplatePath(string name, string? subdir = null)
@@ -1119,16 +1116,23 @@ namespace CvAut
             return new Mat(image, clamped);
         }
 
-        private static ArmySpec GetArmySpec(JsonElement cfg)
+        private static string GetAttackKey(JsonElement cfg, string? attackStrategy = null)
         {
-            string attack = "Dragon_Attack";
-            if (cfg.ValueKind == JsonValueKind.Object
+            string attack = string.IsNullOrWhiteSpace(attackStrategy) ? "Dragon_Attack" : attackStrategy;
+            if (string.IsNullOrWhiteSpace(attackStrategy)
+                && cfg.ValueKind == JsonValueKind.Object
                 && cfg.TryGetProperty("attack", out JsonElement attackElement)
                 && attackElement.ValueKind == JsonValueKind.String)
             {
                 attack = attackElement.GetString() ?? attack;
             }
 
+            return attack;
+        }
+
+        private static ArmySpec GetArmySpec(JsonElement cfg, string? attackStrategy = null)
+        {
+            string attack = GetAttackKey(cfg, attackStrategy);
             return ArmySets.TryGetValue(attack, out ArmySpec? spec)
                 ? spec
                 : ArmySets["Dragon_Attack"];

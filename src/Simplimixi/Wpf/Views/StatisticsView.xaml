@@ -71,7 +71,7 @@
                                    Height="30"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
-                                   Source="pack://siteoforigin:,,,/assets/Templates/icon_attack.png" />
+                                   Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_attack.png}" />
                         </Border>
                         <ui:TextBlock Margin="12,0,0,0"
                                       VerticalAlignment="Center"
@@ -102,7 +102,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Image Width="34" Height="34" Source="pack://siteoforigin:,,,/assets/Templates/icon_gold.png" />
+                        <Image Width="34" Height="34" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_gold.png}" />
                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
                             <ui:TextBlock Style="{StaticResource MetricLabelStyle}" Text="Gold" />
                             <ui:TextBlock FontSize="24" FontWeight="Bold" Text="{Binding GoldGainedText}" />
@@ -144,7 +144,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Image Width="34" Height="34" Source="pack://siteoforigin:,,,/assets/Templates/icon_elixir.png" />
+                        <Image Width="34" Height="34" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_elixir.png}" />
                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
                             <ui:TextBlock Style="{StaticResource MetricLabelStyle}" Text="Elixir" />
                             <ui:TextBlock FontSize="24" FontWeight="Bold" Text="{Binding ElixirGainedText}" />
@@ -186,7 +186,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Image Width="34" Height="34" Source="pack://siteoforigin:,,,/assets/Templates/icon_de.png" />
+                        <Image Width="34" Height="34" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_de.png}" />
                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
                             <ui:TextBlock Style="{StaticResource MetricLabelStyle}" Text="Dark Elixir" />
                             <ui:TextBlock FontSize="24" FontWeight="Bold" Text="{Binding DarkElixirGainedText}" />
@@ -237,25 +237,25 @@
 
                 <UniformGrid Grid.Row="2" Columns="4">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Image Width="56" Height="56" Source="pack://siteoforigin:,,,/assets/Templates/icon_0 star.png" />
+                        <Image Width="56" Height="56" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_0 star.png}" />
                         <ui:TextBlock HorizontalAlignment="Center" FontSize="30" FontWeight="Bold" Text="{Binding Star0CountText}" />
                         <ui:TextBlock HorizontalAlignment="Center" Foreground="{StaticResource DangerBrush}" Text="0 star" />
                     </StackPanel>
 
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Image Width="56" Height="56" Source="pack://siteoforigin:,,,/assets/Templates/icon_1 star.png" />
+                        <Image Width="56" Height="56" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_1 star.png}" />
                         <ui:TextBlock HorizontalAlignment="Center" FontSize="30" FontWeight="Bold" Text="{Binding Star1CountText}" />
                         <ui:TextBlock HorizontalAlignment="Center" Foreground="{StaticResource WarningBrush}" Text="1 star" />
                     </StackPanel>
 
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Image Width="56" Height="56" Source="pack://siteoforigin:,,,/assets/Templates/icon_2 star.png" />
+                        <Image Width="56" Height="56" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_2 star.png}" />
                         <ui:TextBlock HorizontalAlignment="Center" FontSize="30" FontWeight="Bold" Text="{Binding Star2CountText}" />
                         <ui:TextBlock HorizontalAlignment="Center" Foreground="{ui:ThemeResource AccentTextFillColorPrimaryBrush}" Text="2 stars" />
                     </StackPanel>
 
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Image Width="56" Height="56" Source="pack://siteoforigin:,,,/assets/Templates/icon_3 star.png" />
+                        <Image Width="56" Height="56" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_3 star.png}" />
                         <ui:TextBlock HorizontalAlignment="Center" FontSize="30" FontWeight="Bold" Text="{Binding Star3CountText}" />
                         <ui:TextBlock HorizontalAlignment="Center" Foreground="{StaticResource ReadyBrush}" Text="3 stars" />
                     </StackPanel>

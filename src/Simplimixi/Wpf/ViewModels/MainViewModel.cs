@@ -82,6 +82,11 @@ namespace CvAut.WpfApp.ViewModels
         /// </summary>
         public LogsViewModel LogsVM { get; }
 
+        /// <summary>
+        /// ViewModel quản lý cài đặt và cảnh báo an toàn.
+        /// </summary>
+        public SettingsViewModel SettingsVM { get; }
+
         // Navigation Commands (Lệnh chuyển đổi giữa các màn hình con)
 
         /// <summary>
@@ -118,6 +123,11 @@ namespace CvAut.WpfApp.ViewModels
         /// Lệnh chuyển sang màn hình Xem Logs.
         /// </summary>
         public ICommand NavigateLogsCommand { get; }
+
+        /// <summary>
+        /// Lệnh chuyển sang màn hình Cài đặt.
+        /// </summary>
+        public ICommand NavigateSettingsCommand { get; }
 
         // Bot Control Commands (Lệnh điều khiển hoạt động của Bot)
 
@@ -287,6 +297,7 @@ namespace CvAut.WpfApp.ViewModels
             ClanCapitalVM = new ClanCapitalViewModel(_botService);
             StatisticsVM = new StatisticsViewModel(_botService);
             LogsVM = new LogsViewModel(_botService);
+            SettingsVM = new SettingsViewModel(_botService);
 
             // Trang mặc định khi mở app là Cài đặt Chung
             _currentViewModel = GeneralVM;
@@ -306,6 +317,7 @@ namespace CvAut.WpfApp.ViewModels
             NavigateClanCapitalCommand = new RelayCommand(() => NavigateTo(ClanCapitalVM, "clancapital"));
             NavigateStatisticsCommand = new RelayCommand(() => NavigateTo(StatisticsVM, "statistics"));
             NavigateLogsCommand = new RelayCommand(() => NavigateTo(LogsVM, "logs"));
+            NavigateSettingsCommand = new RelayCommand(() => NavigateTo(SettingsVM, "settings"));
 
             // Đăng ký các lệnh điều khiển bot
             StartCommand = new RelayCommand(StartBot);

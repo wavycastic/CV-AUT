@@ -38,7 +38,7 @@ namespace CvAut
         private const int HeroAbilityDelayMs = 2500;
         private const int DuplicateTabDistancePx = 45;
         private const int RemainingTroopSettleDelayMs = 540;
-        private const int MaxRemainingDeployPasses = 3;
+        private const int MaxRemainingDeployPasses = 1;
         private const int SpellTabMinSeparationPx = 45;
         private const double SpellTabAmbiguityScoreDelta = 0.06;
         private static readonly bool VerboseTemplateLogs = false;
@@ -189,6 +189,7 @@ namespace CvAut
                 _deployCoords["ice_minion"] = DragonL.GetRange(2, 10);
                 _deployCoords["ice_golem"] = DragonL.GetRange(4, 5);
                 _fallbackDeployCoords["dragon"] = DragonFallbackL;
+                _fallbackDeployCoords["e_drag"] = DragonFallbackL;
                 _fallbackDeployCoords["balloon"] = BalloonFallbackL;
 
                 _heroCoords = HeroL.ConvertAll(h => new HeroInfo { Name = h.Name, Coord = h.Coord });
@@ -208,6 +209,7 @@ namespace CvAut
                 _deployCoords["ice_minion"] = DragonR.GetRange(2, 10);
                 _deployCoords["ice_golem"] = DragonR.GetRange(4, 5);
                 _fallbackDeployCoords["dragon"] = DragonFallbackL.ConvertAll(mirror);
+                _fallbackDeployCoords["e_drag"] = DragonFallbackL.ConvertAll(mirror);
                 _fallbackDeployCoords["balloon"] = BalloonFallbackL.ConvertAll(mirror);
 
                 _heroCoords = HeroL.ConvertAll(h => new HeroInfo { Name = h.Name, Coord = mirror(h.Coord) });
@@ -220,7 +222,7 @@ namespace CvAut
         /// </summary>
         public void UpdateTabs()
         {
-            Console.WriteLine("[ATTACK] Scanning deployment bar...");
+            Console.WriteLine("[ATTACK-CS] phase=scan_bar status=start");
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty()) return;
 
@@ -252,9 +254,14 @@ namespace CvAut
                 double threshold = isSpell ? 0.45 : MatchThreshold;
                 Point? coord = _vision.FindElement(screenshot, kvp.Value, threshold, DeployBarRoi, out double score);
 
+                if (coord == null)
+                {
+                    coord = FindDeploymentTabFallback(screenshot, kvp.Key, kvp.Value, threshold, out score);
+                }
+
                 if (isSpell && VerboseTemplateLogs)
                 {
-                    Console.WriteLine($"[TPL] {kvp.Key} primary scan completed.");
+                    Console.WriteLine($"[ATTACK-CS] phase=scan_bar status=pending action=scan item={kvp.Key} details=\"primary_scan_completed\"");
                 }
 
                 // Dò tìm dự phòng cho phép Đóng băng (Freeze) nếu tìm kiếm chính thất bại
@@ -274,7 +281,7 @@ namespace CvAut
                         coord = _vision.FindElement(screenshot, fallbackTemplate, fallbackThreshold, widerRoi, out double fallbackScore);
                         if (VerboseTemplateLogs)
                         {
-                            Console.WriteLine("[TPL] Freeze fallback scan completed.");
+                            Console.WriteLine("[ATTACK-CS] phase=scan_bar status=pending action=scan item=freeze details=\"fallback_scan_completed\"");
                         }
                         score = fallbackScore;
                         if (coord != null)
@@ -287,43 +294,77 @@ namespace CvAut
                 if (coord != null)
                 {
                     // Lọc trùng lặp để tránh gán nhầm sang thẻ bên cạnh do khoảng cách quá gần
-                    if (IsDuplicateTab(coord.Value, out string existingName))
+                    if (IsDuplicateTab(kvp.Key, coord.Value, out string existingName))
                     {
-                        if (VerboseTemplateLogs)
-                        {
-                            Console.WriteLine($"[TPL] {kvp.Key} duplicate tab skipped.");
-                        }
+                        Console.WriteLine($"[ATTACK-CS WARNING] phase=scan_bar status=pending action=scan item={kvp.Key} reason=duplicate existing={existingName}");
                         continue;
                     }
 
                     _tabs[kvp.Key] = coord.Value;
-                    Console.WriteLine($"[ATTACK] {kvp.Key} ready.");
+                    Console.WriteLine($"[ATTACK-CS] phase=scan_bar status=pending action=scan item={kvp.Key} verdict=ready");
                 }
 
-                if (coord == null && _requiredTabs.Contains(kvp.Key) && VerboseTemplateLogs)
+                if (coord == null && _requiredTabs.Contains(kvp.Key))
                 {
-                    Console.WriteLine($"[TPL] {kvp.Key} not found.");
+                    Console.WriteLine($"[ATTACK-CS WARNING] phase=scan_bar status=missing action=scan item={kvp.Key} reason=required_tab_not_found");
                 }
             }
 
             // Dò tìm xe công thành (Siege Machine) - có 2 trường hợp: Có quân (siege_with_troops) hoặc rỗng (empty_siege)
-            Point? swt = _vision.FindElement(screenshot, "troops/siege_with_troops", MatchThreshold, DeployBarRoi, out double swtScore);
-            Point? es = _vision.FindElement(screenshot, "troops/empty_siege", MatchThreshold, DeployBarRoi, out double esScore);
+            Rect widerDeployBarRoi = Rect.FromLTRB(0, 650, screenshot.Width, screenshot.Height);
+            Point? swt = _vision.FindElement(screenshot, "troops/siege_with_troops", MatchThreshold, DeployBarRoi, out double swtScore)
+                ?? _vision.FindElement(screenshot, "troops/icon_siege", 0.42, widerDeployBarRoi, out swtScore)
+                ?? _vision.FindElement(screenshot, "troops/siege_with_troops", 0.42, widerDeployBarRoi, out swtScore);
+            Point? es = _vision.FindElement(screenshot, "troops/empty_siege", MatchThreshold, DeployBarRoi, out double esScore)
+                ?? _vision.FindElement(screenshot, "troops/empty_siege", 0.42, widerDeployBarRoi, out esScore);
             if (VerboseTemplateLogs)
             {
-                Console.WriteLine("[DEBUG] Siege scan completed.");
-                Console.WriteLine("[DEBUG] Empty siege scan completed.");
+                Console.WriteLine("[ATTACK-CS] phase=scan_bar status=pending action=scan item=siege details=\"scan_completed\"");
+                Console.WriteLine("[ATTACK-CS] phase=scan_bar status=pending action=scan item=siege details=\"empty_scan_completed\"");
             }
             if (swt != null)
             {
                 _tabs["siege_machine"] = swt.Value;
-                Console.WriteLine("[ATTACK] Siege machine ready.");
+                Console.WriteLine("[ATTACK-CS] phase=scan_bar status=pending action=scan item=siege verdict=ready");
             }
             else if (es != null)
             {
                 _tabs["siege_machine"] = es.Value;
-                Console.WriteLine("[ATTACK] Empty siege slot detected.");
+                Console.WriteLine("[ATTACK-CS] phase=scan_bar status=pending action=scan item=siege verdict=empty");
             }
+
+            foreach (string required in _requiredTabs)
+            {
+                if (!_tabs.ContainsKey(required))
+                {
+                    Console.WriteLine($"[ATTACK-CS WARNING] phase=scan_bar status=missing item={required} reason=required_tab_not_found");
+                }
+            }
+        }
+
+        private Point? FindDeploymentTabFallback(Mat screenshot, string key, string primaryTemplate, double primaryThreshold, out double score)
+        {
+            score = 0;
+            Rect widerDeployBarRoi = Rect.FromLTRB(0, 650, screenshot.Width, screenshot.Height);
+            double fallbackThreshold = Math.Min(primaryThreshold, 0.42);
+            string[] templates = key switch
+            {
+                "dragon" => new[] { primaryTemplate, "troops/icon_dragon", "troops/dragon", "Smart_Auto_train/Army Troops/dragon", "Smart_Auto_train/to_train/dragon" },
+                "e_drag" => new[] { primaryTemplate, "troops/e_drag", "troops/electro_dragon", "troops/E_Drag", "Smart_Auto_train/Army Troops/electro_dragon", "Smart_Auto_train/to_train/electro_dragon" },
+                _ => Array.Empty<string>()
+            };
+
+            foreach (string template in templates)
+            {
+                Point? coord = _vision.FindElement(screenshot, template, fallbackThreshold, widerDeployBarRoi, out double fallbackScore);
+                score = fallbackScore;
+                if (coord != null)
+                {
+                    return coord;
+                }
+            }
+
+            return null;
         }
 
         private bool AreTabsTooClose(Point a, Point b)
@@ -334,7 +375,7 @@ namespace CvAut
         /// <summary>
         /// Kiểm tra xem tọa độ thẻ quân mới quét được có bị trùng lặp với tọa độ thẻ đã ghi nhận hay không.
         /// </summary>
-        private bool IsDuplicateTab(Point candidate, out string existingName)
+        private bool IsDuplicateTab(string candidateName, Point candidate, out string existingName)
         {
             foreach (var kvp in _tabs)
             {
@@ -343,12 +384,22 @@ namespace CvAut
                 if ((dx * dx) + (dy * dy) <= DuplicateTabDistancePx * DuplicateTabDistancePx)
                 {
                     existingName = kvp.Key;
-                    return true;
+                    return !ShouldKeepNearbyTroopTab(candidateName, existingName);
                 }
             }
 
             existingName = "";
             return false;
+        }
+
+        private static bool ShouldKeepNearbyTroopTab(string candidateName, string existingName)
+        {
+            bool candidateMain = candidateName.Equals("dragon", StringComparison.OrdinalIgnoreCase)
+                || candidateName.Equals("e_drag", StringComparison.OrdinalIgnoreCase);
+            bool existingMain = existingName.Equals("dragon", StringComparison.OrdinalIgnoreCase)
+                || existingName.Equals("e_drag", StringComparison.OrdinalIgnoreCase);
+
+            return candidateMain && existingMain && !candidateName.Equals(existingName, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -364,7 +415,7 @@ namespace CvAut
 
             if (!_deployCoords.TryGetValue("dragon", out List<Point>? dragonCoords) || dragonCoords.Count == 0)
             {
-                Console.WriteLine($"[ATTACK] Quick drop unavailable for {troopKey}.");
+                Console.WriteLine($"[ATTACK-CS WARNING] phase=deploy status=skip item={troopKey} reason=quick_drop_unavailable");
                 return;
             }
 
@@ -378,7 +429,7 @@ namespace CvAut
                 quickTaps.Add(JitterCoord(dragonCoords[i % dragonCoords.Count]));
             }
 
-            Console.WriteLine($"[ATTACK] Quick deploying {troopKey} ({tapLimit} taps)...");
+            Console.WriteLine($"[ATTACK-CS] phase=deploy status=start item={troopKey} action=quick_deploy count={tapLimit}");
             _adb.TapSequenceSafeFast(quickTaps, batchSize: 5, batchDelayMs: 60, token);
         }
 
@@ -407,17 +458,17 @@ namespace CvAut
             string key = troopKey.ToLower();
             if (!_tabs.TryGetValue(key, out Point tab))
             {
-                Console.WriteLine($"[ATTACK] Skipping {troopKey}: tab not found.");
+                Console.WriteLine($"[ATTACK-CS WARNING] phase=deploy status=skip item={troopKey} reason=tab_not_found");
                 return;
             }
 
             if (!_deployCoords.TryGetValue(key, out List<Point>? coords) || coords.Count == 0)
             {
-                Console.WriteLine($"[ATTACK] Skipping {troopKey}: deployment pattern unavailable.");
+                Console.WriteLine($"[ATTACK-CS WARNING] phase=deploy status=skip item={troopKey} reason=pattern_unavailable");
                 return;
             }
 
-            Console.WriteLine($"[ATTACK] Deploying {troopKey} ({coords.Count} taps)...");
+            Console.WriteLine($"[ATTACK-CS] phase=deploy status=start item={troopKey} tab=({tab.X},{tab.Y}) tap_count={coords.Count}");
             Stopwatch sw = Stopwatch.StartNew();
             _adb.Tap(tab.X, tab.Y);
             if (InterruptibleSleep(TroopTabSelectDelayMs, token)) return;
@@ -431,19 +482,19 @@ namespace CvAut
             _adb.TapSequenceSafeFast(taps, batchSize: 5, batchDelayMs: 60, token);
 
             sw.Stop();
-            if (VerboseTemplateLogs) Console.WriteLine($"[ATTACK DEBUG] {troopKey} deploy took {sw.ElapsedMilliseconds}ms.");
+            Console.WriteLine($"[ATTACK-CS] phase=deploy status=success item={troopKey} tab=({tab.X},{tab.Y}) tap_count={taps.Count} duration={sw.ElapsedMilliseconds}ms");
         }
 
         /// <summary>
-        /// Đảm bảo quân lính được thả hoàn toàn (rải bù nếu đọc thấy số lượng lính còn thừa trên giao diện thẻ).
-        /// Chạy tối đa 3 chu kỳ quét số dư và rải bù bằng tọa độ dự phòng (Fallback).
+        /// Đảm bảo quân lính được thả hoàn toàn (rải bù nhanh nếu đọc thấy số lượng lính còn thừa trên giao diện thẻ).
+        /// Chỉ chạy một lượt để ưu tiên tốc độ trong attack flow.
         /// </summary>
         public void EnsureTroopFullyDeployed(string troopKey)
         {
             string key = troopKey.ToLower();
             if (!_tabs.TryGetValue(key, out Point tab))
             {
-                Console.WriteLine($"[ATTACK] Remaining check skipped for {troopKey}: tab not found.");
+                Console.WriteLine($"[ATTACK-CS WARNING] phase=validate_remaining status=skip item={troopKey} reason=tab_not_found");
                 return;
             }
 
@@ -451,7 +502,7 @@ namespace CvAut
             {
                 if (!_deployCoords.TryGetValue(key, out fallbackCoords) || fallbackCoords.Count == 0)
                 {
-                    Console.WriteLine($"[ATTACK] Backup deploy pattern unavailable for {troopKey}.");
+                    Console.WriteLine($"[ATTACK-CS WARNING] phase=validate_remaining status=skip item={troopKey} reason=pattern_unavailable");
                     return;
                 }
             }
@@ -462,17 +513,33 @@ namespace CvAut
                 int remaining = ReadRemainingTroopCount(key, out double confidence);
                 if (remaining < 0)
                 {
-                    Console.WriteLine($"[ATTACK] Remaining count unavailable for {troopKey}; skipping backup deploy.");
+                    int fallbackTapCount = Math.Min(4, fallbackCoords.Count);
+                    Console.WriteLine($"[ATTACK-CS WARNING] phase=validate_remaining status=fallback item={troopKey} reason=count_unavailable fallback_tap_count={fallbackTapCount}");
+                    if (fallbackTapCount == 0)
+                    {
+                        return;
+                    }
+
+                    _adb.Tap(tab.X, tab.Y);
+                    Thread.Sleep(TroopTabSelectDelayMs);
+                    var fallbackTaps = new List<Point>(fallbackTapCount);
+                    int fallbackStartOffset = ((pass - 1) * 4) % fallbackCoords.Count;
+                    for (int i = 0; i < fallbackTapCount; i++)
+                    {
+                        fallbackTaps.Add(JitterCoord(fallbackCoords[(fallbackStartOffset + i) % fallbackCoords.Count]));
+                    }
+
+                    _adb.TapSequence(fallbackTaps);
                     return;
                 }
 
                 if (remaining == 0)
                 {
-                    Console.WriteLine($"[ATTACK] {troopKey} fully deployed.");
+                    Console.WriteLine($"[ATTACK-CS] phase=validate_remaining status=success item={troopKey} details=\"fully_deployed\"");
                     return;
                 }
 
-                Console.WriteLine($"[ATTACK WARNING] {troopKey} may remain; running backup deploy {pass}/{MaxRemainingDeployPasses}.");
+                Console.WriteLine($"[ATTACK-CS WARNING] phase=validate_remaining status=fallback item={troopKey} remaining={remaining} confidence={confidence:F2}");
                 _adb.Tap(tab.X, tab.Y);
                 Thread.Sleep(TroopTabSelectDelayMs);
 
@@ -487,12 +554,7 @@ namespace CvAut
                 _adb.TapSequence(taps);
             }
 
-            Thread.Sleep(RemainingTroopSettleDelayMs);
-            int finalRemaining = ReadRemainingTroopCount(key, out double finalConfidence);
-            if (finalRemaining > 0)
-            {
-                Console.WriteLine($"[ATTACK WARNING] {troopKey} may still remain after backup deploy.");
-            }
+
         }
 
         /// <summary>
@@ -569,7 +631,7 @@ namespace CvAut
             if (IsStopRequested(token)) return;
             _heroAbilityTabs.Clear();
 
-            Console.WriteLine("[ATTACK] Deploying heroes...");
+            Console.WriteLine("[ATTACK-CS] phase=deploy_heroes status=start");
             Stopwatch sw = Stopwatch.StartNew();
             foreach (var hero in _heroCoords)
             {
@@ -588,7 +650,7 @@ namespace CvAut
             }
 
             sw.Stop();
-            if (VerboseTemplateLogs) Console.WriteLine($"[ATTACK DEBUG] Heroes deploy took {sw.ElapsedMilliseconds}ms.");
+            if (VerboseTemplateLogs) Console.WriteLine($"[ATTACK-CS] phase=deploy_heroes status=success duration={sw.ElapsedMilliseconds}ms");
         }
 
         /// <summary>
@@ -602,7 +664,7 @@ namespace CvAut
                 return;
             }
 
-            Console.WriteLine($"[ATTACK] Casting {spellKey} ({coords.Count} spells)...");
+            Console.WriteLine($"[ATTACK-CS] phase=deploy_spell status=start item={spellKey} count={coords.Count}");
             Stopwatch sw = Stopwatch.StartNew();
             _adb.Tap(tab.X, tab.Y);
 
@@ -614,7 +676,7 @@ namespace CvAut
             }
 
             sw.Stop();
-            if (VerboseTemplateLogs) Console.WriteLine($"[ATTACK DEBUG] {spellKey} casting took {sw.ElapsedMilliseconds}ms.");
+            if (VerboseTemplateLogs) Console.WriteLine($"[ATTACK-CS] phase=deploy_spell status=success item={spellKey} duration={sw.ElapsedMilliseconds}ms");
         }
 
         /// <summary>
@@ -629,7 +691,7 @@ namespace CvAut
 
             if (!_tabs.TryGetValue(key, out tab))
             {
-                Console.WriteLine($"[ATTACK] Skipping {spellKey}: spell tab not found.");
+                Console.WriteLine($"[ATTACK-CS WARNING] phase=deploy_spell status=skip item={spellKey} reason=tab_not_found");
                 return false;
             }
 
@@ -648,7 +710,7 @@ namespace CvAut
         public void RetapHeroes(CancellationToken token = default)
         {
             if (IsStopRequested(token)) return;
-            Console.WriteLine("[ATTACK] Activating hero abilities...");
+            Console.WriteLine("[ATTACK-CS] phase=activate_abilities status=start");
             string[] tags = { "warden", "queen", "bk", "prince", "rc" };
             foreach (var tag in tags)
             {
@@ -659,7 +721,7 @@ namespace CvAut
                 }
                 else
                 {
-                    Console.WriteLine($"[ATTACK] Skipping {tag} ability: tab unavailable.");
+                    Console.WriteLine($"[ATTACK-CS WARNING] phase=activate_abilities status=skip item={tag} reason=tab_unavailable");
                 }
             }
         }
@@ -669,6 +731,7 @@ namespace CvAut
         /// Tự động sinh ngẫu nhiên hướng tấn công là cánh Trái hay cánh Phải để đa dạng hóa hành vi.
         /// </summary>
         /// <param name="attackStrategy">Chiến thuật tấn công ("Dragon_Attack" hoặc "ElectroDragon_Attack").</param>
+        /// <param name="token">Token dùng để hủy bỏ tiến trình nếu cần dừng bot.</param>
         public void Run(string attackStrategy = "Dragon_Attack", CancellationToken token = default)
         {
             if (IsStopRequested(token)) return;
@@ -676,9 +739,7 @@ namespace CvAut
             _side = _rand.Next(0, 2) == 0 ? "left" : "right";
             InitializePatterns();
 
-            Console.WriteLine($"\n==============================================");
-            Console.WriteLine($"[ATTACK] Running {attackStrategy} from {_side.ToUpper()} side.");
-            Console.WriteLine($"==============================================");
+            Console.WriteLine("[ATTACK-CS] phase=run_attack status=start strategy=\"" + attackStrategy + "\" side=\"" + _side.ToUpper() + "\"");
 
             if (attackStrategy == "Dragon_Attack")
             {
@@ -723,7 +784,7 @@ namespace CvAut
                 DeploySpells("rage", token);
                 DeploySpells("freeze", token);
 
-                // TapSequence đã rải toàn bộ điểm chính, bỏ OCR rải bù để giữ nhịp tấn công nhanh.
+                EnsureTroopFullyDeployed("dragon");
             }
             else if (attackStrategy == "ElectroDragon_Attack")
             {
@@ -762,18 +823,20 @@ namespace CvAut
                 if (InterruptibleSleep(SpellPhaseDelayMs, token)) return;
                 DeploySpells("rage", token);
                 DeploySpells("freeze", token);
+
+                EnsureTroopFullyDeployed("e_drag");
             }
             else
             {
                 _requiredTabs.Clear();
                 UpdateTabs();
-                Console.WriteLine($"[ATTACK ERROR] Unknown strategy: {attackStrategy}");
+                Console.WriteLine($"[ATTACK-CS ERROR] phase=run_attack status=fail reason=unknown_strategy strategy=\"{attackStrategy}\"");
             }
 
             // Cho tướng giao tranh một lúc rồi mới kích hoạt kỹ năng.
             if (InterruptibleSleep(HeroAbilityDelayMs, token)) return;
             RetapHeroes(token);
-            Console.WriteLine("[ATTACK] Deployment complete.");
+            Console.WriteLine("[ATTACK-CS] phase=run_attack status=success");
         }
     }
 }

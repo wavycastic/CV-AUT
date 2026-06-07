@@ -34,6 +34,8 @@ namespace CvAut
         private static readonly HttpClient UiAutomatorHttp = new HttpClient();
         private Process? _uiautomatorProcess;
 
+        public Func<bool>? BeforeInputAction { get; set; }
+
         /// <summary>
         /// Khởi tạo đối tượng kết nối ADB tới giả lập Android.
         /// Tự động bật ADB Server và kết nối tới thiết bị mong muốn.
@@ -53,7 +55,7 @@ namespace CvAut
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ADB WARNING] Failed to start ADB server: {ex.Message}");
+                Console.WriteLine($"[ADB WARNING] phase=init status=fail action=start_server reason=\"{ex.Message}\"");
             }
 
             _deviceAddress = $"{host}:{port}";
@@ -61,7 +63,7 @@ namespace CvAut
             // 1. Ưu tiên đúng địa chỉ cổng cấu hình cụ thể để tránh điều khiển nhầm giả lập khác đang mở.
             if (TryConnectAndSelectDevice(_host, _port, out _device))
             {
-                Console.WriteLine("[ADB] Device connected.");
+                Console.WriteLine("[ADB] phase=connect status=success details=\"device_connected\"");
                 return;
             }
 
@@ -73,7 +75,7 @@ namespace CvAut
                 if (TryConnectAndSelectDevice(_host, p, out _device))
                 {
                     _deviceAddress = $"{_host}:{p}";
-                    Console.WriteLine("[ADB] Device connected via fallback port.");
+                    Console.WriteLine("[ADB] phase=connect status=success details=\"device_connected_fallback\"");
                     return;
                 }
             }
@@ -86,18 +88,18 @@ namespace CvAut
                 {
                     _device = connectedDevices[0];
                     _deviceAddress = _device.Serial;
-                    Console.WriteLine("[ADB] Active device detected.");
+                    Console.WriteLine("[ADB] phase=connect status=success details=\"active_device_detected\"");
                     return;
                 }
             }
             catch (Exception)
             {
-                Console.WriteLine("[ADB WARNING] Unable to read ADB device list.");
+                Console.WriteLine("[ADB WARNING] phase=connect status=pending action=get_devices reason=\"read_failed\"");
             }
 
             // Mặc định tạo dữ liệu thiết bị trống nếu hoàn toàn không kết nối được (để tránh NullReference)
             _device = new DeviceData { Serial = _deviceAddress };
-            Console.WriteLine("[ADB WARNING] No connected device detected; using configured target.");
+            Console.WriteLine("[ADB WARNING] phase=connect status=pending reason=\"no_device_detected\"");
         }
 
         /// <summary>
@@ -238,6 +240,11 @@ namespace CvAut
         /// <param name="y">Tọa độ y.</param>
         public void Tap(int x, int y)
         {
+            if (BeforeInputAction?.Invoke() == true)
+            {
+                return;
+            }
+
             ExecuteShell($"input tap {x} {y}");
         }
 
@@ -256,6 +263,11 @@ namespace CvAut
             }
 
             if (commands.Count == 0)
+            {
+                return;
+            }
+
+            if (BeforeInputAction?.Invoke() == true)
             {
                 return;
             }
@@ -305,6 +317,11 @@ namespace CvAut
         /// </summary>
         public void Swipe(int x1, int y1, int x2, int y2, int durationMs = 300)
         {
+            if (BeforeInputAction?.Invoke() == true)
+            {
+                return;
+            }
+
             ExecuteShell($"input swipe {x1} {y1} {x2} {y2} {durationMs}");
         }
 
@@ -319,13 +336,18 @@ namespace CvAut
         /// <returns>True nếu thực hiện thành công ít nhất một cử chỉ zoom.</returns>
         public bool PinchInZoomOut(int count = 5, int durationMs = 450, int intervalMs = 350)
         {
+            if (BeforeInputAction?.Invoke() == true)
+            {
+                return false;
+            }
+
             // 1. Thử dùng cơ chế UIAutomator2 pinchIn
             if (TryUiAutomatorPinchIn(count, percent: 100, steps: 20, intervalMs))
             {
                 return true;
             }
 
-            Console.WriteLine("[ADB WARNING] Pinch gesture unavailable; using swipe fallback.");
+            Console.WriteLine("[ADB WARNING] phase=pinch status=retry action=pinch reason=\"pinch_unsupported\" details=\"swipe_fallback\"");
             bool anySuccess = false;
 
             // 2. Chạy fallback vuốt song song ngầm bằng lệnh sh
@@ -412,7 +434,7 @@ namespace CvAut
         /// </summary>
         private bool EnsureUiAutomator2Server()
         {
-            // Thiết lập chuyển tiếp cổng cổng mạng local 9008 tới cổng 9008 trên giả lập Android
+            // Thiết lập chuyển tiếp cổng mạng local 9008 tới cổng 9008 trên giả lập Android
             RunAdb($"-s {_deviceAddress} forward tcp:9008 tcp:9008", waitForExit: true);
             if (PingUiAutomator2Server())
             {
@@ -422,28 +444,22 @@ namespace CvAut
             string? jarPath = FindUiAutomatorJar();
             if (jarPath == null)
             {
-                Console.WriteLine("[ADB WARNING] UIAutomator2 package not found.");
+                Console.WriteLine("[ADB WARNING] phase=uia2 status=fail action=find_package reason=\"not_found\"");
                 return false;
             }
 
-            // Cache cục bộ file jar để các phiên khởi động sau diễn ra nhanh hơn
-            string destJar = Path.Combine(AppContext.BaseDirectory, "adb", "u2.jar");
+            // Cache file jar ngoài thư mục cài đặt để chạy được khi app nằm trong Program Files.
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string destJar = Path.Combine(appData, "SimpliMixi", "adb", "u2.jar");
             if (!File.Exists(destJar))
             {
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(destJar)!);
                     File.Copy(jarPath, destJar, overwrite: true);
-                    Console.WriteLine("[ADB] UIAutomator2 package cached.");
+                    Console.WriteLine("[ADB] phase=uia2 status=pending action=cache_package");
                 }
                 catch { }
-            }
-
-            string rootJarDir = Path.Combine(Directory.GetCurrentDirectory(), "adb");
-            string rootJar = Path.Combine(rootJarDir, "u2.jar");
-            if (!File.Exists(rootJar) && Directory.Exists(rootJarDir))
-            {
-                try { File.Copy(jarPath, rootJar, overwrite: true); } catch { }
             }
 
             // Đẩy tệp .jar lên thư mục tạm của hệ điều hành Android
@@ -517,14 +533,14 @@ namespace CvAut
                 string body = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[ADB WARNING] UIAutomator2 HTTP {(int)response.StatusCode}: {body}");
+                    Console.WriteLine($"[ADB WARNING] phase=uia2 status=fail action=rpc code={(int)response.StatusCode} details=\"{body}\"");
                     return false;
                 }
 
                 using JsonDocument doc = JsonDocument.Parse(body);
                 if (doc.RootElement.TryGetProperty("error", out JsonElement error))
                 {
-                    Console.WriteLine($"[ADB WARNING] UIAutomator2 RPC error: {error}");
+                    Console.WriteLine($"[ADB WARNING] phase=uia2 status=fail action=rpc reason=\"error\" details=\"{error}\"");
                     return false;
                 }
 
@@ -532,7 +548,7 @@ namespace CvAut
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ADB WARNING] UIAutomator2 RPC failed: {ex.Message}");
+                Console.WriteLine($"[ADB WARNING] phase=uia2 status=fail action=rpc reason=\"exception\" details=\"{ex.Message}\"");
                 return false;
             }
         }
@@ -542,7 +558,11 @@ namespace CvAut
         /// </summary>
         private string? FindUiAutomatorJar()
         {
-            string localJar = Path.Combine(AppContext.BaseDirectory, "adb", "u2.jar");
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string localJar = Path.Combine(appData, "SimpliMixi", "adb", "u2.jar");
+            if (File.Exists(localJar)) return localJar;
+
+            localJar = Path.Combine(AppContext.BaseDirectory, "adb", "u2.jar");
             if (File.Exists(localJar)) return localJar;
 
             localJar = Path.Combine(Directory.GetCurrentDirectory(), "adb", "u2.jar");
@@ -609,7 +629,7 @@ namespace CvAut
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ADB WARNING] ADB command failed: {ex.Message}");
+                Console.WriteLine($"[ADB WARNING] phase=command status=fail command=\"adb\" reason=\"{ex.Message}\"");
                 return null;
             }
         }
@@ -650,7 +670,7 @@ namespace CvAut
 
                     if (process.ExitCode != 0)
                     {
-                        Console.WriteLine($"[ADB WARNING] Screenshot capture failed (attempt {attempt}).");
+                        Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry attempt={attempt}");
                         Thread.Sleep(1000);
                         continue;
                     }
@@ -658,7 +678,7 @@ namespace CvAut
                     byte[] imageBytes = ms.ToArray();
                     if (imageBytes.Length == 0)
                     {
-                        Console.WriteLine($"[ADB WARNING] Screenshot was empty (attempt {attempt}).");
+                        Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry reason=\"empty\" attempt={attempt}");
                         Thread.Sleep(1000);
                         continue;
                     }
@@ -667,7 +687,7 @@ namespace CvAut
                     using Mat decoded = Cv2.ImDecode(imageBytes, ImreadModes.Color);
                     if (decoded.Empty())
                     {
-                        Console.WriteLine($"[ADB WARNING] Screenshot decode failed (attempt {attempt}).");
+                        Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry reason=\"decode_fail\" attempt={attempt}");
                         Thread.Sleep(1000);
                         continue;
                     }
@@ -679,7 +699,7 @@ namespace CvAut
                     Cv2.MeanStdDev(gray, out _, out Scalar stddev);
                     if (stddev.Val0 < 3.0)
                     {
-                        Console.WriteLine($"[ADB WARNING] Screenshot appears blank (attempt {attempt}).");
+                        Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry reason=\"blank\" attempt={attempt}");
                         Thread.Sleep(1000);
                         continue;
                     }
@@ -688,7 +708,7 @@ namespace CvAut
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[ADB ERROR] Screenshot capture failed (attempt {attempt}): {ex.Message}");
+                    Console.WriteLine($"[ADB ERROR] phase=screenshot status=fail reason=\"{ex.Message}\" attempt={attempt}");
                     Thread.Sleep(1000);
                 }
             }

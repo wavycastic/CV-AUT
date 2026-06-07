@@ -6,7 +6,7 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:viewmodels="clr-namespace:CvAut.WpfApp.ViewModels"
                  xmlns:views="clr-namespace:CvAut.WpfApp.Views"
-                 Title="SimpliMixi v0.5.0"
+                 Title="SimpliMixi v0.6.0"
                  Width="920"
                  Height="640"
                  MinWidth="920"
@@ -44,6 +44,9 @@
         </DataTemplate>
         <DataTemplate DataType="{x:Type viewmodels:LogsViewModel}">
             <views:LogsView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type viewmodels:SettingsViewModel}">
+            <views:SettingsView/>
         </DataTemplate>
 
         <Style x:Key="ControlDockButtonStyle" TargetType="Button">
@@ -165,7 +168,7 @@
                                        ToolTip="General"
                                        Tag="general"
                                        Command="{Binding NavigateGeneralCommand}"
-                                       Icon="{ui:SymbolIcon Settings24}">
+                                       Icon="{ui:SymbolIcon Home24}">
                     <ui:NavigationViewItem.Content>
                         <Grid MinWidth="142">
                             <Grid.RowDefinitions>
@@ -462,6 +465,57 @@
                         </Grid>
                     </ui:NavigationViewItem.Content>
                 </ui:NavigationViewItem>
+
+                <ui:NavigationViewItem
+                                       ToolTip="Information"
+                                       Tag="settings"
+                                       Command="{Binding NavigateSettingsCommand}"
+                                       Icon="{ui:SymbolIcon Settings24}">
+                    <ui:NavigationViewItem.Content>
+                        <Grid MinWidth="142">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="4" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Information"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="White" />
+                            <Border Grid.Row="1"
+                                    Height="3"
+                                    Margin="0,3,34,0"
+                                    HorizontalAlignment="Stretch"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="2"
+                                    Opacity="0">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="RenderTransformOrigin" Value="0,0.5" />
+                                        <Setter Property="RenderTransform">
+                                            <Setter.Value>
+                                                <ScaleTransform ScaleX="0.25" />
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.CurrentTab, RelativeSource={RelativeSource AncestorType=ui:NavigationView}}" Value="settings">
+                                                <Setter Property="Opacity" Value="1" />
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                                             To="1"
+                                                                             Duration="0:0:0.18" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                        </Grid>
+                    </ui:NavigationViewItem.Content>
+                </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.ContentOverlay>
@@ -604,7 +658,7 @@
                        FontSize="11"
                        FontWeight="SemiBold"
                        Foreground="#E8FFFFFF"
-                       Text="SimpliMixi v0.5.0" />
+                       Text="SimpliMixi v0.6.0" />
         </Border>
 
         <ui:TitleBar x:Name="AppTitleBar"

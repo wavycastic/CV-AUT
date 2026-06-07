@@ -18,6 +18,11 @@ namespace CvAut
     {
         // Chiều rộng cố định của khung Menu chính
         private const int MenuWidth = 92;
+        private static readonly string UserDataDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SimpliMixi");
+        private static readonly string WritableLogsDirectory = Path.Combine(UserDataDirectory, "logs");
+        private static readonly string UserConfigPath = Path.Combine(UserDataDirectory, "Config", "test_config.json");
 
         // Chiều rộng cố định của khung Thống kê kết thúc phiên chơi
         private const int SummaryWidth = 78;
@@ -44,7 +49,7 @@ namespace CvAut
         [STAThread]
         static void Main(string[] args)
         {
-            Console.WriteLine($"[BUILD-ID] SimpliMixi v0.5.0 binary loaded at {DateTime.Now:yyyy-MM-dd HH:mm:ss} | base={AppContext.BaseDirectory}");
+            Console.WriteLine($"[BUILD-ID] SimpliMixi v0.6.0 binary loaded at {DateTime.Now:yyyy-MM-dd HH:mm:ss} | base={AppContext.BaseDirectory}");
 
             // Mặc định khởi chạy giao diện WPF nếu không truyền cờ --console
             if (!args.Any(a => string.Equals(a, "--console", StringComparison.OrdinalIgnoreCase)))
@@ -55,7 +60,7 @@ namespace CvAut
 
             try { Console.Clear(); } catch { }
 
-            string configPath = Path.Combine(AppContext.BaseDirectory, "Config", "test_config.json");
+            string configPath = UserConfigPath;
             string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
 
             // Xử lý cờ chẩn đoán giao diện quân đội riêng biệt
@@ -144,9 +149,9 @@ namespace CvAut
         {
             try { Console.Clear(); } catch { }
 
-            Console.Title = "SimpliMixi v0.5.0 Control Console";
+            Console.Title = "SimpliMixi v0.6.0 Control Console";
             WriteRule(ConsoleColor.DarkCyan);
-            WriteCentered("SIMPLIMIXI v0.5.0 CONTROL CONSOLE", ConsoleColor.Cyan);
+            WriteCentered("SIMPLIMIXI v0.6.0 CONTROL CONSOLE", ConsoleColor.Cyan);
             WriteCentered("Clash of Clans automation | FSM + OCR + ADB", ConsoleColor.Gray);
             WriteRule(ConsoleColor.DarkCyan);
             Console.WriteLine();
@@ -465,7 +470,8 @@ namespace CvAut
                 Console.WriteLine("===================================================");
                 Console.ResetColor();
 
-                string debugPath = Path.Combine(AppContext.BaseDirectory, "live_screenshot_debug.png");
+                Directory.CreateDirectory(WritableLogsDirectory);
+                string debugPath = Path.Combine(WritableLogsDirectory, "live_screenshot_debug.png");
                 Cv2.ImWrite(debugPath, screenshot);
                 Console.WriteLine($"[LIVE-SCOUT] Debug screenshot saved: {debugPath}");
             }
@@ -518,7 +524,8 @@ namespace CvAut
                 Console.WriteLine("========================================================");
                 Console.ResetColor();
 
-                string debugPath = Path.Combine(AppContext.BaseDirectory, "live_home_screenshot_debug.png");
+                Directory.CreateDirectory(WritableLogsDirectory);
+                string debugPath = Path.Combine(WritableLogsDirectory, "live_home_screenshot_debug.png");
                 Cv2.ImWrite(debugPath, screenshot);
                 Console.WriteLine($"[LIVE-HOME] Debug screenshot saved: {debugPath}");
             }
@@ -643,8 +650,8 @@ namespace CvAut
         {
             PrintBanner("WORKFLOW TEMPLATE", "Runs 5 live cycles and saves a detailed log");
 
-            Directory.CreateDirectory("logs");
-            string logPath = Path.Combine("logs", $"workflow_template_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+            Directory.CreateDirectory(WritableLogsDirectory);
+            string logPath = Path.Combine(WritableLogsDirectory, $"workflow_template_{DateTime.Now:yyyyMMdd_HHmmss}.log");
             RunSessionStats stats = new RunSessionStats();
 
             TextWriter originalOut = Console.Out;

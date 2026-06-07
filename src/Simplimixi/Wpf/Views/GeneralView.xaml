@@ -41,7 +41,7 @@
                                                     VerticalAlignment="Center"
                                                     CornerRadius="7">
                                                 <Border.Background>
-                                                    <ImageBrush ImageSource="{Binding ImagePath}" Stretch="Uniform" />
+                                                    <ImageBrush ImageSource="{Binding ImagePath, Converter={StaticResource TemplateImageConverter}}" Stretch="Uniform" />
                                                 </Border.Background>
                                             </Border>
                                             <TextBlock Grid.Row="1"
@@ -95,7 +95,7 @@
                                         <ColumnDefinition Width="104" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Image Width="22" Height="22" Margin="0,0,8,0" Source="pack://siteoforigin:,,,/assets/Templates/icon_gold.png" />
+                                        <Image Width="22" Height="22" Margin="0,0,8,0" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_gold.png}" />
                                         <ui:TextBlock VerticalAlignment="Center" FontTypography="BodyStrong" Text="Gold" />
                                     </StackPanel>
                                     <ui:NumberBox Grid.Column="1"
@@ -122,7 +122,7 @@
                                         <ColumnDefinition Width="104" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Image Width="22" Height="22" Margin="0,0,8,0" Source="pack://siteoforigin:,,,/assets/Templates/icon_elixir.png" />
+                                        <Image Width="22" Height="22" Margin="0,0,8,0" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_elixir.png}" />
                                         <ui:TextBlock VerticalAlignment="Center" FontTypography="BodyStrong" Text="Elixir" />
                                     </StackPanel>
                                     <ui:NumberBox Grid.Column="1"
@@ -149,7 +149,7 @@
                                         <ColumnDefinition Width="104" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Image Width="22" Height="22" Margin="0,0,8,0" Source="pack://siteoforigin:,,,/assets/Templates/icon_de.png" />
+                                        <Image Width="22" Height="22" Margin="0,0,8,0" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_de.png}" />
                                         <ui:TextBlock VerticalAlignment="Center" FontTypography="BodyStrong" Text="Dark" />
                                     </StackPanel>
                                     <ui:NumberBox Grid.Column="1"
@@ -203,7 +203,7 @@
                                             <ColumnDefinition Width="96" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Image Width="22" Height="22" Margin="0,0,8,0" Source="pack://siteoforigin:,,,/assets/Templates/icon_gold.png" />
+                                            <Image Width="22" Height="22" Margin="0,0,8,0" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_gold.png}" />
                                             <ui:TextBlock VerticalAlignment="Center" FontTypography="BodyStrong" Text="Gold" />
                                         </StackPanel>
                                         <ui:NumberBox Grid.Column="1"
@@ -230,7 +230,7 @@
                                             <ColumnDefinition Width="96" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Image Width="22" Height="22" Margin="0,0,8,0" Source="pack://siteoforigin:,,,/assets/Templates/icon_elixir.png" />
+                                            <Image Width="22" Height="22" Margin="0,0,8,0" Source="{Binding Converter={StaticResource TemplateImageConverter}, ConverterParameter=icon_elixir.png}" />
                                             <ui:TextBlock VerticalAlignment="Center" FontTypography="BodyStrong" Text="Elixir" />
                                         </StackPanel>
                                         <ui:NumberBox Grid.Column="1"
@@ -254,21 +254,18 @@
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" MinWidth="72" />
-                                            <ColumnDefinition Width="72" />
+                                            <ColumnDefinition Width="90" />
                                         </Grid.ColumnDefinitions>
                                         <ui:TextBlock Grid.Column="0"
                                                       VerticalAlignment="Center"
                                                       FontTypography="BodyStrong"
                                                       Text="Target" />
-                                        <ui:NumberBox Grid.Column="1"
-                                                      Width="72"
-                                                      HorizontalAlignment="Right"
-                                                      Minimum="1"
-                                                      Maximum="20"
-                                                      MaxDecimalPlaces="0"
-                                                      PlaceholderText="Level"
-                                                      SpinButtonPlacementMode="Compact"
-                                                      Text="{Binding WallLevel, UpdateSourceTrigger=PropertyChanged}" />
+                                        <ComboBox Grid.Column="1"
+                                                  Width="90"
+                                                  HorizontalAlignment="Right"
+                                                  VerticalAlignment="Center"
+                                                  ItemsSource="{Binding SupportedWallLevels}"
+                                                  SelectedItem="{Binding WallLevel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>
                                 </Border>
                             </StackPanel>
