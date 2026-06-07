@@ -971,7 +971,7 @@ namespace CvAut
         /// <summary>
         /// Kiểm tra xem có bất kỳ popup báo lỗi kết nối mạng nào đang cản màn hình không.
         /// </summary>
-        private bool ConnectionPopupVisible(out string matchInfo)
+        private bool ConnectionPopupVisible(out string matchInfo, bool allowDialogShapeFallback = true)
         {
             matchInfo = "none";
 
@@ -1005,7 +1005,7 @@ namespace CvAut
                 return true;
             }
 
-            if (TryDetectReloadDialogShape(screenshot, out Rect dialogRect))
+            if (allowDialogShapeFallback && TryDetectReloadDialogShape(screenshot, out Rect dialogRect))
             {
                 matchInfo = $"reload_dialog_shape rect=({dialogRect.X},{dialogRect.Y},{dialogRect.Width},{dialogRect.Height})";
                 Console.WriteLine("[FSM-CS WARNING] phase=connection_check status=fail reason=\"popup_detected\" template=\"reload_dialog_shape\"");
@@ -1487,13 +1487,6 @@ namespace CvAut
                 WaitIfPaused(token);
                 if (CheckStop(token)) return false;
 
-                if (ConnectionPopupVisible(out string matchInfo))
-                {
-                    Console.WriteLine("[FSM-CS WARNING] phase=battle_wait status=fail reason=connection_lost");
-                    BootRecovery();
-                    return false;
-                }
-
                 if (BattleEnded(out string resultMatchInfo))
                 {
                     stableResultMatches++;
@@ -1518,6 +1511,13 @@ namespace CvAut
                         Console.WriteLine("[FSM-CS] phase=battle_wait status=pending details=\"waiting\"");
                         waitingLogged = true;
                     }
+                }
+
+                if (ConnectionPopupVisible(out string matchInfo, allowDialogShapeFallback: !resultDetectedLogged))
+                {
+                    Console.WriteLine("[FSM-CS WARNING] phase=battle_wait status=fail reason=connection_lost");
+                    BootRecovery();
+                    return false;
                 }
 
                 if ((DateTime.Now - start).TotalSeconds >= MaxWaitBattleSeconds)

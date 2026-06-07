@@ -1,9 +1,9 @@
 #define MyAppName "SimpliMixi"
-#define MyAppVersion "0.6.0"
+#define MyAppVersion "0.6.1"
 #define MyAppPublisher "SimpliMixi"
 #define MyAppExeName "SimpliMixi.exe"
 #define MyAppId "9D2F0D65-A778-4F3D-8C08-84DBF9165F57"
-#define SourceDir "..\publish\SimpliMixi-v0.6.0"
+#define SourceDir "..\publish\SimpliMixi-v0.6.1"
 #define DotNetRuntimeInstaller "windowsdesktop-runtime-8.0.0-win-x64.exe"
 
 [Setup]
