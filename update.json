@@ -1,0 +1,7 @@
+{
+  "version": "0.6.0",
+  "url": "https://simplimixi.pages.dev/SimpliMixi-v0.6.0-Setup.exe",
+  "force_update": false,
+  "min_supported_version": "0.5.1",
+  "notes": "- TEST: Kiểm tra popup cập nhật từ 0.5.1 lên 0.6.0.\n- Đây là bản update tùy chọn, người dùng vẫn có thể bấm Nhắc lại sau.\n- Khi release thật, đổi url sang link setup 0.6.0 chính thức."
+}

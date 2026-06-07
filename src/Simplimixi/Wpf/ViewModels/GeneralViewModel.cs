@@ -14,11 +14,15 @@ namespace CvAut.WpfApp.ViewModels
     {
         // Dịch vụ quản lý bot
         private readonly IBotService _botService;
+        private const int MinSupportedWallLevel = 8;
+        private const int MaxSupportedWallLevel = 17;
 
         /// <summary>
         /// ViewModel quản lý quân đội (Army Settings), dùng để chia sẻ thông số cấu hình và hiển thị trên giao diện chung.
         /// </summary>
         public ArmyViewModel ArmyVM { get; }
+
+        public int[] SupportedWallLevels { get; } = { 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 };
 
         // Ngưỡng Vàng (Gold) tối thiểu của đối thủ để quyết định tấn công
         private string _goldThreshold = "650000";
@@ -30,7 +34,7 @@ namespace CvAut.WpfApp.ViewModels
         private string _darkThreshold = "1000";
 
         // Tùy chọn bật/tắt tính năng tự động nâng cấp tường
-        private bool _upgradeWallEnabled = true;
+        private bool _upgradeWallEnabled;
 
         // Lượng Vàng dự trữ tối thiểu cần giữ lại (chỉ dùng Vàng vượt quá ngưỡng này để nâng tường)
         private string _wallGoldThreshold = "5000000";
@@ -38,8 +42,8 @@ namespace CvAut.WpfApp.ViewModels
         // Lượng Dầu hồng dự trữ tối thiểu cần giữ lại (chỉ dùng Dầu hồng vượt quá ngưỡng này để nâng tường)
         private string _wallElixirThreshold = "5000000";
 
-        // Cấp độ tường đích muốn hướng tới (ví dụ: cấp 12)
-        private int _wallLevel = 12;
+        // Cấp độ tường đích muốn hướng tới (ví dụ: cấp 14)
+        private int _wallLevel = 14;
 
         // Địa chỉ IP của máy chủ ADB (mặc định là localhost)
         private string _adbHost = "127.0.0.1";
@@ -127,7 +131,7 @@ namespace CvAut.WpfApp.ViewModels
         public int WallLevel
         {
             get => _wallLevel;
-            set => SetProperty(ref _wallLevel, value);
+            set => SetProperty(ref _wallLevel, ClampWallLevel(value));
         }
 
         /// <summary>
@@ -208,24 +212,19 @@ namespace CvAut.WpfApp.ViewModels
                     AdbPort = device["port"]?.GetValue<int>() ?? 5556;
                 }
 
-                // 2. Nạp ngưỡng tài nguyên đi cướp (ưu tiên cấu hình farming_thresholds mới, sau đó là target_data_threshold cũ)
-                if (root["farming_thresholds"] is JsonObject farming)
-                {
-                    GoldThreshold = farming["gold_threshold"]?.ToString() ?? "650000";
-                    ElixirThreshold = farming["elixir_threshold"]?.ToString() ?? "650000";
-                    DarkThreshold = farming["dark_elixir_threshold"]?.ToString() ?? "1000";
-                }
-                else if (root["target_data_threshold"] is JsonObject target)
-                {
-                    GoldThreshold = target["gold"]?.ToString() ?? "650000";
-                    ElixirThreshold = target["elixir"]?.ToString() ?? "650000";
-                    DarkThreshold = target["dark_elixir"]?.ToString() ?? "1000";
-                }
-
-                // 3. Nạp thông số cấu hình riêng theo từng làng
+                // 2. Nạp thông số cấu hình riêng theo từng làng
                 var profile = _botService.LoadProfile(_botService.CurrentVillage);
-                UpgradeWallEnabled = GetBool(profile, "upgrade_wall", true);
-                WallLevel = GetInt(profile, "wall_level", 12);
+
+                // 3. Nạp ngưỡng tài nguyên đi cướp: ưu tiên profile làng hiện tại, root chỉ là fallback.
+                var rootFarming = root["farming_thresholds"] as JsonObject;
+                var legacyTarget = root["target_data_threshold"] as JsonObject;
+                GoldThreshold = GetProfileOrRootThreshold(profile, rootFarming, legacyTarget, "gold_threshold", "gold", "650000");
+                ElixirThreshold = GetProfileOrRootThreshold(profile, rootFarming, legacyTarget, "elixir_threshold", "elixir", "650000");
+                DarkThreshold = GetProfileOrRootThreshold(profile, rootFarming, legacyTarget, "dark_elixir_threshold", "dark_elixir", "1000");
+
+                // 4. Nạp thông số cấu hình riêng theo từng làng
+                UpgradeWallEnabled = GetBool(profile, "upgrade_wall", false);
+                WallLevel = GetInt(profile, "wall_level", 14);
                 WallGoldThreshold = profile["wall_gold_threshold"]?.ToString() ?? "5000000";
                 WallElixirThreshold = profile["wall_elixir_threshold"]?.ToString() ?? "5000000";
                 RequestTroopsEnabled = GetBool(profile, "request_troops", false);
@@ -275,7 +274,8 @@ namespace CvAut.WpfApp.ViewModels
 
                 // Lưu các thuộc tính tường vào cấu hình chính
                 root["upgrade_wall"] = UpgradeWallEnabled;
-                root["wall_level"] = WallLevel;
+                int wallLevel = ClampWallLevel(WallLevel);
+                root["wall_level"] = wallLevel;
                 root["wall_gold_threshold"] = ParseInt(WallGoldThreshold, 5000000);
                 root["wall_elixir_threshold"] = ParseInt(WallElixirThreshold, 5000000);
                 root["request_troops"] = RequestTroopsEnabled;
@@ -288,7 +288,7 @@ namespace CvAut.WpfApp.ViewModels
                 profile["elixir_threshold"] = elixir;
                 profile["dark_elixir_threshold"] = dark;
                 profile["upgrade_wall"] = UpgradeWallEnabled;
-                profile["wall_level"] = WallLevel;
+                profile["wall_level"] = wallLevel;
                 profile["wall_gold_threshold"] = ParseInt(WallGoldThreshold, 5000000);
                 profile["wall_elixir_threshold"] = ParseInt(WallElixirThreshold, 5000000);
                 profile["request_troops"] = RequestTroopsEnabled;
@@ -334,6 +334,37 @@ namespace CvAut.WpfApp.ViewModels
             {
                 try { return val.GetValue<int>(); } catch { }
             }
+            return defaultValue;
+        }
+
+        private static int ClampWallLevel(int value)
+        {
+            return Math.Clamp(value, MinSupportedWallLevel, MaxSupportedWallLevel);
+        }
+
+        private static string GetProfileOrRootThreshold(
+            JsonObject profile,
+            JsonObject? farming,
+            JsonObject? legacyTarget,
+            string profileKey,
+            string legacyKey,
+            string defaultValue)
+        {
+            if (profile.TryGetPropertyValue(profileKey, out var profileValue) && profileValue != null)
+            {
+                return profileValue.ToString();
+            }
+
+            if (farming?.TryGetPropertyValue(profileKey, out var farmingValue) == true && farmingValue != null)
+            {
+                return farmingValue.ToString();
+            }
+
+            if (legacyTarget?.TryGetPropertyValue(legacyKey, out var legacyValue) == true && legacyValue != null)
+            {
+                return legacyValue.ToString();
+            }
+
             return defaultValue;
         }
 

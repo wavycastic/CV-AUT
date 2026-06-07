@@ -6,6 +6,12 @@
   -->
   <Var name="InPath" value="publish\win-x64" />
   <Var name="OutPath" value="publish\win-x64-obfuscated" />
+  <AssemblySearchPath
+        path="C:\Program Files\dotnet\packs\Microsoft.WindowsDesktop.App.Ref\8.0.27\ref\net8.0"
+    />
+  <AssemblySearchPath
+        path="C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Ref\8.0.27\ref\net8.0"
+    />
 
   <Var name="KeepPublicApi" value="false" />
   <Var name="HidePrivateApi" value="true" />

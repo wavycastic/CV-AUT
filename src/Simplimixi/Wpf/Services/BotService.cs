@@ -22,8 +22,11 @@ namespace CvAut.WpfApp.Services
     /// </summary>
     public class BotService : IBotService
     {
-        // Đường dẫn đến tệp cấu hình kiểm thử chính của bot
-        private static readonly string ConfigPath = Path.Combine(AppContext.BaseDirectory, "Config", "test_config.json");
+        // UserData giữ cấu hình người dùng ngoài Program Files để cài lại/mở lại không mất chỉnh sửa.
+        private static readonly string UserDataDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SimpliMixi");
+        private static readonly string ConfigPath = Path.Combine(UserDataDirectory, "Config", "test_config.json");
 
         // Đối tượng Engine tự động hóa lõi điều khiển game
         private CVAutomationFramework? _framework;
@@ -322,6 +325,7 @@ namespace CvAut.WpfApp.Services
         /// </summary>
         public JsonObject LoadMainConfig()
         {
+            EnsureUserConfigSeeded();
             return ReadJsonObject(ConfigPath);
         }
 
@@ -330,7 +334,7 @@ namespace CvAut.WpfApp.Services
         /// </summary>
         public void SaveMainConfig(JsonObject root)
         {
-            Directory.CreateDirectory("profiles");
+            Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
             WriteJson(ConfigPath, root);
         }
 
@@ -339,7 +343,13 @@ namespace CvAut.WpfApp.Services
         /// </summary>
         public JsonObject LoadProfile(int villageId)
         {
-            return ReadJsonObject(ProfilePath(villageId));
+            string path = ProfilePath(villageId);
+            if (!File.Exists(path))
+            {
+                SaveProfile(villageId, CreateDefaultProfile());
+            }
+
+            return ReadJsonObject(path);
         }
 
         /// <summary>
@@ -347,7 +357,7 @@ namespace CvAut.WpfApp.Services
         /// </summary>
         public void SaveProfile(int villageId, JsonObject profile)
         {
-            Directory.CreateDirectory("profiles");
+            Directory.CreateDirectory(Path.Combine(UserDataDirectory, "profiles"));
             WriteJson(ProfilePath(villageId), profile);
         }
 
@@ -523,7 +533,7 @@ namespace CvAut.WpfApp.Services
 
         private StatsSnapshot ReadStatsSnapshot(int village)
         {
-            string statsFile = Path.Combine("profiles", $"Stats_{village}.json");
+            string statsFile = StatsPath(village);
             JsonObject stats = ReadJsonObject(statsFile);
             JsonObject starsObj = GetObject(stats, "stars");
 
@@ -561,7 +571,60 @@ namespace CvAut.WpfApp.Services
         /// <summary>
         /// Trả về đường dẫn tệp cấu hình lưu trữ thông tin cấu hình cho một làng cụ thể.
         /// </summary>
-        private static string ProfilePath(int village) => Path.Combine("profiles", $"Village_{village}.json");
+        private static string ProfilePath(int village) => Path.Combine(UserDataDirectory, "profiles", $"Village_{village}.json");
+
+        private static string StatsPath(int village) => Path.Combine(UserDataDirectory, "profiles", $"Stats_{village}.json");
+
+        private static void EnsureUserConfigSeeded()
+        {
+            if (File.Exists(ConfigPath))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+            WriteJson(ConfigPath, CreateDefaultMainConfig());
+        }
+
+        private static JsonObject CreateDefaultMainConfig() => new()
+        {
+            ["device_connection"] = new JsonObject { ["host"] = "127.0.0.1", ["port"] = 5556 },
+            ["farming_thresholds"] = new JsonObject
+            {
+                ["gold_threshold"] = 650000,
+                ["elixir_threshold"] = 650000,
+                ["dark_elixir_threshold"] = 1000
+            },
+            ["upgrade_wall"] = false,
+            ["wall_level"] = 14,
+            ["wall_gold_threshold"] = 5000000,
+            ["wall_elixir_threshold"] = 5000000,
+            ["enable_stats"] = true,
+            ["multi_account"] = new JsonObject
+            {
+                ["enable_multi_account"] = false,
+                ["multi_interval_mins"] = 60,
+                ["selected_villages"] = new JsonArray(1)
+            }
+        };
+
+        private static JsonObject CreateDefaultProfile() => new()
+        {
+            ["gold_threshold"] = 650000,
+            ["elixir_threshold"] = 650000,
+            ["dark_elixir_threshold"] = 1000,
+            ["upgrade_wall"] = false,
+            ["wall_level"] = 14,
+            ["wall_gold_threshold"] = 5000000,
+            ["wall_elixir_threshold"] = 5000000,
+            ["request_troops"] = false,
+            ["enable_clan_games"] = false,
+            ["enable_clan_capital"] = false,
+            ["enable_stats"] = true,
+            ["attack"] = "Dragon_Attack",
+            ["train_mode"] = "smart",
+            ["quick_slot"] = 1
+        };
 
         /// <summary>
         /// Đọc nội dung tệp tin JSON và chuyển đổi thành một đối tượng JsonObject.

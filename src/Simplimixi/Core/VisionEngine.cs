@@ -11,14 +11,14 @@ namespace CvAut
     /// <summary>
     /// Phân hệ Xử lý Ảnh (Vision Engine):
     /// - Quản lý và thực hiện so khớp mẫu (Template Matching) sử dụng OpenCV.
-    /// - Thực hiện nhận diện chữ số nhị phân (Light OCR) bằng thuật toán so khớp chỉ số IoU (Intersection over Union) 
+    /// - Thực hiện nhận diện chữ số nhị phân (Light OCR) bằng thuật toán so khớp chỉ số IoU (Intersection over Union)
     ///   với ma trận nhị phân 12x16 của font chữ Supercell Magic chuyên dụng cho game Clash of Clans.
     /// </summary>
     public class VisionEngine : IDisposable
     {
         // Thư mục chứa các mẫu hình ảnh template PNG
         private readonly string _templatesDir;
-        
+
         // Từ điển lưu trữ ma trận OpenCV (Mat) cho 11 chữ số nhị phân làm mẫu (0-9 và mẫu số 5 thay thế offline)
         private readonly Dictionary<int, Mat> _templates = new();
         private bool _disposed;
@@ -168,14 +168,13 @@ namespace CvAut
             score = 0;
             if (screenshot.Empty()) return null;
 
-            string templatePath = Path.Combine(_templatesDir, $"{templateName}.png");
-            if (!File.Exists(templatePath))
+            if (!TemplateAssetLoader.Exists(_templatesDir, templateName))
             {
-                Console.WriteLine($"[VISION WARNING] Template không tồn tại: {templatePath}");
+                Console.WriteLine($"[VISION] phase=template_match status=fail reason=missing_file details=\"{templateName}\"");
                 return null;
             }
 
-            using Mat template = Cv2.ImRead(templatePath, ImreadModes.Color);
+            using Mat template = TemplateAssetLoader.Load(_templatesDir, templateName, ImreadModes.Color);
             if (template.Empty()) return null;
 
             // Giới hạn vùng ROI trong biên ảnh để đảm bảo an toàn
@@ -321,7 +320,7 @@ namespace CvAut
 
             if (!int.TryParse(digits, out value))
             {
-                Console.WriteLine($"[VISION] Cảnh báo: không parse được giá trị OCR '{digits}'");
+                Console.WriteLine($"[VISION] phase=ocr status=fail reason=unparseable details=\"{digits}\"");
                 return false;
             }
             confidence = scores.Count == 0 ? 0 : scores.Average();
