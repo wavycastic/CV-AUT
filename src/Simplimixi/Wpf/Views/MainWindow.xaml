@@ -6,7 +6,7 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:viewmodels="clr-namespace:CvAut.WpfApp.ViewModels"
                  xmlns:views="clr-namespace:CvAut.WpfApp.Views"
-                 Title="SimpliMixi v0.6.0"
+                 Title="SimpliMixi v0.6.1"
                  Width="920"
                  Height="640"
                  MinWidth="920"
@@ -658,7 +658,7 @@
                        FontSize="11"
                        FontWeight="SemiBold"
                        Foreground="#E8FFFFFF"
-                       Text="SimpliMixi v0.6.0" />
+                       Text="SimpliMixi v0.6.1" />
         </Border>
 
         <ui:TitleBar x:Name="AppTitleBar"

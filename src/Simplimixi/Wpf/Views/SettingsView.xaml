@@ -86,7 +86,7 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <ui:TextBlock Text="Software Version" VerticalAlignment="Center" />
-                            <ui:TextBlock Grid.Column="1" Text="v0.6.0" FontTypography="BodyStrong" Foreground="White" />
+                            <ui:TextBlock Grid.Column="1" Text="v0.6.1" FontTypography="BodyStrong" Foreground="White" />
                         </Grid>
 
                         <Separator Margin="0,12,0,12" Background="{StaticResource GlassCardStrokeBrush}" />
