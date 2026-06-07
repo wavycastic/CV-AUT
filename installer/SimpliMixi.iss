@@ -4,7 +4,6 @@
 #define MyAppExeName "SimpliMixi.exe"
 #define MyAppId "9D2F0D65-A778-4F3D-8C08-84DBF9165F57"
 #define SourceDir "..\publish\SimpliMixi-v0.6.1"
-#define DotNetRuntimeInstaller "windowsdesktop-runtime-8.0.0-win-x64.exe"
 
 [Setup]
 AppId={{{#MyAppId}}
@@ -38,14 +37,12 @@ Type: filesandordirs; Name: "{app}\*"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\redist\{#DotNetRuntimeInstaller}"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: not IsDotNetDesktopRuntime8Installed
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{tmp}\{#DotNetRuntimeInstaller}"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Microsoft .NET 8 Desktop Runtime..."; Check: not IsDotNetDesktopRuntime8Installed
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: ShouldLaunchAppAfterUpdate
 
@@ -126,8 +123,17 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
 begin
   Result := True;
   StopRunningAppProcesses();
   DeleteOldVersionItems();
+
+  if not IsDotNetDesktopRuntime8Installed() then
+  begin
+    MsgBox('Ứng dụng yêu cầu Microsoft .NET 8 Desktop Runtime (x64) để hoạt động.' + #13#10 + 'Hệ thống sẽ tự động mở trang web tải về của Microsoft để bạn cài đặt .NET 8.', mbCriticalError, MB_OK);
+    ShellExec('open', 'https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0-windows-x64-installer', '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+    Result := False;
+  end;
 end;
