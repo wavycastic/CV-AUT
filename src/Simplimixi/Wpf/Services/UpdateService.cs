@@ -142,14 +142,36 @@ namespace CvAut.WpfApp.Services
 
         public static void StartInstallerAndExit(string installerPath)
         {
-            WriteLog($"install_start path={installerPath}");
-            Process.Start(new ProcessStartInfo
+            if (!File.Exists(installerPath))
+            {
+                throw new FileNotFoundException("Downloaded installer was not found.", installerPath);
+            }
+
+            string installerLogPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SimpliMixi",
+                "logs",
+                "installer-update.log");
+            Directory.CreateDirectory(Path.GetDirectoryName(installerLogPath)!);
+
+            string arguments = $"/SILENT /NORESTART /CLOSEAPPLICATIONS /LAUNCHAPP=1 /LOG=\"{installerLogPath}\"";
+            WriteLog($"install_start path={installerPath} log={installerLogPath}");
+
+            using Process? installerProcess = Process.Start(new ProcessStartInfo
             {
                 FileName = installerPath,
-                Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /LAUNCHAPP=1",
+                Arguments = arguments,
                 UseShellExecute = true,
-                Verb = "runas"
+                Verb = "runas",
+                WorkingDirectory = Path.GetDirectoryName(installerPath) ?? string.Empty
             });
+
+            if (installerProcess == null)
+            {
+                throw new InvalidOperationException("Installer process did not start.");
+            }
+
+            WriteLog($"install_process_started pid={installerProcess.Id}");
         }
 
         private static Version GetCurrentVersion()

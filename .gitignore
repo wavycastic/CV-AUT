@@ -49,3 +49,7 @@ obj/
 # Local WPF UI gallery reference
 docs/wpf-ui/gallery/
 Legacy/Simplicity
+
+# Cloudflare Wrangler cache
+.wrangler/
+

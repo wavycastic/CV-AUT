@@ -55,6 +55,19 @@ begin
   Result := Pos('/LAUNCHAPP=1', Uppercase(GetCmdTail())) > 0;
 end;
 
+procedure StopRunningProcess(ProcessName: String);
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM ' + ProcessName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure StopRunningAppProcesses();
+begin
+  StopRunningProcess('{#MyAppExeName}');
+  StopRunningProcess('adb.exe');
+end;
+
 function IsDotNetDesktopRuntime8Installed(): Boolean;
 var
   Versions: TArrayOfString;
@@ -115,5 +128,6 @@ end;
 function InitializeSetup(): Boolean;
 begin
   Result := True;
+  StopRunningAppProcesses();
   DeleteOldVersionItems();
 end;

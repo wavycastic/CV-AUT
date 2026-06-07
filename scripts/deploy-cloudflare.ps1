@@ -1,5 +1,5 @@
 param(
-    [string]$BucketName = "simplimixi-downloads",
+    [string]$BucketName = "simplimixi-storage",
     [string]$PagesProjectName = "simplimixi",
     [string]$R2PublicBaseUrl,
     [string]$Version = "0.6.1"
