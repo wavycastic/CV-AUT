@@ -129,8 +129,8 @@ if ($LASTEXITCODE -ne 0)
     throw "dotnet publish failed with exit code $LASTEXITCODE."
 }
 
-Write-Host "Removing debug artifacts..."
-Get-ChildItem $publishDir -Recurse -Include *.pdb,*.xml -ErrorAction SilentlyContinue | Remove-Item -Force
+Write-Host "Removing debug artifacts and unused dependencies..."
+Get-ChildItem $publishDir -Recurse -Include *.pdb,*.xml,opencv_videoio_ffmpeg*.dll -ErrorAction SilentlyContinue | Remove-Item -Force
 
 Write-Host "Running Obfuscar..."
 $obfuscar = Find-ObfuscarCli
