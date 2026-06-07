@@ -63,7 +63,7 @@ namespace CvAut.WpfApp.Views
                 ProgressTextBlock.Text = "Đã tải xong. Đang mở trình cài đặt...";
                 _startedInstall = true;
                 UpdateService.StartInstallerAndExit(installerPath);
-                Application.Current.Shutdown();
+                Environment.Exit(0);
             }
             catch (Exception ex)
             {
