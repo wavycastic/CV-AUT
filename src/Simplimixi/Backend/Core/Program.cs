@@ -4,7 +4,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
-using OpenCvSharp;
 using Timer = System.Threading.Timer;
 
 namespace CvAut
@@ -66,7 +65,7 @@ namespace CvAut
             // Xử lý cờ chẩn đoán giao diện quân đội riêng biệt
             if (args.Any(a => string.Equals(a, "--diagnose-saved-army-window", StringComparison.OrdinalIgnoreCase)))
             {
-                Training.DiagnoseSavedArmyWindow("live_army_window_debug.png", templatesPath);
+                BackendDiagnostics.DiagnoseSavedArmyWindow("live_army_window_debug.png", templatesPath);
                 return;
             }
 
@@ -293,73 +292,11 @@ namespace CvAut
             try { Console.Clear(); } catch { }
             Console.WriteLine("=== OFFLINE MOCK TEST ===");
 
-            VisionEngine vision = new VisionEngine(templatesPath);
-            string offlineImagePath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates", "ui", "enemy_resources.png");
-
-            if (File.Exists(offlineImagePath))
-            {
-                Console.WriteLine("[TEST-CS] Offline test image found.");
-                using Mat testImg = Cv2.ImRead(offlineImagePath, ImreadModes.Color);
-                if (!testImg.Empty())
-                {
-                    Console.WriteLine("\n=== [TEST-CS] 1. Light OCR check ===");
-
-                    int wImg = testImg.Width;
-                    int hImg = testImg.Height;
-
-                    // Tính toán giới hạn ROI an toàn
-                    Rect goldRoi = new Rect(Math.Max(0, 55 - 60), Math.Max(0, 117 - 5), Math.Min(wImg, 55 + 196 + 15) - Math.Max(0, 55 - 60), Math.Min(hImg, 117 + 44 + 5) - Math.Max(0, 117 - 5));
-                    Rect elixirRoi = new Rect(Math.Max(0, 60 - 15), Math.Max(0, 167 - 5), Math.Min(wImg, 60 + 201 + 15) - Math.Max(0, 60 - 15), Math.Min(hImg, 167 + 41 + 5) - Math.Max(0, 167 - 5));
-                    Rect deRoi = new Rect(Math.Max(0, 73 - 15), Math.Max(0, 214 - 5), Math.Min(wImg, 73 + 110 + 15) - Math.Max(0, 73 - 15), Math.Min(hImg, 214 + 34 + 5) - Math.Max(0, 214 - 5));
-
-                    int gold = vision.ExtractNumericalMetrics(testImg, goldRoi, isOffline: true);
-                    int elixir = vision.ExtractNumericalMetrics(testImg, elixirRoi, isOffline: true);
-                    int de = vision.ExtractNumericalMetrics(testImg, deRoi, isOffline: true);
-
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine($"-> Gold: {gold:N0} (expected: 353,139)");
-                    Console.WriteLine($"-> Elixir: {elixir:N0} (expected: 664,536)");
-                    Console.WriteLine($"-> Dark Elixir: {de:N0} (expected: 5,859)");
-                    Console.ResetColor();
-
-                    string homeImagePath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates", "ui", "home.png");
-                    if (File.Exists(homeImagePath))
-                    {
-                        Console.WriteLine("\n=== [TEST-CS] 1.2. Home-base OCR check ===");
-                        using Mat homeImg = Cv2.ImRead(homeImagePath, ImreadModes.Color);
-                        if (!homeImg.Empty())
-                        {
-                            int goldHome = vision.ExtractNumericalMetrics(homeImg, new Rect(1310, 30, 200, 36), isOffline: false, useRgbThresh: true);
-                            int elixirHome = vision.ExtractNumericalMetrics(homeImg, new Rect(1310, 115, 200, 36), isOffline: false, useRgbThresh: true);
-                            int deHome = vision.ExtractNumericalMetrics(homeImg, new Rect(1310, 200, 200, 32), isOffline: false, useRgbThresh: true);
-
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine($"-> Home Gold:        {goldHome:N0} (expected: 12,519,983)");
-                            Console.WriteLine($"-> Home Elixir:      {elixirHome:N0} (expected: 12,813,630)");
-                            Console.WriteLine($"-> Home Dark Elixir: {deHome:N0} (expected: 240,000)");
-                            Console.ResetColor();
-                        }
-                    }
-
-                    Console.WriteLine("\n=== [TEST-CS] 2. Attack deployment check ===");
-
-                    ADBHelper adb = new ADBHelper("127.0.0.1", 5556);
-                    Attacks attack = new Attacks(adb, vision);
-                    attack.Run("Dragon_Attack");
-                }
-                else
-                {
-                    Console.WriteLine("[ERROR] Unable to read or decode the offline test image.");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"[ERROR] Offline test image not found: {offlineImagePath}");
-            }
+            BackendDiagnostics.RunOfflineMockTest(templatesPath);
 
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" C# MODULE TEST COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
-            Console.WriteLine("==============================================");
+            Console.WriteLine("\n==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
@@ -377,11 +314,11 @@ namespace CvAut
             using StatsTrackingTextWriter statsWriter = new StatsTrackingTextWriter(originalOut, stats, livePanel);
             Console.SetOut(statsWriter);
 
-            CVAutomationFramework? framework = null;
+            IAutomationRunner? framework = null;
 
             try
             {
-                framework = new CVAutomationFramework(configPath);
+                framework = new AutomationRunner(configPath);
                 livePanel.Render();
                 livePanel.Start();
                 framework.Start();
@@ -440,45 +377,12 @@ namespace CvAut
             Console.WriteLine("==================================================================");
             Console.ResetColor();
 
-            Console.WriteLine("[LIVE-SCOUT] Initializing ADB connection...");
-            ADBHelper adb = new ADBHelper("127.0.0.1", 5556);
-            VisionEngine vision = new VisionEngine(templatesPath);
-
-            Console.WriteLine("[LIVE-SCOUT] Capturing emulator screen...");
-            using Mat? screenshot = adb.TakeScreenshot();
-
-            if (screenshot == null || screenshot.Empty())
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("[LIVE-SCOUT ERROR] Unable to capture the emulator screen. Please check:");
-                Console.WriteLine("  1. BlueStacks / MEmu is running.");
-                Console.WriteLine("  2. Android Debug Bridge (ADB) is enabled in emulator settings.");
-                Console.ResetColor();
-            }
-            else
-            {
-                Console.WriteLine($"[LIVE-SCOUT] Screenshot captured: {screenshot.Width}x{screenshot.Height}");
-                Console.WriteLine("[LIVE-SCOUT] Reading visible resources...");
-
-                var res = IsTarget.ExtractResources(adb, vision);
-
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("\n================ LIVE SCAN RESULT ================");
-                Console.WriteLine($"Gold:        {res.Gold:N0}");
-                Console.WriteLine($"Elixir:      {res.Elixir:N0}");
-                Console.WriteLine($"Dark Elixir: {res.DarkElixir:N0}");
-                Console.WriteLine("===================================================");
-                Console.ResetColor();
-
-                Directory.CreateDirectory(WritableLogsDirectory);
-                string debugPath = Path.Combine(WritableLogsDirectory, "live_screenshot_debug.png");
-                Cv2.ImWrite(debugPath, screenshot);
-                Console.WriteLine($"[LIVE-SCOUT] Debug screenshot saved: {debugPath}");
-            }
+            string debugPath = Path.Combine(WritableLogsDirectory, "live_screenshot_debug.png");
+            BackendDiagnostics.RunLiveScoutingTest(templatesPath, debugPath);
 
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" LIVE RESOURCE SCAN COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
-            Console.WriteLine("==============================================");
+            Console.WriteLine("\n==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
@@ -494,45 +398,12 @@ namespace CvAut
             Console.WriteLine("==================================================================");
             Console.ResetColor();
 
-            Console.WriteLine("[LIVE-HOME] Initializing ADB connection...");
-            ADBHelper adb = new ADBHelper("127.0.0.1", 5556);
-            VisionEngine vision = new VisionEngine(templatesPath);
-
-            Console.WriteLine("[LIVE-HOME] Capturing emulator screen...");
-            using Mat? screenshot = adb.TakeScreenshot();
-
-            if (screenshot == null || screenshot.Empty())
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("[LIVE-HOME ERROR] Unable to capture the emulator screen. Please check:");
-                Console.WriteLine("  1. BlueStacks / MEmu is running.");
-                Console.WriteLine("  2. Android Debug Bridge (ADB) is enabled in emulator settings.");
-                Console.ResetColor();
-            }
-            else
-            {
-                Console.WriteLine($"[LIVE-HOME] Screenshot captured: {screenshot.Width}x{screenshot.Height}");
-                Console.WriteLine("[LIVE-HOME] Reading home-base resources...");
-
-                var res = IsTarget.ExtractHomeResources(adb, vision);
-
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("\n============= LIVE HOME SCAN RESULT =============");
-                Console.WriteLine($"Gold:        {res.Gold:N0}");
-                Console.WriteLine($"Elixir:      {res.Elixir:N0}");
-                Console.WriteLine($"Dark Elixir: {res.DarkElixir:N0}");
-                Console.WriteLine("========================================================");
-                Console.ResetColor();
-
-                Directory.CreateDirectory(WritableLogsDirectory);
-                string debugPath = Path.Combine(WritableLogsDirectory, "live_home_screenshot_debug.png");
-                Cv2.ImWrite(debugPath, screenshot);
-                Console.WriteLine($"[LIVE-HOME] Debug screenshot saved: {debugPath}");
-            }
+            string debugPath = Path.Combine(WritableLogsDirectory, "live_home_screenshot_debug.png");
+            BackendDiagnostics.RunLiveHomeBaseTest(templatesPath, debugPath);
 
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" LIVE HOME RESOURCE SCAN COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
-            Console.WriteLine("==============================================");
+            Console.WriteLine("\n==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
@@ -551,8 +422,7 @@ namespace CvAut
             Console.WriteLine("[LIVE-ZOOM] Initializing automation framework...");
             try
             {
-                CVAutomationFramework framework = new CVAutomationFramework(configPath);
-                framework.ZoomOut();
+                BackendDiagnostics.ZoomOut(configPath);
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("\n[LIVE-ZOOM] Zoom-out command completed. Check the emulator screen.");
                 Console.ResetColor();
@@ -566,7 +436,7 @@ namespace CvAut
 
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" ZOOM OUT TEST COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
-            Console.WriteLine("==============================================");
+            Console.WriteLine("\n==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
@@ -584,18 +454,7 @@ namespace CvAut
 
             try
             {
-                using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(configPath));
-                JsonElement cfg = doc.RootElement.Clone();
-
-                JsonElement devConfig = cfg.GetProperty("device_connection");
-                string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
-                int port = devConfig.GetProperty("port").GetInt32();
-
-                ADBHelper adb = new ADBHelper(host, port);
-                VisionEngine vision = new VisionEngine(templatesPath);
-                Training training = new Training(adb, templatesPath, vision);
-
-                training.SmartTrain(cfg);
+                BackendDiagnostics.RunSmartTrainTest(configPath, templatesPath);
             }
             catch (Exception ex)
             {
@@ -606,7 +465,7 @@ namespace CvAut
 
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" SMART TRAIN LIVE TEST COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
-            Console.WriteLine("==============================================");
+            Console.WriteLine("\n==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
@@ -624,8 +483,7 @@ namespace CvAut
 
             try
             {
-                CVAutomationFramework framework = new CVAutomationFramework(configPath);
-                framework.BootRecovery();
+                BackendDiagnostics.BootRecovery(configPath);
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("\n[BOOT-RECOVERY] Force-stop, launch, and dismiss steps completed.");
                 Console.ResetColor();
@@ -639,7 +497,7 @@ namespace CvAut
 
             Console.WriteLine("\n==============================================");
             Console.WriteLine(" BOOT RECOVERY LIVE TEST COMPLETE. PRESS ANY KEY TO RETURN TO THE MENU.");
-            Console.WriteLine("==============================================");
+            Console.WriteLine("\n==============================================");
             try { Console.ReadKey(); } catch { }
         }
 
@@ -667,9 +525,8 @@ namespace CvAut
                 const int workflowCycleCount = 5;
                 Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [TEST] Mode: {workflowCycleCount} cycles, detailed console/file logging.");
 
-                CVAutomationFramework framework = new CVAutomationFramework(configPath);
                 using CancellationTokenSource cts = new CancellationTokenSource();
-                framework.RunCyclesForTest(workflowCycleCount, cts.Token);
+                BackendDiagnostics.RunWorkflowTemplate(configPath, workflowCycleCount, cts.Token);
 
                 Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [TEST] Workflow template run finished.");
                 PrintSessionSummary(stats);
