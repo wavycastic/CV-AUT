@@ -15,6 +15,7 @@ $obfuscatedInputDir = Join-Path $publishRoot "$Runtime-obfuscator-input"
 $obfuscatedDepsDir = Join-Path $publishRoot "$Runtime-obfuscator-deps"
 $obfuscatedDir = Join-Path $publishRoot "$Runtime-obfuscated"
 $projectPath = Join-Path $repoRoot "CV-AUT.csproj"
+$backendBuildAssembly = Join-Path $repoRoot "src\Simplimixi\Backend\bin\$Configuration\net8.0-windows\Simplimixi.Backend.dll"
 $configPath = Join-Path $repoRoot "Obfuscar.xml"
 $issPath = Join-Path $repoRoot "installer\SimpliMixi.iss"
 $setupPath = Join-Path $repoRoot "publish\SimpliMixi-v0.6.2-Setup.exe"
@@ -75,6 +76,12 @@ function Test-NoSensitiveTerms
     if (-not (Test-Path $AssemblyPath))
     {
         throw "Protected assembly was not found at $AssemblyPath"
+    }
+
+    $assemblyInfo = Get-Item $AssemblyPath
+    if ($assemblyInfo.Length -le 0)
+    {
+        throw "Protected assembly '$([System.IO.Path]::GetFileName($AssemblyPath))' is empty."
     }
 
     $bytes = [System.IO.File]::ReadAllBytes($AssemblyPath)
@@ -234,7 +241,7 @@ Get-ChildItem $publishDir -Recurse -Include *.pdb,*.xml,opencv_videoio_ffmpeg*.d
 Write-Host "Preparing Obfuscar input..."
 New-Item -ItemType Directory -Path $obfuscatedInputDir -Force | Out-Null
 New-Item -ItemType Directory -Path $obfuscatedDepsDir -Force | Out-Null
-Copy-Item (Join-Path $publishDir "Simplimixi.Backend.dll") (Join-Path $obfuscatedInputDir "Simplimixi.Backend.dll") -Force
+Copy-Item $backendBuildAssembly (Join-Path $obfuscatedInputDir "Simplimixi.Backend.dll") -Force
 Copy-Item (Join-Path $publishDir "OpenCvSharp.dll") (Join-Path $obfuscatedDepsDir "OpenCvSharp.dll") -Force
 Copy-Item (Join-Path $publishDir "SharpAdbClient.dll") (Join-Path $obfuscatedDepsDir "SharpAdbClient.dll") -Force
 
@@ -243,13 +250,7 @@ $obfuscar = Find-ObfuscarCli
 & $obfuscar $configPath
 if ($LASTEXITCODE -ne 0)
 {
-    $backendObfuscatedPath = Join-Path $obfuscatedDir "Simplimixi.Backend.dll"
-    if (-not (Test-Path $backendObfuscatedPath))
-    {
-        throw "Obfuscar failed with exit code $LASTEXITCODE."
-    }
-
-    Write-Warning "Obfuscar reported exit code $LASTEXITCODE after writing Simplimixi.Backend.dll; continuing because only the backend assembly is packaged from Obfuscar output."
+    throw "Obfuscar failed with exit code $LASTEXITCODE."
 }
 
 if (-not (Test-Path $obfuscatedDir))
