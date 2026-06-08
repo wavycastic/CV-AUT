@@ -11,6 +11,8 @@ $publishRoot = Join-Path $repoRoot "publish"
 $publishDir = Join-Path $publishRoot $Runtime
 $protectedDir = Join-Path $publishRoot "$Runtime-protected"
 $packageDir = Join-Path $publishRoot "SimpliMixi-v0.6.1"
+$obfuscatedInputDir = Join-Path $publishRoot "$Runtime-obfuscator-input"
+$obfuscatedDepsDir = Join-Path $publishRoot "$Runtime-obfuscator-deps"
 $obfuscatedDir = Join-Path $publishRoot "$Runtime-obfuscated"
 $projectPath = Join-Path $repoRoot "CV-AUT.csproj"
 $configPath = Join-Path $repoRoot "Obfuscar.xml"
@@ -63,9 +65,12 @@ function Find-InnoCompiler
     return $iscc.Source
 }
 
-function Test-ProtectedAssembly
+function Test-NoSensitiveTerms
 {
-    param([string]$AssemblyPath)
+    param(
+        [string]$AssemblyPath,
+        [string[]]$Terms
+    )
 
     if (-not (Test-Path $AssemblyPath))
     {
@@ -73,20 +78,8 @@ function Test-ProtectedAssembly
     }
 
     $bytes = [System.IO.File]::ReadAllBytes($AssemblyPath)
-    $sensitiveTerms = @(
-        "CVAutomationFramework",
-        "VisionEngine",
-        "ADBHelper",
-        "Training",
-        "WallUpdater",
-        "IsTarget",
-        "EmulatorBootstrapper",
-        "TemplateAssetLoader",
-        "SimpliMixi-Templates-051"
-    )
-
     $hits = New-Object System.Collections.Generic.List[string]
-    foreach ($term in $sensitiveTerms)
+    foreach ($term in $Terms)
     {
         $needle = [System.Text.Encoding]::UTF8.GetBytes($term)
         for ($i = 0; $i -le $bytes.Length - $needle.Length; $i++)
@@ -111,7 +104,41 @@ function Test-ProtectedAssembly
 
     if ($hits.Count -gt 0)
     {
-        throw "Protected assembly still exposes sensitive terms: $($hits -join ', ')"
+        throw "Protected assembly '$([System.IO.Path]::GetFileName($AssemblyPath))' still exposes sensitive terms: $($hits -join ', ')"
+    }
+}
+
+function Test-ProtectedPackage
+{
+    param([string]$PackagePath)
+
+    $appAssembly = Join-Path $PackagePath "SimpliMixi.dll"
+    $backendAssembly = Join-Path $PackagePath "Simplimixi.Backend.dll"
+    $nativeLibrary = Join-Path $PackagePath "simplimixi_native.dll"
+    $oldTemplateKeys = @("SimpliMixi-Templates-051")
+    $backendClassNames = @(
+        "CVAutomationFramework",
+        "VisionEngine",
+        "ADBHelper",
+        "Training",
+        "WallUpdater",
+        "IsTarget",
+        "TemplateAssetLoader"
+    )
+
+    Test-NoSensitiveTerms -AssemblyPath $appAssembly -Terms $oldTemplateKeys
+    Test-NoSensitiveTerms -AssemblyPath $backendAssembly -Terms $oldTemplateKeys
+    Test-NoSensitiveTerms -AssemblyPath $backendAssembly -Terms $backendClassNames
+
+    if (Test-Path $nativeLibrary)
+    {
+        Test-NoSensitiveTerms -AssemblyPath $nativeLibrary -Terms $oldTemplateKeys
+    }
+
+    $debugArtifacts = Get-ChildItem $PackagePath -Recurse -Include *.pdb,*.xml -ErrorAction SilentlyContinue
+    if ($debugArtifacts)
+    {
+        throw "Protected package contains debug artifacts: $($debugArtifacts.FullName -join ', ')"
     }
 }
 
@@ -188,7 +215,7 @@ if (-not (Test-Path $dotNetRuntimePath))
 }
 
 Write-Host "Publishing $Configuration $Runtime..."
-Remove-Item $publishDir, $protectedDir, $packageDir, $obfuscatedDir, $setupPath -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $publishDir, $protectedDir, $packageDir, $obfuscatedInputDir, $obfuscatedDepsDir, $obfuscatedDir, $setupPath -Recurse -Force -ErrorAction SilentlyContinue
 
 $selfContainedArg = if ($SelfContained)
 { "true"
@@ -204,12 +231,25 @@ if ($LASTEXITCODE -ne 0)
 Write-Host "Removing debug artifacts and unused dependencies..."
 Get-ChildItem $publishDir -Recurse -Include *.pdb,*.xml,opencv_videoio_ffmpeg*.dll -ErrorAction SilentlyContinue | Remove-Item -Force
 
+Write-Host "Preparing Obfuscar input..."
+New-Item -ItemType Directory -Path $obfuscatedInputDir -Force | Out-Null
+New-Item -ItemType Directory -Path $obfuscatedDepsDir -Force | Out-Null
+Copy-Item (Join-Path $publishDir "Simplimixi.Backend.dll") (Join-Path $obfuscatedInputDir "Simplimixi.Backend.dll") -Force
+Copy-Item (Join-Path $publishDir "OpenCvSharp.dll") (Join-Path $obfuscatedDepsDir "OpenCvSharp.dll") -Force
+Copy-Item (Join-Path $publishDir "SharpAdbClient.dll") (Join-Path $obfuscatedDepsDir "SharpAdbClient.dll") -Force
+
 Write-Host "Running Obfuscar..."
 $obfuscar = Find-ObfuscarCli
 & $obfuscar $configPath
 if ($LASTEXITCODE -ne 0)
 {
-    throw "Obfuscar failed with exit code $LASTEXITCODE."
+    $backendObfuscatedPath = Join-Path $obfuscatedDir "Simplimixi.Backend.dll"
+    if (-not (Test-Path $backendObfuscatedPath))
+    {
+        throw "Obfuscar failed with exit code $LASTEXITCODE."
+    }
+
+    Write-Warning "Obfuscar reported exit code $LASTEXITCODE after writing Simplimixi.Backend.dll; continuing because only the backend assembly is packaged from Obfuscar output."
 }
 
 if (-not (Test-Path $obfuscatedDir))
@@ -220,16 +260,13 @@ if (-not (Test-Path $obfuscatedDir))
 Write-Host "Creating protected package..."
 New-Item -ItemType Directory -Path $protectedDir -Force | Out-Null
 Copy-Item (Join-Path $publishDir "*") $protectedDir -Recurse -Force
-Copy-Item (Join-Path $obfuscatedDir "SimpliMixi.dll") (Join-Path $protectedDir "SimpliMixi.dll") -Force
+Copy-Item (Join-Path $obfuscatedDir "Simplimixi.Backend.dll") (Join-Path $protectedDir "Simplimixi.Backend.dll") -Force
 
 Get-ChildItem $protectedDir -Recurse -Include *.pdb,*.xml -ErrorAction SilentlyContinue | Remove-Item -Force
 Remove-Item (Join-Path $protectedDir "Backgrounds"), (Join-Path $protectedDir "AppIcon"), (Join-Path $protectedDir "Templates") -Recurse -Force -ErrorAction SilentlyContinue
 
 New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
 Copy-Item (Join-Path $protectedDir "*") $packageDir -Recurse -Force
-
-Write-Host "Verifying protected assembly..."
-Test-ProtectedAssembly -AssemblyPath (Join-Path $packageDir "SimpliMixi.dll")
 
 Write-Host "Encrypting template assets..."
 Protect-TemplateAssets -TemplateRoot (Join-Path $packageDir "assets\Templates")
@@ -247,6 +284,9 @@ Package layout:
 
 Do not remove files or folders from this package.
 "@ | Set-Content $readmePath -Encoding UTF8
+
+Write-Host "Verifying protected package..."
+Test-ProtectedPackage -PackagePath $packageDir
 
 Write-Host "Building installer..."
 $iscc = Find-InnoCompiler

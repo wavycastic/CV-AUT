@@ -8,7 +8,7 @@ namespace CvAut
     /// Lớp tiện ích cung cấp các toạ độ và chức năng để quét, phân tích tài nguyên (Vàng, Dầu hồng, Dầu đen)
     /// từ các màn hình của Clash of Clans. Được thiết kế tối ưu cho độ phân giải giả lập chuẩn 1600x900px.
     /// </summary>
-    public static class IsTarget
+    internal static class IsTarget
     {
         // Tọa độ vùng quét tài nguyên đối thủ khi đang đi tìm trận (Scout Screen)
         // Dựa trên chuẩn giao diện độ phân giải 1600x900px

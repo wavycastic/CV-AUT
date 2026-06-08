@@ -19,7 +19,7 @@ namespace CvAut
     /// - Điều khiển thu phóng nâng cao qua UIAutomator2 Server bằng giao thức JSON-RPC (PinchIn).
     /// - Chụp ảnh màn hình giả lập tốc độ cao bằng exec-out screencap, kèm cơ chế chống ảnh lỗi/trống.
     /// </summary>
-    public class ADBHelper : IDisposable
+    internal class ADBHelper : IDisposable
     {
         private bool _disposed;
         private readonly string _deviceAddress;

@@ -29,17 +29,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="src\Simplimixi\Core\**\*.cs" />
-    <Compile Include="src\Simplimixi\Wpf\**\*.cs" />
-    <ApplicationDefinition Include="src\Simplimixi\Wpf\App.xaml" />
-    <Page Include="src\Simplimixi\Wpf\**\*.xaml" Exclude="src\Simplimixi\Wpf\App.xaml" />
+    <Compile Include="src\Simplimixi\Backend\Core\Program.cs" />
+    <Compile Include="src\Simplimixi\Frontend\Wpf\**\*.cs" />
+    <ApplicationDefinition Include="src\Simplimixi\Frontend\Wpf\App.xaml" />
+    <Page Include="src\Simplimixi\Frontend\Wpf\**\*.xaml" Exclude="src\Simplimixi\Frontend\Wpf\App.xaml" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="OpenCvSharp4" Version="4.9.0.20240103" />
-    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.9.0.20240103" />
-    <PackageReference Include="SharpAdbClient" Version="2.3.3" />
     <PackageReference Include="WPF-UI" Version="3.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="src\Simplimixi\Backend\Simplimixi.Backend.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -59,6 +60,10 @@
     <None Include="Config\test_config.json" Link="Config\test_config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Content Include="$(MSBuildProjectDirectory)\src\Simplimixi\Native\bin\win-x64\Release\simplimixi_native.dll" Link="simplimixi_native.dll" Condition="Exists('$(MSBuildProjectDirectory)\src\Simplimixi\Native\bin\win-x64\Release\simplimixi_native.dll')">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

@@ -14,7 +14,7 @@ namespace CvAut
     /// - Thực hiện nhận diện chữ số nhị phân (Light OCR) bằng thuật toán so khớp chỉ số IoU (Intersection over Union)
     ///   với ma trận nhị phân 12x16 của font chữ Supercell Magic chuyên dụng cho game Clash of Clans.
     /// </summary>
-    public class VisionEngine : IDisposable
+    internal class VisionEngine : IDisposable
     {
         // Thư mục chứa các mẫu hình ảnh template PNG
         private readonly string _templatesDir;

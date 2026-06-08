@@ -3,7 +3,6 @@ using System.Globalization;
 using System.IO;
 using System.Windows.Data;
 using System.Windows.Media.Imaging;
-using OpenCvSharp;
 
 namespace CvAut.WpfApp.Services
 {
@@ -19,14 +18,13 @@ namespace CvAut.WpfApp.Services
 
             templateName = NormalizeTemplateName(templateName);
             string templatesRoot = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
-            using Mat image = TemplateAssetLoader.Load(templatesRoot, templateName, ImreadModes.Unchanged);
-            if (image.Empty())
+            byte[] imageBytes = TemplateAssetLoader.LoadPngBytes(templatesRoot, templateName);
+            if (imageBytes.Length == 0)
             {
                 return null;
             }
 
-            Cv2.ImEncode(".png", image, out byte[] encodedBytes);
-            using var stream = new MemoryStream(encodedBytes);
+            using var stream = new MemoryStream(imageBytes);
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;

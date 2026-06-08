@@ -6,7 +6,7 @@ using OpenCvSharp;
 
 namespace CvAut
 {
-    internal static class TemplateAssetLoader
+    public static class TemplateAssetLoader
     {
         private static readonly byte[] Magic = { 0x53, 0x4D, 0x54, 0x50, 1 };
         private static readonly byte[] Key = CreateKey();
@@ -28,6 +28,18 @@ namespace CvAut
 
             string plainPath = GetPlainPath(templatesRoot, templateName);
             return File.Exists(plainPath) ? Cv2.ImRead(plainPath, mode) : new Mat();
+        }
+
+        public static byte[] LoadPngBytes(string templatesRoot, string templateName)
+        {
+            using Mat image = Load(templatesRoot, templateName, ImreadModes.Unchanged);
+            if (image.Empty())
+            {
+                return Array.Empty<byte>();
+            }
+
+            Cv2.ImEncode(".png", image, out byte[] encodedBytes);
+            return encodedBytes;
         }
 
         public static IEnumerable<string> EnumerateNames(string templatesRoot, string subdir)
@@ -88,12 +100,22 @@ namespace CvAut
             }
 
             byte[] decoded = new byte[encryptedBytes.Length - Magic.Length];
+            if (NativeTemplateCodec.TryDecode(encryptedBytes, decoded, out int decodedLength)
+                && decodedLength == decoded.Length)
+            {
+                return decoded;
+            }
+
+            DecodeManaged(encryptedBytes, decoded);
+            return decoded;
+        }
+
+        private static void DecodeManaged(byte[] encryptedBytes, byte[] decoded)
+        {
             for (int i = 0; i < decoded.Length; i++)
             {
                 decoded[i] = (byte)(encryptedBytes[i + Magic.Length] ^ Key[i % Key.Length]);
             }
-
-            return decoded;
         }
 
         private static byte[] CreateKey()

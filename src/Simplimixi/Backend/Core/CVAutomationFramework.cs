@@ -20,7 +20,7 @@ namespace CvAut
     /// - Hỗ trợ điều khiển Zoom Out ngầm giả lập MEmu qua PostMessage Win32 API hoặc giả lập BlueStacks qua ADB Pinch-In.
     /// - Hỗ trợ cơ chế chơi luân phiên nhiều tài khoản (Multi-Account) từ cấu hình.
     /// </summary>
-    public class CVAutomationFramework : IDisposable
+    internal class CVAutomationFramework : IAutomationRunner
     {
         private readonly ADBHelper _adb;
         private readonly VisionEngine _vision;
