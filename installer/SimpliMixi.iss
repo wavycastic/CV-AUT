@@ -1,9 +1,9 @@
 #define MyAppName "SimpliMixi"
-#define MyAppVersion "0.6.1"
+#define MyAppVersion "0.6.2"
 #define MyAppPublisher "SimpliMixi"
 #define MyAppExeName "SimpliMixi.exe"
 #define MyAppId "9D2F0D65-A778-4F3D-8C08-84DBF9165F57"
-#define SourceDir "..\publish\SimpliMixi-v0.6.1"
+#define SourceDir "..\publish\SimpliMixi-v0.6.2"
 
 [Setup]
 AppId={{{#MyAppId}}

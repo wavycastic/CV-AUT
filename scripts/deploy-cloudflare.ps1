@@ -2,7 +2,7 @@ param(
     [string]$BucketName = "simplimixi-storage",
     [string]$PagesProjectName = "simplimixi",
     [string]$R2PublicBaseUrl,
-    [string]$Version = "0.6.1"
+    [string]$Version = "0.6.2"
 )
 
 $ErrorActionPreference = "Stop"
