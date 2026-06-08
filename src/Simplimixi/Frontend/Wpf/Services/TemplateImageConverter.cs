@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows.Data;
 using System.Windows.Media.Imaging;
+using CvAut;
 
 namespace CvAut.WpfApp.Services
 {
@@ -18,7 +19,7 @@ namespace CvAut.WpfApp.Services
 
             templateName = NormalizeTemplateName(templateName);
             string templatesRoot = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
-            byte[] imageBytes = TemplateAssetLoader.LoadPngBytes(templatesRoot, templateName);
+            byte[] imageBytes = BackendDiagnostics.LoadTemplatePngBytes(templatesRoot, templateName);
             if (imageBytes.Length == 0)
             {
                 return null;

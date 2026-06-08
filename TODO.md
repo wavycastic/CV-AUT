@@ -4,11 +4,11 @@
 
 ### 1. Remove backend friend assembly access
 
-- [ ] Search for backend `internal` APIs still used by the `SimpliMixi` frontend assembly.
-- [ ] Move any remaining frontend calls behind public backend facade methods.
-- [ ] Keep `IAutomationRunner` / `AutomationRunner` as the only UI-facing backend API unless a new contract is clearly needed.
-- [ ] Delete `InternalsVisibleTo("SimpliMixi")` from the backend assembly.
-- [ ] Run `dotnet build CV-AUT.csproj -c Release`.
+- [x] Search for backend `internal` APIs still used by the `SimpliMixi` frontend assembly.
+- [x] Move any remaining frontend calls behind public backend facade methods.
+- [x] Keep `IAutomationRunner` / `AutomationRunner` as the only UI-facing backend API unless a new contract is clearly needed.
+- [x] Delete `InternalsVisibleTo("SimpliMixi")` from the backend assembly.
+- [x] Run `dotnet build CV-AUT.csproj -c Release`.
 
 ### 2. Tighten the backend facade
 
