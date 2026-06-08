@@ -14,7 +14,7 @@ namespace CvAut
     /// - Thực hiện lọc trùng lặp tọa độ để tránh bấm nhầm cùng một bức tường.
     /// - Bấm chọn tường, xác thực giao diện nâng cấp, tính toán và nâng cấp bằng Vàng hoặc Dầu hồng tùy điều kiện tài nguyên.
     /// </summary>
-    public sealed class WallUpdater
+    internal sealed class WallUpdater
     {
         // Vùng ROI tìm kiếm tường trên bản đồ (Tránh phần rìa chứa các nút UI cản trở)
         private static readonly Rect WallSearchRoi = Rect.FromLTRB(270, 100, 1339, 785);

@@ -5,7 +5,7 @@ namespace CvAut;
 /// <summary>
 /// Các tiện ích xử lý ảnh dùng chung cho nhiều cấu phần trong ứng dụng.
 /// </summary>
-public static class ImageUtils
+internal static class ImageUtils
 {
     /// <summary>
     /// Giới hạn một vùng hình chữ nhật (Rect) để đảm bảo nó nằm trọn vẹn trong biên của bức ảnh.

@@ -10,7 +10,7 @@ namespace CvAut
     /// <summary>
     /// Thông tin tọa độ thả của một vị tướng (Hero) trong game.
     /// </summary>
-    public class HeroInfo
+    internal class HeroInfo
     {
         public string Name { get; set; } = "";
         public Point Coord { get; set; }
@@ -23,7 +23,7 @@ namespace CvAut
     /// - Thực hiện kịch bản rải quân (tạp biến ngẫu nhiên chống chống-bot), rải phép đóng băng/cuồng nộ.
     /// - Quét số lượng lính còn dư để tiến hành rải bù.
     /// </summary>
-    public class Attacks
+    internal class Attacks
     {
         private readonly ADBHelper _adb;
         private readonly VisionEngine _vision;

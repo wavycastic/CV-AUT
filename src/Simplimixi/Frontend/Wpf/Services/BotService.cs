@@ -28,8 +28,8 @@ namespace CvAut.WpfApp.Services
             "SimpliMixi");
         private static readonly string ConfigPath = Path.Combine(UserDataDirectory, "Config", "test_config.json");
 
-        // Đối tượng Engine tự động hóa lõi điều khiển game
-        private CVAutomationFramework? _framework;
+        // Boundary tối giản để UI điều khiển backend mà không phụ thuộc implementation.
+        private IAutomationRunner? _runner;
 
         // Lưu trữ luồng xuất Standard Output gốc của Console trước khi chuyển hướng
         private TextWriter? _originalOut;
@@ -62,7 +62,7 @@ namespace CvAut.WpfApp.Services
         /// <summary>
         /// Xác định xem luồng xử lý bot có đang chạy hay không.
         /// </summary>
-        public bool IsRunning => _framework != null || _isStopping;
+        public bool IsRunning => _runner != null || _isStopping;
 
         /// <summary>
         /// Xác định xem bot có đang ở trạng thái tạm dừng hay không.
@@ -199,11 +199,11 @@ namespace CvAut.WpfApp.Services
         }
 
         /// <summary>
-        /// Bắt đầu chạy bot: chuyển hướng đầu ra Console, khởi tạo và kích hoạt máy trạng thái CVAutomationFramework.
+        /// Bắt đầu chạy bot: chuyển hướng đầu ra Console, khởi tạo và kích hoạt backend automation runner.
         /// </summary>
         public void StartBot()
         {
-            if (_framework != null || _isStopping) return;
+            if (_runner != null || _isStopping) return;
 
             // Lưu trữ TextWriter Console gốc
             _originalOut = Console.Out;
@@ -213,7 +213,7 @@ namespace CvAut.WpfApp.Services
 
             try
             {
-                // Khởi tạo framework tự động hóa với đường dẫn cấu hình
+                // Khởi tạo backend automation runner với đường dẫn cấu hình
                 _sessionBaselines.Clear();
                 _sessionBattleHistory.Clear();
                 _lastObservedSessionStats = StatsSnapshot.Empty;
@@ -221,8 +221,8 @@ namespace CvAut.WpfApp.Services
                 UptimeText = "00:00:00";
                 CaptureSessionBaseline(_currentVillage);
 
-                _framework = new CVAutomationFramework(ConfigPath);
-                _framework.Start();
+                _runner = new AutomationRunner(ConfigPath);
+                _runner.Start();
 
                 _runStartTime = DateTime.Now;
                 _isPaused = false;
@@ -232,22 +232,22 @@ namespace CvAut.WpfApp.Services
             }
             catch (Exception ex)
             {
-                AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI ERROR] Failed to start framework: {ex.Message}");
+                AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI ERROR] Failed to start runner: {ex.Message}");
                 RestoreConsole();
-                _framework = null;
+                _runner = null;
                 _statusText = "IDLE";
                 OnStatusChanged();
             }
         }
 
         /// <summary>
-        /// Dừng bot: kết thúc luồng chạy CVAutomationFramework, phục hồi lại Console tiêu chuẩn và khôi phục các biến trạng thái.
+        /// Dừng bot: kết thúc luồng backend automation, phục hồi lại Console tiêu chuẩn và khôi phục các biến trạng thái.
         /// </summary>
         public void StopBot()
         {
-            if (_framework == null || _isStopping) return;
+            if (_runner == null || _isStopping) return;
 
-            CVAutomationFramework framework = _framework;
+            IAutomationRunner runner = _runner;
             _isStopping = true;
             _isPaused = false;
             _statusText = "STOPPING";
@@ -257,33 +257,34 @@ namespace CvAut.WpfApp.Services
 
             try
             {
-                framework.Stop();
+                runner.Stop();
             }
             catch (Exception ex)
             {
-                AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI ERROR] Error stopping framework: {ex.Message}");
+                AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI ERROR] Error stopping runner: {ex.Message}");
             }
 
             Task.Run(async () =>
             {
                 try
                 {
-                    await framework.Completion.ConfigureAwait(false);
+                    await runner.Completion.ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
                     AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI ERROR] Worker stop failed: {ex.Message}");
                 }
 
-                Application.Current.Dispatcher.Invoke(() => CompleteStop(framework));
+                Application.Current.Dispatcher.Invoke(() => CompleteStop(runner));
             });
         }
 
-        private void CompleteStop(CVAutomationFramework framework)
+        private void CompleteStop(IAutomationRunner runner)
         {
-            if (!ReferenceEquals(_framework, framework)) return;
+            if (!ReferenceEquals(_runner, runner)) return;
 
-            _framework = null;
+            runner.Dispose();
+            _runner = null;
             _isStopping = false;
             _isPaused = false;
             _statusText = "IDLE";
@@ -301,18 +302,18 @@ namespace CvAut.WpfApp.Services
         /// </summary>
         public void TogglePause()
         {
-            if (_framework == null) return;
+            if (_runner == null) return;
 
             if (_isPaused)
             {
-                _framework.Resume();
+                _runner.Resume();
                 _isPaused = false;
                 _statusText = "RUNNING";
                 AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI] Resume requested");
             }
             else
             {
-                _framework.Pause();
+                _runner.Pause();
                 _isPaused = true;
                 _statusText = "PAUSED";
                 AppendLog($"[{DateTime.Now:HH:mm:ss}] [GUI] Pause requested");

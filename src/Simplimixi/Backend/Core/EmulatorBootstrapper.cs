@@ -11,7 +11,7 @@ namespace CvAut
     /// tự động khởi chạy giả lập nếu chưa mở, chờ giả lập online qua ADB,
     /// kiểm tra xem game Clash of Clans đã cài đặt chưa và khởi chạy game.
     /// </summary>
-    public static class EmulatorBootstrapper
+    internal static class EmulatorBootstrapper
     {
         // Tên tiến trình (Process) của BlueStacks App Player
         private const string BlueStacksProcessName = "HD-Player";
