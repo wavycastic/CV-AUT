@@ -63,6 +63,58 @@ function Find-InnoCompiler
     return $iscc.Source
 }
 
+function Test-ProtectedAssembly
+{
+    param([string]$AssemblyPath)
+
+    if (-not (Test-Path $AssemblyPath))
+    {
+        throw "Protected assembly was not found at $AssemblyPath"
+    }
+
+    $bytes = [System.IO.File]::ReadAllBytes($AssemblyPath)
+    $sensitiveTerms = @(
+        "CVAutomationFramework",
+        "VisionEngine",
+        "ADBHelper",
+        "Training",
+        "WallUpdater",
+        "IsTarget",
+        "EmulatorBootstrapper",
+        "TemplateAssetLoader",
+        "SimpliMixi-Templates-051"
+    )
+
+    $hits = New-Object System.Collections.Generic.List[string]
+    foreach ($term in $sensitiveTerms)
+    {
+        $needle = [System.Text.Encoding]::UTF8.GetBytes($term)
+        for ($i = 0; $i -le $bytes.Length - $needle.Length; $i++)
+        {
+            $matched = $true
+            for ($j = 0; $j -lt $needle.Length; $j++)
+            {
+                if ($bytes[$i + $j] -ne $needle[$j])
+                {
+                    $matched = $false
+                    break
+                }
+            }
+
+            if ($matched)
+            {
+                $hits.Add($term)
+                break
+            }
+        }
+    }
+
+    if ($hits.Count -gt 0)
+    {
+        throw "Protected assembly still exposes sensitive terms: $($hits -join ', ')"
+    }
+}
+
 function Protect-TemplateAssets
 {
     param([string]$TemplateRoot)
@@ -79,12 +131,7 @@ using System.IO;
 public static class SimpliMixiTemplateEncryptor
 {
     private static readonly byte[] Magic = { 0x53, 0x4D, 0x54, 0x50, 0x01 };
-    private static readonly byte[] Key =
-    {
-        0x53, 0x69, 0x6D, 0x70, 0x6C, 0x69, 0x4D, 0x69,
-        0x78, 0x69, 0x2D, 0x54, 0x65, 0x6D, 0x70, 0x6C,
-        0x61, 0x74, 0x65, 0x73, 0x2D, 0x30, 0x35, 0x31
-    };
+    private static readonly byte[] Key = CreateKey();
 
     public static void EncryptDirectory(string root)
     {
@@ -103,6 +150,31 @@ public static class SimpliMixiTemplateEncryptor
             File.WriteAllBytes(datPath, encryptedBytes);
             File.Delete(pngPath);
         }
+    }
+
+    private static byte[] CreateKey()
+    {
+        byte[] seed =
+        {
+            0x31, 0xA4, 0x5C, 0x27, 0xE8, 0x09, 0xD3, 0x76,
+            0x42, 0xBD, 0x18, 0xC1, 0x6F, 0x90, 0x2A, 0x55,
+            0xCE, 0x03, 0xB7, 0x64, 0x1D, 0x88, 0xF2, 0x0B,
+            0x79, 0xE1, 0x34, 0xAC, 0x5A, 0x17, 0xC9, 0x60
+        };
+        byte[] mask =
+        {
+            0x4F, 0x12, 0xE0, 0x99, 0x3B, 0xC6, 0x70, 0x2D,
+            0x84, 0x5E, 0xA9, 0x01, 0xF3, 0x6C, 0x1A, 0xD5
+        };
+
+        byte[] key = new byte[24];
+        for (int i = 0; i < key.Length; i++)
+        {
+            int mixed = seed[i] ^ mask[(i * 7 + 3) % mask.Length] ^ (i * 29 + 0x41);
+            key[i] = (byte)((mixed << 3) | (mixed >> 5));
+        }
+
+        return key;
     }
 }
 "@
@@ -155,6 +227,9 @@ Remove-Item (Join-Path $protectedDir "Backgrounds"), (Join-Path $protectedDir "A
 
 New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
 Copy-Item (Join-Path $protectedDir "*") $packageDir -Recurse -Force
+
+Write-Host "Verifying protected assembly..."
+Test-ProtectedAssembly -AssemblyPath (Join-Path $packageDir "SimpliMixi.dll")
 
 Write-Host "Encrypting template assets..."
 Protect-TemplateAssets -TemplateRoot (Join-Path $packageDir "assets\Templates")
