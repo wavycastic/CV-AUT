@@ -10,14 +10,14 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $publishRoot = Join-Path $repoRoot "publish"
 $publishDir = Join-Path $publishRoot $Runtime
 $protectedDir = Join-Path $publishRoot "$Runtime-protected"
-$packageDir = Join-Path $publishRoot "SimpliMixi-v0.6.1"
+$packageDir = Join-Path $publishRoot "SimpliMixi-v0.6.2"
 $obfuscatedInputDir = Join-Path $publishRoot "$Runtime-obfuscator-input"
 $obfuscatedDepsDir = Join-Path $publishRoot "$Runtime-obfuscator-deps"
 $obfuscatedDir = Join-Path $publishRoot "$Runtime-obfuscated"
 $projectPath = Join-Path $repoRoot "CV-AUT.csproj"
 $configPath = Join-Path $repoRoot "Obfuscar.xml"
 $issPath = Join-Path $repoRoot "installer\SimpliMixi.iss"
-$setupPath = Join-Path $repoRoot "publish\SimpliMixi-v0.6.1-Setup.exe"
+$setupPath = Join-Path $repoRoot "publish\SimpliMixi-v0.6.2-Setup.exe"
 $dotNetRuntimePath = Join-Path $repoRoot "redist\windowsdesktop-runtime-8.0.0-win-x64.exe"
 
 function Find-ObfuscarCli
@@ -273,7 +273,7 @@ Protect-TemplateAssets -TemplateRoot (Join-Path $packageDir "assets\Templates")
 
 $readmePath = Join-Path $packageDir "README.txt"
 @"
-SimpliMixi v0.6.1
+SimpliMixi v0.6.2
 
 Run SimpliMixi.exe to start the app.
 

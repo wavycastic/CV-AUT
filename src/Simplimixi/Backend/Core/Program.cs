@@ -49,7 +49,7 @@ namespace CvAut
         [STAThread]
         static void Main(string[] args)
         {
-            Console.WriteLine($"[BUILD-ID] SimpliMixi v0.6.1 binary loaded at {DateTime.Now:yyyy-MM-dd HH:mm:ss} | base={AppContext.BaseDirectory}");
+            Console.WriteLine($"[BUILD-ID] SimpliMixi v0.6.2 binary loaded at {DateTime.Now:yyyy-MM-dd HH:mm:ss} | base={AppContext.BaseDirectory}");
 
             // Mặc định khởi chạy giao diện WPF nếu không truyền cờ --console
             if (!args.Any(a => string.Equals(a, "--console", StringComparison.OrdinalIgnoreCase)))
@@ -149,9 +149,9 @@ namespace CvAut
         {
             try { Console.Clear(); } catch { }
 
-            Console.Title = "SimpliMixi v0.6.1 Control Console";
+            Console.Title = "SimpliMixi v0.6.2 Control Console";
             WriteRule(ConsoleColor.DarkCyan);
-            WriteCentered("SIMPLIMIXI v0.6.1 CONTROL CONSOLE", ConsoleColor.Cyan);
+            WriteCentered("SIMPLIMIXI v0.6.2 CONTROL CONSOLE", ConsoleColor.Cyan);
             WriteCentered("Clash of Clans automation | FSM + OCR + ADB", ConsoleColor.Gray);
             WriteRule(ConsoleColor.DarkCyan);
             Console.WriteLine();
