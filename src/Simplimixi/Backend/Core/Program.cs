@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Timer = System.Threading.Timer;
-
 namespace CvAut
 {
     /// <summary>
@@ -40,22 +39,9 @@ namespace CvAut
             new("9", "Exit", "Close the application", "System", null)
         };
 
-        /// <summary>
-        /// Phương thức Main bắt đầu vòng đời ứng dụng.
-        /// Mặc định sẽ khởi động giao diện WPF. Nếu có tham số "--console", ứng dụng sẽ chạy trên Console CLI.
-        /// </summary>
-        /// <param name="args">Các đối số dòng lệnh truyền vào.</param>
-        [STAThread]
         static void Main(string[] args)
         {
             Console.WriteLine($"[BUILD-ID] SimpliMixi v0.6.2 binary loaded at {DateTime.Now:yyyy-MM-dd HH:mm:ss} | base={AppContext.BaseDirectory}");
-
-            // Mặc định khởi chạy giao diện WPF nếu không truyền cờ --console
-            if (!args.Any(a => string.Equals(a, "--console", StringComparison.OrdinalIgnoreCase)))
-            {
-                RunWpfApp();
-                return;
-            }
 
             try { Console.Clear(); } catch { }
 
@@ -81,17 +67,6 @@ namespace CvAut
 
                 selected.Action(configPath, templatesPath);
             }
-        }
-
-        /// <summary>
-        /// Khởi chạy ứng dụng đồ họa WPF bằng lớp App.
-        /// </summary>
-        [STAThread]
-        private static void RunWpfApp()
-        {
-            var app = new CvAut.WpfApp.App();
-            app.InitializeComponent();
-            app.Run();
         }
 
         // Các hàm chuyển hướng gọi chức năng tương ứng của Menu
@@ -166,7 +141,7 @@ namespace CvAut
 
             Console.WriteLine();
             WriteRule(ConsoleColor.DarkGray);
-            WriteMuted("By default, the app opens the WPF UI. Use --console to show this screen.");
+            WriteMuted("Running in console mode. Use --console flag explicitly if needed.");
             WriteMuted("Bot shortcuts: P = Pause, R = Resume, S = Stop.");
         }
 
