@@ -1,9 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>CvAut</RootNamespace>
@@ -15,8 +14,6 @@
     <FileVersion>0.6.2.0</FileVersion>
     <ApplicationIcon>Assets\AppIcon\SimpliMixi.ico</ApplicationIcon>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <EnableDefaultPageItems>false</EnableDefaultPageItems>
-    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -30,13 +27,6 @@
 
   <ItemGroup>
     <Compile Include="src\Simplimixi\Backend\Core\Program.cs" />
-    <Compile Include="src\Simplimixi\Frontend\Wpf\**\*.cs" />
-    <ApplicationDefinition Include="src\Simplimixi\Frontend\Wpf\App.xaml" />
-    <Page Include="src\Simplimixi\Frontend\Wpf\**\*.xaml" Exclude="src\Simplimixi\Frontend\Wpf\App.xaml" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="WPF-UI" Version="3.0.5" />
   </ItemGroup>
 
   <ItemGroup>
@@ -65,5 +55,7 @@
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
+
+
 
 </Project>
