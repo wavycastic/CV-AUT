@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using OpenCvSharp;
 using Point = OpenCvSharp.Point;
@@ -19,8 +18,20 @@ namespace CvAut
         // Vùng ROI tìm kiếm tường trên bản đồ (Tránh phần rìa chứa các nút UI cản trở)
         private static readonly Rect WallSearchRoi = Rect.FromLTRB(270, 100, 1339, 785);
 
-        // Vùng ROI dùng để đối khớp icon xác nhận nâng cấp tường
-        private static readonly Rect ValidateRoi = Rect.FromLTRB(235, 561, 1415, 867);
+        // Bảng giá nâng cấp tường tiêu chuẩn theo cấp độ (Clash of Clans)
+        private static readonly Dictionary<int, int> WallCosts = new()
+        {
+            { 8, 500_000 },     { 9, 1_000_000 },   { 10, 2_000_000 },
+            { 11, 3_000_000 },  { 12, 4_000_000 },  { 13, 5_000_000 },
+            { 14, 6_000_000 },  { 15, 7_000_000 },  { 16, 8_000_000 },
+            { 17, 9_000_000 }
+        };
+
+        // Vùng hiển thị giá tiền nâng cấp trên bảng thông tin ở đáy màn hình
+        private static readonly Rect UpgradeCostRoi = new(680, 730, 240, 45);
+
+        // Tọa độ điểm kiểm tra màu nền xám/trắng nhạt để xác nhận bảng nâng cấp đang mở
+        private static readonly Point PanelCheckPoint = new(800, 750);
 
         // Nút bấm gợi ý Thợ xây ở top-center (độ phân giải 1600x900)
         private static readonly Point BuilderMenuPoint = new(738, 36);
@@ -38,12 +49,15 @@ namespace CvAut
 
         // Các điểm chạm điều hướng giao diện nâng cấp tường
         private static readonly Point DismissPoint = new(1143, 209);
+        private static readonly Point FixedGoldUpgradePoint = new(920, 707);
+        private static readonly Point FixedElixirUpgradePoint = new(1095, 702);
+        private static readonly Point AddMoreButton = new(800, 720);
         private static readonly Point ConfirmUpgradePoint = new(1115, 782);
+        private static readonly Point ConfirmMultiPoint = new(990, 620);
         private static readonly Point SafeClosePoint = new(1229, 25);
 
         // Ngưỡng so khớp mẫu để tìm tường (cần độ tin cậy cao để tránh nhận diện nhầm các vật thể khác)
         private const double WallSearchThreshold = 0.90;
-        private const double ValidateThreshold = 0.88;
         private const int SwipeDurationMs = 600;
 
         private readonly ADBHelper _adb;
@@ -75,41 +89,71 @@ namespace CvAut
         /// <param name="wallLevel">Cấp độ tường đích muốn nâng cấp.</param>
         /// <param name="wallGoldThreshold">Ngưỡng Vàng tối thiểu để bắt đầu nâng tường.</param>
         /// <param name="wallElixirThreshold">Ngưỡng Dầu hồng tối thiểu để bắt đầu nâng tường.</param>
-        public void HandleHomeResources(int wallLevel, int wallGoldThreshold, int wallElixirThreshold)
+        public int HandleHomeResources(int wallLevel, int wallGoldThreshold, int wallElixirThreshold)
         {
             if (!IsSupportedWallLevel(wallLevel))
             {
-                Console.WriteLine($"[WALL WARN] phase=read_resources status=skip level={wallLevel} reason=unsupported_wall_level supported={MinSupportedWallLevel}-{MaxSupportedWallLevel}");
-                return;
+                Console.WriteLine($"[WALL RESULT] phase=read_resources status=skip reason=unsupported_wall_level level={wallLevel}");
+                return 0;
+            }
+
+            if (!WallCosts.TryGetValue(wallLevel, out int targetCost))
+            {
+                Console.WriteLine($"[WALL RESULT] phase=read_resources status=skip reason=missing_wall_cost level={wallLevel}");
+                return 0;
             }
 
             var (gold, elixir, _) = IsTarget.ExtractHomeResources(_adb, _vision);
-            bool goldReady = gold >= wallGoldThreshold;
-            bool elixirReady = elixir >= wallElixirThreshold;
-            Console.WriteLine($"[WALL] phase=read_resources gold={gold:N0} elixir={elixir:N0} level={wallLevel} status=ok");
-            Console.WriteLine($"[WALL DECISION] phase=read_resources gold={goldReady} elixir={elixirReady} gthr={wallGoldThreshold:N0} ethr={wallElixirThreshold:N0} status=check");
+            Console.WriteLine($"[WALL] phase=read_resources gold={gold:N0} elixir={elixir:N0} level={wallLevel} cost={targetCost:N0} status=ok");
 
-            bool upgraded = false;
+            int availableGold = Math.Max(0, gold - 100_000);
+            int availableElixir = elixir;
+            int affordGold = availableGold / targetCost;
+            int affordElixir = availableElixir / targetCost;
 
-            if (goldReady)
+            if (gold < wallGoldThreshold)
             {
-                upgraded = UpgradeWall("gold", wallLevel) || upgraded;
+                affordGold = 0;
             }
 
-            if (elixirReady)
+            if (elixir < wallElixirThreshold)
             {
-                upgraded = UpgradeWall("elixir", wallLevel) || upgraded;
+                affordElixir = 0;
             }
 
-            Console.WriteLine($"[WALL RESULT] phase=read_resources status={(upgraded ? "upgraded" : "skip")} reason={(upgraded ? "wall_upgraded" : "threshold_not_met")}");
+            Console.WriteLine($"[WALL DECISION] phase=read_resources afford_gold={affordGold} afford_elixir={affordElixir} gthr={wallGoldThreshold:N0} ethr={wallElixirThreshold:N0} status=check");
+
+            if (affordGold == 0 && affordElixir == 0)
+            {
+                Console.WriteLine("[WALL RESULT] phase=read_resources status=skip count=0 reason=cannot_afford_or_below_threshold");
+                return 0;
+            }
+
+            string bestResource;
+            int qtyToDo;
+            if (affordGold >= affordElixir && affordGold > 0)
+            {
+                bestResource = "gold";
+                qtyToDo = affordGold;
+            }
+            else
+            {
+                bestResource = "elixir";
+                qtyToDo = affordElixir;
+            }
+
+            Console.WriteLine($"[WALL DECISION] phase=decide resource={bestResource} qty={qtyToDo} status=selected");
+            bool success = UpgradeWallBulk(bestResource, wallLevel, gold, elixir);
+            Console.WriteLine($"[WALL RESULT] phase=read_resources status={(success ? "upgraded" : "skip")} count={(success ? qtyToDo : 0)} reason={(success ? "wall_upgraded" : "upgrade_failed")}");
+            return success ? qtyToDo : 0;
         }
 
         /// <summary>
-        /// Thực hiện quy trình nâng cấp một bức tường bất kỳ lên cấp độ chỉ định bằng tài nguyên vàng hoặc elixir.
+        /// Thực hiện quy trình nâng cấp hàng loạt tường lên cấp độ chỉ định bằng tài nguyên vàng hoặc elixir.
         /// Thử nghiệm tối đa 3 bức tường cho đến khi tìm được bức tường xác thực hợp lệ.
         /// </summary>
-        /// <returns>True nếu nâng cấp thành công ít nhất một bức tường, ngược lại False.</returns>
-        private bool UpgradeWall(string resource, int wallLevel)
+        /// <returns>True nếu thao tác xác nhận nâng cấp thành công, ngược lại False.</returns>
+        private bool UpgradeWallBulk(string resource, int wallLevel, int currentGold, int currentElixir)
         {
             Console.WriteLine($"[WALL] phase=attempt_upgrade resource={resource} level={wallLevel} status=start");
 
@@ -151,8 +195,8 @@ namespace CvAut
                 _adb.Tap(BuilderMenuPoint.X, BuilderMenuPoint.Y);
                 Thread.Sleep(500);
 
-                // Kiểm tra xem giao diện có hiển thị nút nâng cấp tường cấp độ tương ứng hay không
-                if (ValidateWallTap(wallLevel))
+                // Kiểm tra xem bảng nâng cấp đã mở và khớp giá tiền cấp độ tương ứng hay không
+                if (ValidateWallTapNew(wallLevel))
                 {
                     validCoord = candidate;
                     _savedWallOffset ??= -1 - attempt;
@@ -173,19 +217,42 @@ namespace CvAut
                 return false;
             }
 
-            // Tiến hành bấm nút nâng cấp bằng Vàng hoặc Dầu hồng
-            Point upgradePoint = GetUpgradePoint(resource);
+            int targetCost = WallCosts[wallLevel];
+            int available = resource.Equals("gold", StringComparison.OrdinalIgnoreCase)
+                ? Math.Max(0, currentGold - 100_000)
+                : currentElixir;
+            int qtyToDo = available / targetCost;
+
+            if (qtyToDo <= 0)
+            {
+                Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade resource={resource} level={wallLevel} status=skip reason=insufficient_resources_virtual cost={targetCost:N0}");
+                _adb.Tap(DismissPoint.X, DismissPoint.Y);
+                return false;
+            }
+
+            if (qtyToDo > 1)
+            {
+                Console.WriteLine($"[WALL] phase=add_more resource={resource} level={wallLevel} count={qtyToDo - 1} status=start");
+                for (int i = 0; i < qtyToDo - 1; i++)
+                {
+                    _adb.Tap(AddMoreButton.X, AddMoreButton.Y);
+                    Thread.Sleep(350);
+                }
+            }
+
+            Point upgradePoint = resource.Equals("gold", StringComparison.OrdinalIgnoreCase)
+                ? FixedGoldUpgradePoint
+                : FixedElixirUpgradePoint;
             _adb.Tap(upgradePoint.X, upgradePoint.Y);
             Thread.Sleep(1000);
 
-            // Xác nhận nâng cấp (Confirm)
-            _adb.Tap(ConfirmUpgradePoint.X, ConfirmUpgradePoint.Y);
+            Point confirmPoint = qtyToDo > 1 ? ConfirmMultiPoint : ConfirmUpgradePoint;
+            _adb.Tap(confirmPoint.X, confirmPoint.Y);
             Thread.Sleep(500);
 
-            // Đóng cửa sổ hoàn thành nâng cấp
             _adb.Tap(SafeClosePoint.X, SafeClosePoint.Y);
 
-            Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade resource={resource} level={wallLevel} status=upgraded reason=confirmed");
+            Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade resource={resource} level={wallLevel} qty={qtyToDo} status=upgraded reason=confirmed");
             Thread.Sleep(1000);
             return true;
         }
@@ -339,10 +406,9 @@ namespace CvAut
         }
 
         /// <summary>
-        /// Xác thực xem bức tường được bấm có đúng cấp độ mong muốn nâng cấp hay không.
-        /// Nếu khớp mẫu nút nâng cấp thành công, điều chỉnh tọa độ của nút nâng cấp Gold và Elixir.
+        /// Xác thực bảng nâng cấp tường bằng màu panel và OCR giá tiền, không phụ thuộc template ảnh theo cấp.
         /// </summary>
-        private bool ValidateWallTap(int wallLevel)
+        private bool ValidateWallTapNew(int wallLevel)
         {
             if (!IsSupportedWallLevel(wallLevel))
             {
@@ -353,61 +419,55 @@ namespace CvAut
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty())
             {
+                Console.WriteLine("[WALL RESULT] phase=validate status=fail reason=screenshot_failed");
                 return false;
             }
 
-            // Tìm mẫu hình ảnh nút nâng cấp đặc thù của cấp độ tường đó để xác minh
-            string templateName = Path.Combine("walls", wallLevel.ToString(), "Validate_Upgrade", "verify_wall_level.png");
-            if (!TemplateAssetLoader.Exists(_templatesPath, templateName))
+            int width = screenshot.Width;
+            int height = screenshot.Height;
+            int px = Math.Clamp(PanelCheckPoint.X, 0, width - 1);
+            int py = Math.Clamp(PanelCheckPoint.Y, 0, height - 1);
+            Vec3b pixel = screenshot.At<Vec3b>(py, px);
+            bool panelOpen = pixel.Item0 >= 200 && pixel.Item1 >= 200 && pixel.Item2 >= 200;
+
+            if (!panelOpen)
             {
-                Console.WriteLine($"[WALL WARN] Missing validation template: {templateName}");
+                Console.WriteLine($"[WALL RESULT] phase=validate status=fail reason=panel_not_open pixel_bgr=[{pixel.Item0},{pixel.Item1},{pixel.Item2}]");
                 return false;
             }
 
-            using Mat template = TemplateAssetLoader.Load(_templatesPath, templateName, ImreadModes.Color);
-            if (template.Empty())
+            if (!WallCosts.TryGetValue(wallLevel, out int expectedCost))
             {
+                Console.WriteLine($"[WALL RESULT] phase=validate status=fail reason=missing_wall_cost level={wallLevel}");
                 return false;
             }
 
-            Rect roi = ImageUtils.ClampRect(ValidateRoi, screenshot.Width, screenshot.Height);
-            if (roi.Width < template.Width || roi.Height < template.Height)
+            Rect safeRoi = ImageUtils.ClampRect(UpgradeCostRoi, width, height);
+            if (safeRoi.Width <= 0 || safeRoi.Height <= 0)
             {
+                Console.WriteLine($"[WALL RESULT] phase=validate status=fail reason=empty_cost_roi width={width} height={height}");
                 return false;
             }
 
-            using Mat searchArea = new Mat(screenshot, roi);
-            using Mat result = new Mat();
-            Cv2.MatchTemplate(searchArea, template, result, TemplateMatchModes.CCoeffNormed);
-            Cv2.MinMaxLoc(result, out _, out double maxVal, out _, out Point maxLoc);
-
-            int centerX = roi.X + maxLoc.X + template.Width / 2;
-            if (maxVal >= ValidateThreshold)
+            if (_vision.TryExtractNumericalMetrics(screenshot, safeRoi, out int readCost, out double confidence, useRgbThresh: true))
             {
-                // Tính toán tọa độ bấm nút nâng cấp Vàng (Gold) và Dầu hồng (Elixir) dựa trên độ lệch tương đối với nút xác minh
-                GoldUpgradePoint = new Point(centerX + 175, GoldUpgradePoint.Y);
-                ElixirUpgradePoint = new Point(centerX + 350, ElixirUpgradePoint.Y);
-                Console.WriteLine($"[WALL RESULT] phase=validate level={wallLevel} status=pass score={maxVal:F3} reason=threshold_met");
-                return true;
+                double error = Math.Abs(readCost - expectedCost) / (double)expectedCost;
+                if (error <= 0.15)
+                {
+                    Console.WriteLine($"[WALL RESULT] phase=validate level={wallLevel} status=pass read={readCost:N0} expected={expectedCost:N0} conf={confidence:F2} reason=cost_matched");
+                    return true;
+                }
+
+                Console.WriteLine($"[WALL RESULT] phase=validate level={wallLevel} status=retry read={readCost:N0} expected={expectedCost:N0} error={error:P2} reason=cost_mismatch");
+            }
+            else
+            {
+                Console.WriteLine($"[WALL RESULT] phase=validate level={wallLevel} status=retry reason=ocr_failed_to_extract");
             }
 
-            Console.WriteLine($"[WALL RESULT] phase=validate level={wallLevel} status=retry score={maxVal:F3} threshold={ValidateThreshold:F2} reason=below_threshold");
             return false;
         }
 
-        // Tọa độ tạm thời của nút nâng cấp
-        private Point GoldUpgradePoint { get; set; } = new(0, 707);
-        private Point ElixirUpgradePoint { get; set; } = new(0, 702);
-
-        /// <summary>
-        /// Trả về tọa độ điểm nâng cấp của loại tài nguyên chỉ định.
-        /// </summary>
-        private Point GetUpgradePoint(string resource)
-        {
-            return resource.Equals("gold", StringComparison.OrdinalIgnoreCase)
-                ? GoldUpgradePoint
-                : ElixirUpgradePoint;
-        }
 
         /// <summary>
         /// Phân tách ảnh nguồn 4 kênh (có alpha) thành ảnh xám và ảnh mặt nạ nhị phân (mask) để phục vụ so khớp mẫu trong suốt.

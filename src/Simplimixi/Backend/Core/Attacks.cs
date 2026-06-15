@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using OpenCvSharp;
 using Point = OpenCvSharp.Point;
@@ -16,6 +17,26 @@ namespace CvAut
         public Point Coord { get; set; }
     }
 
+    internal sealed class AttackDelayConfig
+    {
+        public int TroopDeployDelayMs { get; init; } = 60;
+        public int RageSpellDelayMs { get; init; } = 650;
+        public int FreezeSpellDelayMs { get; init; } = 850;
+        public int GrandWardenAbilityDelayMs { get; init; } = 2500;
+    }
+
+    internal sealed class SpellDeploymentGroups
+    {
+        public List<Point> RageInitial { get; init; } = new();
+        public List<Point> Freeze { get; init; } = new();
+        public List<Point> RageRemaining { get; init; } = new();
+    }
+
+    internal sealed class AttackCoordinateConfig
+    {
+        public Dictionary<string, SpellDeploymentGroups> SpellCoordinates { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Phân hệ Tấn công (Attacks):
     /// - Quản lý tọa độ rải quân mặc định theo cánh trái/phải đối xứng.
@@ -27,15 +48,19 @@ namespace CvAut
     {
         private readonly ADBHelper _adb;
         private readonly VisionEngine _vision;
+        private readonly string _templatesPath;
+        private readonly AttackDelayConfig _delays;
+        private readonly AttackCoordinateConfig _coordinates;
         private readonly Random _rand = new();
 
         private const int ScreenWidth = 1600;
         private const double MatchThreshold = 0.52;
         private const int TroopTabSelectDelayMs = 160;
-        private const int SpellCastDelayMs = 650;
-        private const int FreezeCastDelayMs = 850;
+        private const int DefaultTroopDeployDelayMs = 60;
+        private const int DefaultRageSpellDelayMs = 650;
+        private const int DefaultFreezeSpellDelayMs = 850;
         private const int SpellPhaseDelayMs = 1200;
-        private const int HeroAbilityDelayMs = 2500;
+        private const int DefaultHeroAbilityDelayMs = 2500;
         private const int DuplicateTabDistancePx = 45;
         private const int RemainingTroopSettleDelayMs = 540;
         private const int MaxRemainingDeployPasses = 1;
@@ -123,6 +148,7 @@ namespace CvAut
         private Dictionary<string, Point> _tabs = new();
         private readonly Dictionary<string, Point> _heroAbilityTabs = new(StringComparer.OrdinalIgnoreCase);
         private string _side = "left"; // Cánh tấn công ("left" hoặc "right")
+        private string _attackDirection = "top_left";
         private readonly HashSet<string> _requiredTabs = new(StringComparer.OrdinalIgnoreCase);
 
         private static bool IsStopRequested(CancellationToken token) => token.IsCancellationRequested;
@@ -135,10 +161,13 @@ namespace CvAut
         /// <summary>
         /// Khởi tạo đối tượng Attacks điều khiển trận đánh.
         /// </summary>
-        public Attacks(ADBHelper adb, VisionEngine vision)
+        public Attacks(ADBHelper adb, VisionEngine vision, string? templatesPath = null, AttackDelayConfig? delays = null, AttackCoordinateConfig? coordinates = null)
         {
             _adb = adb;
             _vision = vision;
+            _templatesPath = string.IsNullOrWhiteSpace(templatesPath) ? vision.TemplatesDirectory : templatesPath;
+            _delays = delays ?? new AttackDelayConfig();
+            _coordinates = coordinates ?? new AttackCoordinateConfig();
         }
 
         /// <summary>
@@ -177,13 +206,22 @@ namespace CvAut
             _fallbackDeployCoords.Clear();
             _heroCoords = new List<HeroInfo>();
 
+            SpellDeploymentGroups defaultSpellGroups = new()
+            {
+                RageInitial = RageL.Take(2).ToList(),
+                Freeze = FreezeL.ToList(),
+                RageRemaining = RageL.Skip(2).ToList()
+            };
+
             if (_side == "left")
             {
                 _deployCoords["dragon"] = DragonL;
                 _deployCoords["e_drag"] = DragonL.GetRange(2, 10);
                 _deployCoords["balloon"] = BalloonL;
                 _deployCoords["rage"] = RageL;
+                _deployCoords["rage_initial"] = defaultSpellGroups.RageInitial;
                 _deployCoords["freeze"] = FreezeL;
+                _deployCoords["rage_remaining"] = defaultSpellGroups.RageRemaining;
                 _deployCoords["siege_machine"] = new List<Point> { HeroL[0].Coord };
                 _deployCoords["azure_dragon"] = new List<Point> { HeroL[2].Coord };
                 _deployCoords["ice_minion"] = DragonL.GetRange(2, 10);
@@ -202,8 +240,17 @@ namespace CvAut
                 _deployCoords["dragon"] = DragonR;
                 _deployCoords["e_drag"] = DragonR.GetRange(2, 10);
                 _deployCoords["balloon"] = BalloonR;
+                SpellDeploymentGroups mirroredSpellGroups = new()
+                {
+                    RageInitial = defaultSpellGroups.RageInitial.ConvertAll(mirror),
+                    Freeze = defaultSpellGroups.Freeze.ConvertAll(mirror),
+                    RageRemaining = defaultSpellGroups.RageRemaining.ConvertAll(mirror)
+                };
+
                 _deployCoords["rage"] = RageL.ConvertAll(mirror);
+                _deployCoords["rage_initial"] = mirroredSpellGroups.RageInitial;
                 _deployCoords["freeze"] = FreezeL.ConvertAll(mirror);
+                _deployCoords["rage_remaining"] = mirroredSpellGroups.RageRemaining;
                 _deployCoords["siege_machine"] = new List<Point> { mirror(HeroL[0].Coord) };
                 _deployCoords["azure_dragon"] = new List<Point> { mirror(HeroL[2].Coord) };
                 _deployCoords["ice_minion"] = DragonR.GetRange(2, 10);
@@ -213,6 +260,39 @@ namespace CvAut
                 _fallbackDeployCoords["balloon"] = BalloonFallbackL.ConvertAll(mirror);
 
                 _heroCoords = HeroL.ConvertAll(h => new HeroInfo { Name = h.Name, Coord = mirror(h.Coord) });
+            }
+
+            ApplyCustomSpellCoordinates();
+        }
+
+        private void ApplyCustomSpellCoordinates()
+        {
+            if (!_coordinates.SpellCoordinates.TryGetValue(_attackDirection, out SpellDeploymentGroups? groups))
+            {
+                return;
+            }
+
+            if (groups.RageInitial.Count > 0)
+            {
+                _deployCoords["rage_initial"] = groups.RageInitial;
+            }
+
+            if (groups.Freeze.Count > 0)
+            {
+                _deployCoords["freeze"] = groups.Freeze;
+            }
+
+            if (groups.RageRemaining.Count > 0)
+            {
+                _deployCoords["rage_remaining"] = groups.RageRemaining;
+            }
+
+            List<Point> customRage = _deployCoords.GetValueOrDefault("rage_initial", new List<Point>())
+                .Concat(_deployCoords.GetValueOrDefault("rage_remaining", new List<Point>()))
+                .ToList();
+            if (customRage.Count > 0)
+            {
+                _deployCoords["rage"] = customRage;
             }
         }
 
@@ -234,8 +314,6 @@ namespace CvAut
                 { "e_drag", "troops/E_Drag" },
                 { "balloon", "troops/balloon" },
                 { "event_goblin", "troops/event_goblin" },
-                { "nguoimay", "troops/nguoimay" },
-                { "phuthuycuoichoi", "troops/phuthuycuoichoi" },
                 { "azure_dragon", "troops/azure_dragon" },
                 { "ice_minion", "troops/ice_minion" },
                 { "ice_golem", "troops/ice_golem" },
@@ -247,6 +325,11 @@ namespace CvAut
                 { "prince", "heroes/prince" },
                 { "rc", "heroes/rc" }
             };
+
+            foreach (var eventTroop in LoadEventTroopTemplates())
+            {
+                categories[eventTroop.Key] = eventTroop.Template;
+            }
 
             foreach (var kvp in categories)
             {
@@ -342,6 +425,23 @@ namespace CvAut
             }
         }
 
+        private IEnumerable<(string Key, string Template, int DropCount)> LoadEventTroopTemplates()
+        {
+            foreach (string name in TemplateAssetLoader.EnumerateNames(_templatesPath, "event"))
+            {
+                string key = "event_" + name.ToLowerInvariant().Replace(' ', '_').Replace('-', '_');
+                int dropCount = 10;
+                int underscore = name.LastIndexOf('_');
+                if (underscore > 0 && underscore < name.Length - 1 && int.TryParse(name[(underscore + 1)..], out int parsedCount))
+                {
+                    dropCount = Math.Clamp(parsedCount, 1, 200);
+                    key = "event_" + name[..underscore].ToLowerInvariant().Replace(' ', '_').Replace('-', '_');
+                }
+
+                yield return (key, "event/" + name, dropCount);
+            }
+        }
+
         private Point? FindDeploymentTabFallback(Mat screenshot, string key, string primaryTemplate, double primaryThreshold, out double score)
         {
             score = 0;
@@ -430,7 +530,7 @@ namespace CvAut
             }
 
             Console.WriteLine($"[ATTACK-CS] phase=deploy status=start item={troopKey} action=quick_deploy count={tapLimit}");
-            _adb.TapSequenceSafeFast(quickTaps, batchSize: 5, batchDelayMs: 60, token);
+            _adb.TapSequenceSafeFast(quickTaps, batchSize: 5, batchDelayMs: _delays.TroopDeployDelayMs, token);
         }
 
         private void DeployIfPresent(string troopKey, CancellationToken token = default)
@@ -479,7 +579,7 @@ namespace CvAut
                 taps.Add(JitterCoord(pt));
             }
 
-            _adb.TapSequenceSafeFast(taps, batchSize: 5, batchDelayMs: 60, token);
+            _adb.TapSequenceSafeFast(taps, batchSize: 5, batchDelayMs: _delays.TroopDeployDelayMs, token);
 
             sw.Stop();
             Console.WriteLine($"[ATTACK-CS] phase=deploy status=success item={troopKey} tab=({tab.X},{tab.Y}) tap_count={taps.Count} duration={sw.ElapsedMilliseconds}ms");
@@ -685,11 +785,12 @@ namespace CvAut
         private bool TryResolveSpellDeployment(string spellKey, out Point tab, out List<Point> coords, out int delay)
         {
             string key = spellKey.ToLower();
+            string tabKey = key.StartsWith("rage", StringComparison.OrdinalIgnoreCase) ? "rage" : key;
             tab = default;
             coords = new List<Point>();
-            delay = key == "rage" ? SpellCastDelayMs : FreezeCastDelayMs;
+            delay = tabKey == "rage" ? _delays.RageSpellDelayMs : _delays.FreezeSpellDelayMs;
 
-            if (!_tabs.TryGetValue(key, out tab))
+            if (!_tabs.TryGetValue(tabKey, out tab))
             {
                 Console.WriteLine($"[ATTACK-CS WARNING] phase=deploy_spell status=skip item={spellKey} reason=tab_not_found");
                 return false;
@@ -726,20 +827,44 @@ namespace CvAut
             }
         }
 
+        private void DeployConfiguredEventTroops(bool enabled, CancellationToken token)
+        {
+            if (!enabled)
+            {
+                Console.WriteLine("[ATTACK-CS] phase=deploy status=skip item=event_troops reason=disabled");
+                return;
+            }
+
+            var eventTroops = LoadEventTroopTemplates().ToList();
+            if (eventTroops.Count == 0)
+            {
+                Console.WriteLine("[ATTACK-CS] phase=deploy status=skip item=event_troops reason=no_event_templates directory=event");
+                return;
+            }
+
+            foreach (var troop in eventTroops)
+            {
+                if (IsStopRequested(token)) return;
+                DeployQuickIfPresent(troop.Key, troop.DropCount, token);
+            }
+        }
+
         /// <summary>
         /// Chạy toàn bộ kịch bản tấn công (tấn công bằng Rồng hoặc Rồng điện) theo chiến thuật chỉ định.
         /// Tự động sinh ngẫu nhiên hướng tấn công là cánh Trái hay cánh Phải để đa dạng hóa hành vi.
         /// </summary>
         /// <param name="attackStrategy">Chiến thuật tấn công ("Dragon_Attack" hoặc "ElectroDragon_Attack").</param>
         /// <param name="token">Token dùng để hủy bỏ tiến trình nếu cần dừng bot.</param>
-        public void Run(string attackStrategy = "Dragon_Attack", CancellationToken token = default)
+        public void Run(string attackStrategy = "Dragon_Attack", CancellationToken token = default, bool useEventTroops = false)
         {
             if (IsStopRequested(token)) return;
             // Ngẫu nhiên chọn hướng tấn công trái/phải
-            _side = _rand.Next(0, 2) == 0 ? "left" : "right";
+            string[] directions = { "top_left", "top_right", "bottom_left", "bottom_right" };
+            _attackDirection = directions[_rand.Next(directions.Length)];
+            _side = _attackDirection.EndsWith("left", StringComparison.OrdinalIgnoreCase) ? "left" : "right";
             InitializePatterns();
 
-            Console.WriteLine("[ATTACK-CS] phase=run_attack status=start strategy=\"" + attackStrategy + "\" side=\"" + _side.ToUpper() + "\"");
+            Console.WriteLine("[ATTACK-CS] phase=run_attack status=start strategy=\"" + attackStrategy + "\" side=\"" + _side.ToUpper() + "\" direction=\"" + _attackDirection + "\"");
 
             if (attackStrategy == "Dragon_Attack")
             {
@@ -765,10 +890,7 @@ namespace CvAut
                 DeployIfPresent("ice_golem", token);
                 DeployIfPresent("azure_dragon", token);
 
-                // Thả nhanh quân sự kiện phụ trợ nếu có.
-                DeployQuickIfPresent("event_goblin", token: token);
-                DeployQuickIfPresent("nguoimay", 50, token);
-                DeployQuickIfPresent("phuthuycuoichoi", 50, token);
+                DeployConfiguredEventTroops(useEventTroops, token);
                 if (IsStopRequested(token)) return;
 
                 // Thả Balloon đi kèm để dọn bẫy bay và hút sát thương
@@ -781,8 +903,9 @@ namespace CvAut
 
                 // Chờ quân/tướng vào nhịp trước khi thả phép hỗ trợ.
                 if (InterruptibleSleep(SpellPhaseDelayMs, token)) return;
-                DeploySpells("rage", token);
+                DeploySpells("rage_initial", token);
                 DeploySpells("freeze", token);
+                DeploySpells("rage_remaining", token);
 
                 EnsureTroopFullyDeployed("dragon");
             }
@@ -808,9 +931,7 @@ namespace CvAut
                 DeployIfPresent("ice_golem", token);
                 DeployIfPresent("azure_dragon", token);
 
-                DeployQuickIfPresent("event_goblin", token: token);
-                DeployQuickIfPresent("nguoimay", 50, token);
-                DeployQuickIfPresent("phuthuycuoichoi", 50, token);
+                DeployConfiguredEventTroops(useEventTroops, token);
                 if (IsStopRequested(token)) return;
 
                 // Rải Balloon
@@ -821,8 +942,9 @@ namespace CvAut
                 DeployHeroes(token);
 
                 if (InterruptibleSleep(SpellPhaseDelayMs, token)) return;
-                DeploySpells("rage", token);
+                DeploySpells("rage_initial", token);
                 DeploySpells("freeze", token);
+                DeploySpells("rage_remaining", token);
 
                 EnsureTroopFullyDeployed("e_drag");
             }
@@ -834,7 +956,7 @@ namespace CvAut
             }
 
             // Cho tướng giao tranh một lúc rồi mới kích hoạt kỹ năng.
-            if (InterruptibleSleep(HeroAbilityDelayMs, token)) return;
+            if (InterruptibleSleep(_delays.GrandWardenAbilityDelayMs, token)) return;
             RetapHeroes(token);
             Console.WriteLine("[ATTACK-CS] phase=run_attack status=success");
         }

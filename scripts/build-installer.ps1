@@ -123,32 +123,119 @@ function Test-ProtectedPackage
     $backendAssembly = Join-Path $PackagePath "Simplimixi.Backend.dll"
     $nativeLibrary = Join-Path $PackagePath "simplimixi_native.dll"
     $oldTemplateKeys = @("SimpliMixi-Templates-051")
-    $backendClassNames = @(
+    $runtimeConfigAllowList = @(
+        "SimpliMixi.deps.json",
+        "SimpliMixi.runtimeconfig.json",
+        "Config\test_config.json",
+        "security\integrity.manifest.json"
+    )
+    $devOnlyPathPattern = '(^|\\)(tests?|samples?|fixtures?|debug|scripts?|tools?|devtools?|bench|diagnostics|\.git|\.vs|obj|TestResults)(\\|$)'
+    $backendSensitiveTerms = @(
         "CVAutomationFramework",
         "VisionEngine",
         "ADBHelper",
         "Training",
+        "Attacks",
         "WallUpdater",
         "IsTarget",
-        "TemplateAssetLoader"
+        "TemplateAssetLoader",
+        "EmulatorBootstrapper",
+        "ImageUtils",
+        "NativeTemplateCodec",
+        "Simplimixi.Backend.Core",
+        "Dragon_Attack",
+        "ElectroDragon_Attack",
+        "[FSM-CS]",
+        "[ATTACK-CS]",
+        "[SCOUT-CS]",
+        "phase=run_attack",
+        "phase=select_strategy",
+        "input tap",
+        "input swipe",
+        "exec-out screencap",
+        "uiautomator dump",
+        "pm list packages",
+        "com.wetest.uia2.Main",
+        "simplimixi_decode_template"
     )
 
     Test-NoSensitiveTerms -AssemblyPath $appAssembly -Terms $oldTemplateKeys
     Test-NoSensitiveTerms -AssemblyPath $backendAssembly -Terms $oldTemplateKeys
-    Test-NoSensitiveTerms -AssemblyPath $backendAssembly -Terms $backendClassNames
+    Test-NoSensitiveTerms -AssemblyPath $backendAssembly -Terms $backendSensitiveTerms
 
     if (Test-Path $nativeLibrary)
     {
         Test-NoSensitiveTerms -AssemblyPath $nativeLibrary -Terms $oldTemplateKeys
     }
 
-    $debugArtifacts = Get-ChildItem $PackagePath -Recurse -Include *.pdb,*.xml -ErrorAction SilentlyContinue
+    $packageFiles = Get-ChildItem $PackagePath -Recurse -File -ErrorAction SilentlyContinue
+
+    # 1. Scan for forbidden source/script files
+    $forbiddenExtensions = @(".cs", ".csx", ".ps1", ".psm1", ".psd1", ".md", ".py", ".cmd", ".bat", ".sh")
+    $forbiddenFiles = $packageFiles | Where-Object {
+        $_.Extension.ToLowerInvariant() -in $forbiddenExtensions
+    }
+    if ($forbiddenFiles)
+    {
+        throw "Protected package contains forbidden source/script files: $($forbiddenFiles.FullName -join ', ')"
+    }
+
+    # 2. Fail on config-like files that are not explicitly required at runtime
+    $unexpectedConfigs = $packageFiles | Where-Object {
+        $relativePath = [System.IO.Path]::GetRelativePath($PackagePath, $_.FullName)
+        $normalizedPath = $relativePath.Replace('/', '\')
+        $extension = $_.Extension.ToLowerInvariant()
+        ($extension -in @(".json", ".config", ".ini", ".yaml", ".yml")) -and
+        ($normalizedPath -notin $runtimeConfigAllowList)
+    }
+    if ($unexpectedConfigs)
+    {
+        throw "Protected package contains config files that are not runtime-approved: $($unexpectedConfigs.FullName -join ', ')"
+    }
+
+    # 3. Scan for raw unencrypted template files
+    $templatePath = Join-Path $PackagePath "assets\Templates"
+    if (Test-Path $templatePath)
+    {
+        $rawTemplates = Get-ChildItem $templatePath -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+            $_.Extension.ToLowerInvariant() -in @(".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp")
+        }
+        if ($rawTemplates)
+        {
+            throw "Protected package contains unencrypted template images: $($rawTemplates.FullName -join ', ')"
+        }
+    }
+
+    # 4. Scan for dev/test-only directories or artifacts accidentally copied into the package
+    $devOnlyArtifacts = $packageFiles | Where-Object {
+        $relativePath = [System.IO.Path]::GetRelativePath($PackagePath, $_.FullName)
+        $normalizedPath = $relativePath.Replace('/', '\')
+        $normalizedPath -match $devOnlyPathPattern
+    }
+    if ($devOnlyArtifacts)
+    {
+        throw "Protected package contains development-only assets or directories: $($devOnlyArtifacts.FullName -join ', ')"
+    }
+
+    $devOnlyDirectories = Get-ChildItem $PackagePath -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object {
+        $relativePath = [System.IO.Path]::GetRelativePath($PackagePath, $_.FullName)
+        $normalizedPath = $relativePath.Replace('/', '\')
+        $normalizedPath -match $devOnlyPathPattern
+    }
+    if ($devOnlyDirectories)
+    {
+        throw "Protected package contains development-only directories: $($devOnlyDirectories.FullName -join ', ')"
+    }
+
+    # 5. Scan for debug symbols or documentation
+    $debugArtifacts = $packageFiles | Where-Object {
+        $_.Extension.ToLowerInvariant() -in @(".pdb", ".xml")
+    }
     if ($debugArtifacts)
     {
         throw "Protected package contains debug artifacts: $($debugArtifacts.FullName -join ', ')"
     }
 }
-
 function Protect-TemplateAssets
 {
     param([string]$TemplateRoot)
@@ -305,3 +392,7 @@ if (-not (Test-Path $setupPath))
 Write-Host "Protected release ready: $setupPath"
 Write-Host "Package folder: $packageDir"
 Write-Host "Smoke test before release: install setup, launch app, verify encrypted template images, then test Start/End and ADB/BlueStacks flow."
+
+
+
+

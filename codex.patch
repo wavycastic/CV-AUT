@@ -1,0 +1,4 @@
+*** Begin Patch
+*** Add File: src/Simplimixi/Backend/Core/ReleaseSecurity.cs
++using System;
+*** End Patch

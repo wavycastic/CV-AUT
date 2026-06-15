@@ -13,17 +13,10 @@ namespace CvAut
     /// </summary>
     internal static class EmulatorBootstrapper
     {
-        // Tên tiến trình (Process) của BlueStacks App Player
-        private const string BlueStacksProcessName = "HD-Player";
-
-        // Tên gói package Android của game Clash of Clans
         private const string ClashPackageName = "com.supercell.clashofclans";
-
-        // Tiền tố instance mặc định của BlueStacks (thường là bản Pie 64-bit)
         private const string DefaultInstancePrefix = "bst.instance.Pie64.";
 
-        // Danh sách các đường dẫn mặc định thường gặp của file chạy BlueStacks HD-Player.exe
-        private static readonly string[] PlayerCandidates =
+        private static readonly string[] BlueStacksCandidates =
         {
             @"C:\Program Files\BlueStacks_nxt\HD-Player.exe",
             @"C:\Program Files\BlueStacks\HD-Player.exe",
@@ -31,20 +24,64 @@ namespace CvAut
             @"C:\Program Files (x86)\BlueStacks\HD-Player.exe"
         };
 
-        /// <summary>
-        /// Đảm bảo giả lập đã sẵn sàng và game Clash of Clans đã được bật lên hàng trước (foreground).
-        /// </summary>
-        /// <param name="adb">Đối tượng ADBHelper để giao tiếp.</param>
-        /// <param name="host">Địa chỉ IP của giả lập (mặc định 127.0.0.1).</param>
-        /// <param name="port">Cổng ADB của giả lập (mặc định 5556).</param>
-        /// <param name="token">Token dùng để hủy bỏ tiến trình chờ nếu người dùng yêu cầu dừng bot.</param>
-        /// <returns>True nếu giả lập và game sẵn sàng, ngược lại False.</returns>
-        public static bool EnsureReady(ADBHelper adb, string host, int port, CancellationToken token)
+        private static readonly string[] MEmuCandidates =
         {
-            Console.WriteLine($"[ADB] phase=boot status=start host={host} port={port}");
+            @"C:\Program Files\Microvirt\MEmu\MEmu.exe",
+            @"D:\Program Files\Microvirt\MEmu\MEmu.exe",
+            @"C:\Program Files (x86)\Microvirt\MEmu\MEmu.exe"
+        };
 
-            // Tìm file thực thi của BlueStacks trong máy tính
-            string? playerPath = FindExistingFile(PlayerCandidates);
+        private static readonly string[] NoxCandidates =
+        {
+            @"C:\Program Files\Nox\bin\Nox.exe",
+            @"C:\Program Files (x86)\Nox\bin\Nox.exe",
+            @"D:\Program Files\Nox\bin\Nox.exe"
+        };
+
+        private static readonly string[] LDPlayerCandidates =
+        {
+            @"C:\LDPlayer\LDPlayer9\dnplayer.exe",
+            @"C:\LDPlayer\LDPlayer4\dnplayer.exe",
+            @"C:\LDPlayer\LDPlayer\dnplayer.exe",
+            @"D:\LDPlayer\LDPlayer9\dnplayer.exe"
+        };
+
+        private static readonly string[] MuMuCandidates =
+        {
+            @"C:\Program Files\MuMuPlayer-12.0\shell\MuMuPlayer.exe",
+            @"C:\Program Files (x86)\MuMuPlayer-12.0\shell\MuMuPlayer.exe",
+            @"D:\Program Files\MuMuPlayer-12.0\shell\MuMuPlayer.exe",
+            @"C:\Program Files\MuMuPlayer-12.0\shell\NemuPlayer.exe"
+        };
+
+        private static string[] GetCandidatesForType(string type)
+        {
+            switch (type?.ToLowerInvariant())
+            {
+                case "memu": return MEmuCandidates;
+                case "nox": return NoxCandidates;
+                case "ldplayer": return LDPlayerCandidates;
+                case "mumu": return MuMuCandidates;
+                case "bluestacks":
+                default:
+                    return BlueStacksCandidates;
+            }
+        }
+
+        public static bool EnsureReady(ADBHelper adb, string host, int port, string emulatorType, string emulatorPath, CancellationToken token)
+        {
+            Console.WriteLine($"[ADB] phase=boot status=start host={host} port={port} type={emulatorType}");
+
+            string? playerPath = null;
+            if (!string.IsNullOrWhiteSpace(emulatorPath) && File.Exists(emulatorPath))
+            {
+                playerPath = emulatorPath;
+            }
+            else
+            {
+                playerPath = FindExistingFile(GetCandidatesForType(emulatorType));
+            }
+
             if (playerPath != null)
             {
                 Console.WriteLine($"[ADB] phase=boot status=pending action=locate_player details=\"{playerPath}\"");
@@ -54,34 +91,34 @@ namespace CvAut
                 Console.WriteLine("[ADB WARNING] phase=boot status=pending action=locate_player reason=not_found");
             }
 
-            // Đường dẫn tệp cấu hình của BlueStacks để kiểm tra thông tin cài đặt
-            string confPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                @"BlueStacks_nxt\bluestacks.conf");
-            if (File.Exists(confPath))
+            bool displaySettingsChanged = false;
+            if (string.Equals(emulatorType, "BlueStacks", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine($"[ADB] phase=boot status=pending action=locate_conf details=\"{confPath}\"");
-            }
-            else
-            {
-                Console.WriteLine($"[ADB WARNING] phase=boot status=pending action=locate_conf reason=not_found details=\"{confPath}\"");
+                string confPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    @"BlueStacks_nxt\bluestacks.conf");
+                if (File.Exists(confPath))
+                {
+                    Console.WriteLine($"[ADB] phase=boot status=pending action=locate_conf details=\"{confPath}\"");
+                    Console.WriteLine($"[ADB] phase=boot status=pending action=set_instance prefix=\"{DefaultInstancePrefix}\"");
+                    displaySettingsChanged = EnsureBlueStacksDisplaySettings(confPath, DefaultInstancePrefix);
+                }
+                else
+                {
+                    Console.WriteLine($"[ADB WARNING] phase=boot status=pending action=locate_conf reason=not_found details=\"{confPath}\"");
+                }
             }
 
-            Console.WriteLine($"[ADB] phase=boot status=pending action=set_instance prefix=\"{DefaultInstancePrefix}\"");
-            bool displaySettingsChanged = EnsureBlueStacksDisplaySettings(confPath, DefaultInstancePrefix);
-
-            // Nếu BlueStacks đang chạy với display config vừa đổi, restart để 1600x900 DPI 300 có hiệu lực.
-            if (displaySettingsChanged && IsBlueStacksRunning())
+            if (displaySettingsChanged && IsEmulatorRunning(emulatorType))
             {
                 Console.WriteLine("[ADB] phase=boot status=pending action=restart_emulator reason=settings_changed");
-                KillBlueStacksProcesses();
+                KillEmulatorProcesses(emulatorType);
                 Thread.Sleep(1500);
             }
 
-            // Nếu BlueStacks chưa chạy, reset ADB trước rồi mới mở lại giả lập để tránh kẹt kết nối cũ.
-            if (!IsBlueStacksRunning())
+            if (!IsEmulatorRunning(emulatorType))
             {
-                if (!ResetAdbAndStartBlueStacks(playerPath, "BlueStacks is not running"))
+                if (!ResetAdbAndStartEmulator(playerPath, emulatorType, $"{emulatorType} is not running"))
                 {
                     return false;
                 }
@@ -91,11 +128,10 @@ namespace CvAut
                 Console.WriteLine("[ADB] phase=boot status=pending action=check_emulator details=\"running\"");
             }
 
-            // Đợi ADB online. Nếu bị kẹt, reset ADB và gọi lại BlueStacks một lần rồi thử lại.
             if (!WaitForOnline(adb, token))
             {
                 Console.WriteLine("[ADB WARNING] phase=boot status=pending action=wait_online reason=timeout_retrying");
-                if (!ResetAdbAndStartBlueStacks(playerPath, "ADB connection is not online"))
+                if (!ResetAdbAndStartEmulator(playerPath, emulatorType, "ADB connection is not online"))
                 {
                     return false;
                 }
@@ -110,7 +146,6 @@ namespace CvAut
             Console.WriteLine("[ADB] phase=boot status=success details=\"connected\"");
             Console.WriteLine("[ADB] phase=check_app status=start package=\"com.supercell.clashofclans\"");
 
-            // Kiểm tra xem Clash of Clans đã được cài đặt trên giả lập chưa
             string packageInfo = adb.ExecuteShell($"pm path {ClashPackageName}");
             if (packageInfo.StartsWith("Error:", StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrWhiteSpace(packageInfo))
@@ -125,7 +160,6 @@ namespace CvAut
                 return true;
             }
 
-            // Thử nhẹ trước: launch game bằng ADB, chỉ reset ADB nếu game vẫn không lên foreground.
             if (LaunchClashAndWaitForeground(adb, token, timeoutSeconds: 12))
             {
                 Console.WriteLine("[ADB] phase=launch_app status=success");
@@ -133,7 +167,7 @@ namespace CvAut
             }
 
             Console.WriteLine("[ADB WARNING] phase=launch_app status=retry reason=timeout");
-            if (!ResetAdbAndStartBlueStacks(playerPath, "Clash of Clans failed to launch"))
+            if (!ResetAdbAndStartEmulator(playerPath, emulatorType, "Clash of Clans failed to launch"))
             {
                 return false;
             }
@@ -246,10 +280,7 @@ namespace CvAut
             return false;
         }
 
-        /// <summary>
-        /// Reset tiến trình ADB bị kẹt rồi gọi lại BlueStacks để nó tự mở/kéo instance lên.
-        /// </summary>
-        private static bool ResetAdbAndStartBlueStacks(string? playerPath, string reason)
+        private static bool ResetAdbAndStartEmulator(string? playerPath, string emulatorType, string reason)
         {
             if (playerPath == null)
             {
@@ -259,16 +290,45 @@ namespace CvAut
 
             Console.WriteLine($"[ADB] phase=boot status=pending action=kill_adb reason=\"{reason}\"");
             KillAdbProcesses();
-            StartBlueStacks(playerPath);
+            StartEmulator(playerPath);
             return true;
         }
 
-        /// <summary>
-        /// Kết thúc BlueStacks để cấu hình display trong bluestacks.conf được nạp lại khi mở tiếp theo.
-        /// </summary>
-        private static void KillBlueStacksProcesses()
+        private static string GetProcessNameForType(string type)
         {
-            foreach (Process process in Process.GetProcessesByName(BlueStacksProcessName))
+            switch (type?.ToLowerInvariant())
+            {
+                case "memu": return "MEmu";
+                case "nox": return "Nox";
+                case "ldplayer": return "dnplayer";
+                case "mumu": return "MuMuPlayer";
+                case "bluestacks":
+                default:
+                    return "HD-Player";
+            }
+        }
+
+        private static bool IsEmulatorRunning(string type)
+        {
+            string pName = GetProcessNameForType(type);
+            if (Process.GetProcessesByName(pName).Any()) return true;
+            if (type?.ToLowerInvariant() == "mumu" && Process.GetProcessesByName("NemuPlayer").Any()) return true;
+            return false;
+        }
+
+        private static void KillEmulatorProcesses(string type)
+        {
+            string pName = GetProcessNameForType(type);
+            KillProcesses(pName);
+            if (type?.ToLowerInvariant() == "mumu")
+            {
+                KillProcesses("NemuPlayer");
+            }
+        }
+
+        private static void KillProcesses(string processName)
+        {
+            foreach (Process process in Process.GetProcessesByName(processName))
             {
                 try
                 {
@@ -277,7 +337,7 @@ namespace CvAut
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[ADB WARNING] phase=boot status=pending action=kill_emulator pid={process.Id} reason=\"{ex.Message}\"");
+                    Console.WriteLine($"[ADB WARNING] Action=kill_emulator process={processName} pid={process.Id} reason=\"{ex.Message}\"");
                 }
                 finally
                 {
@@ -286,9 +346,6 @@ namespace CvAut
             }
         }
 
-        /// <summary>
-        /// Kết thúc toàn bộ adb.exe để xoá trạng thái server/connection cũ trước khi mở BlueStacks.
-        /// </summary>
         private static void KillAdbProcesses()
         {
             foreach (Process process in Process.GetProcessesByName("adb"))
@@ -309,9 +366,6 @@ namespace CvAut
             }
         }
 
-        /// <summary>
-        /// Gửi lệnh mở Clash of Clans và chờ đến khi game lên foreground.
-        /// </summary>
         private static bool LaunchClashAndWaitForeground(ADBHelper adb, CancellationToken token, int timeoutSeconds)
         {
             Console.WriteLine("[ADB] phase=launch_app status=start");
@@ -331,9 +385,6 @@ namespace CvAut
             return false;
         }
 
-        /// <summary>
-        /// Kiểm tra Clash of Clans có đang là activity foreground/top resumed không.
-        /// </summary>
         private static bool IsClashOfClansForeground(ADBHelper adb)
         {
             string windowInfo = adb.ExecuteShell("dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'");
@@ -343,18 +394,7 @@ namespace CvAut
                 || activityInfo.Contains(ClashPackageName, StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>
-        /// Kiểm tra xem BlueStacks (HD-Player) có đang chạy trong danh sách Task Manager của Windows không.
-        /// </summary>
-        private static bool IsBlueStacksRunning()
-        {
-            return Process.GetProcessesByName(BlueStacksProcessName).Any();
-        }
-
-        /// <summary>
-        /// Khởi chạy file thực thi của BlueStacks.
-        /// </summary>
-        private static void StartBlueStacks(string playerPath)
+        private static void StartEmulator(string playerPath)
         {
             var startInfo = new ProcessStartInfo
             {
