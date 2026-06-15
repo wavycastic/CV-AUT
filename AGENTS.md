@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **CV-AUT** (2887 symbols, 5624 relationships, 215 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **CV-AUT** (3536 symbols, 7469 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -41,12 +41,3 @@ This project is indexed by GitNexus as **CV-AUT** (2887 symbols, 5624 relationsh
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
-
-# WPF UI coding rules
-- This project uses the `Wpf.Ui` (lepoco/wpfui) library for all UI.
-- BEFORE writing or editing any XAML/UI code, READ the relevant files in:
-  - `docs/wpf-ui/docs/`     → official control documentation (markdown)
-  - `docs/wpf-ui/gallery/`  → real source code of the WPF UI Gallery app (use as the canonical example)
-- NEVER invent Wpf.Ui control names, properties, or namespaces. If unsure, find the exact usage in `docs/wpf-ui/gallery/` first.
-- Match the Gallery's patterns: `ui:FluentWindow`, `ui:NavigationView` + `ui:NavigationViewItem`, `ui:CardControl`, `ui:CardExpander`, `ui:CardAction`, `ui:TextBlock FontTypography=...`, `ui:Button Appearance="Primary"`.
-- Use theme resource keys (e.g. `ApplicationBackgroundBrush`, `TextFillColorPrimary`) instead of hardcoded hex, except documented fallbacks.

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -38,6 +39,11 @@ namespace CvAut
         private volatile bool _fastAttackQueued; // Kích hoạt bỏ qua bước chuẩn bị nếu vừa đánh xong về thẳng Làng chính
         private bool _disposed;
         private bool _handlingConnectionPopup;
+        private DateTime _sessionStartedAt;
+        private DateTime? _pauseStartedAt;
+        private TimeSpan _pausedDuration = TimeSpan.Zero;
+        private int _sessionBattlesCompleted;
+        private string _activeAccountName = "unknown";
 
         private static readonly string WritableLogsDirectory = ResolveWritableLogsDirectory();
         private const int MinSupportedWallLevel = 8;
@@ -101,14 +107,15 @@ namespace CvAut
             var devConfig = Config.GetProperty("device_connection");
             string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
             int port = devConfig.GetProperty("port").GetInt32();
+            string? serial = devConfig.TryGetProperty("serial", out JsonElement serialElement) ? serialElement.GetString() : null;
 
-            _adb = new ADBHelper(host, port);
+            _adb = new ADBHelper(host, port, serial);
 
             _templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
             _adb.BeforeInputAction = null;
             _vision = new VisionEngine(_templatesPath);
             _training = new Training(_adb, _templatesPath, _vision);
-            _attacks = new Attacks(_adb, _vision);
+            _attacks = new Attacks(_adb, _vision, _templatesPath, ReadAttackDelayConfig(Config), ReadAttackCoordinateConfig(Config));
             _wallUpdater = new WallUpdater(_adb, _vision, _templatesPath);
 
             Console.WriteLine("[FSM-CS] phase=init status=success details=\"automation_core_initialized\"");
@@ -137,13 +144,14 @@ namespace CvAut
             // Gán cấu hình mặc định dự phòng
             string defaultJson = @"{
                 ""device_connection"": {""host"": ""127.0.0.1"", ""port"": 5556},
-                ""farming_thresholds"": {""gold_threshold"": 650000, ""elixir_threshold"": 650000, ""dark_elixir_threshold"": 1000},
+                ""farming_thresholds"": {""gold_threshold"": 650000, ""elixir_threshold"": 650000, ""dark_elixir_threshold"": 1000, ""total_resource_threshold"": 1300000, ""target_logic"": ""total""},
                 ""upgrade_wall"": false,
                 ""wall_level"": 14,
                 ""wall_gold_threshold"": 5000000,
                 ""wall_elixir_threshold"": 5000000,
                 ""enable_stats"": true,
-                ""multi_account"": {""enable_multi_account"": false, ""multi_interval_mins"": 60, ""selected_villages"": [1]}
+                ""run_session"": {""play_mode"": ""main_village"", ""stop_after_battles_enabled"": false, ""stop_after_battles"": 0, ""stop_after_minutes_enabled"": false, ""stop_after_minutes"": 0},
+                ""multi_account"": {""enable_multi_account"": false, ""multi_interval_mins"": 60, ""switch_after_battles_enabled"": false, ""switch_after_battles"": 0, ""switch_after_minutes_enabled"": true, ""switch_after_clan_points_enabled"": false, ""switch_after_clan_points"": 0, ""selected_villages"": [1], ""accounts"": [{""id"": ""acc_1"", ""name"": ""Account 1"", ""profileVillage"": 1, ""targetVillage"": ""main_village"", ""templatePath"": """", ""enabled"": true}]}
             }";
             using var defaultDoc = JsonDocument.Parse(defaultJson);
             Config = defaultDoc.RootElement.Clone();
@@ -158,6 +166,10 @@ namespace CvAut
 
             _isRunning = true;
             _fastAttackQueued = false;
+            _sessionStartedAt = DateTime.Now;
+            _pauseStartedAt = null;
+            _pausedDuration = TimeSpan.Zero;
+            _sessionBattlesCompleted = 0;
             _cts = new CancellationTokenSource();
             _pauseEvent.Set(); // Mở khoá luồng để bot bắt đầu chạy
 
@@ -175,9 +187,11 @@ namespace CvAut
                 var devConfig = Config.GetProperty("device_connection");
                 string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
                 int port = devConfig.GetProperty("port").GetInt32();
+                string emulatorType = devConfig.TryGetProperty("emulator_type", out var typeProp) ? (typeProp.GetString() ?? "BlueStacks") : "BlueStacks";
+                string emulatorPath = devConfig.TryGetProperty("emulator_path", out var pathProp) ? (pathProp.GetString() ?? string.Empty) : string.Empty;
 
-                // Đảm bảo BlueStacks đã được bật và mở CoC
-                if (!EmulatorBootstrapper.EnsureReady(_adb, host, port, token))
+                // Đảm bảo giả lập đã được bật và mở CoC
+                if (!EmulatorBootstrapper.EnsureReady(_adb, host, port, emulatorType, emulatorPath, token))
                 {
                     _isRunning = false;
                     return;
@@ -221,6 +235,7 @@ namespace CvAut
         /// </summary>
         public void Pause()
         {
+            _pauseStartedAt = DateTime.Now;
             _pauseEvent.Reset();
             Console.WriteLine("[FSM-CS] phase=worker status=paused");
         }
@@ -230,6 +245,12 @@ namespace CvAut
         /// </summary>
         public void Resume()
         {
+            if (_pauseStartedAt != null)
+            {
+                _pausedDuration += DateTime.Now - _pauseStartedAt.Value;
+                _pauseStartedAt = null;
+            }
+
             _pauseEvent.Set();
             Console.WriteLine("[FSM-CS] phase=worker status=resumed");
         }
@@ -270,7 +291,48 @@ namespace CvAut
 
         private bool CheckStop(CancellationToken token)
         {
-            return token.IsCancellationRequested || !_isRunning;
+            return token.IsCancellationRequested || !_isRunning || CheckAutoStop();
+        }
+
+        private bool CheckAutoStop()
+        {
+            if (!_isRunning) return true;
+
+            JsonElement session = GetObjectOrDefault(Config, "run_session");
+            if (session.ValueKind != JsonValueKind.Object) return false;
+
+            bool stopByBattles = GetBoolOrDefault(session, "stop_after_battles_enabled", false);
+            int battleLimit = GetIntOrDefault(session, "stop_after_battles", 0);
+            if (stopByBattles && battleLimit > 0 && _sessionBattlesCompleted >= battleLimit)
+            {
+                _isRunning = false;
+                _cts?.Cancel();
+                _pauseEvent.Set();
+                Console.WriteLine($"[FSM-CS] phase=auto_stop status=triggered reason=battle_limit current={_sessionBattlesCompleted} limit={battleLimit}");
+                return true;
+            }
+
+            bool stopByMinutes = GetBoolOrDefault(session, "stop_after_minutes_enabled", false);
+            int minuteLimit = GetIntOrDefault(session, "stop_after_minutes", 0);
+            if (stopByMinutes && minuteLimit > 0)
+            {
+                TimeSpan activeElapsed = DateTime.Now - _sessionStartedAt - _pausedDuration;
+                if (_pauseStartedAt != null)
+                {
+                    activeElapsed -= DateTime.Now - _pauseStartedAt.Value;
+                }
+
+                if (activeElapsed.TotalMinutes >= minuteLimit)
+                {
+                    _isRunning = false;
+                    _cts?.Cancel();
+                    _pauseEvent.Set();
+                    Console.WriteLine($"[FSM-CS] phase=auto_stop status=triggered reason=minute_limit elapsed_minutes={activeElapsed.TotalMinutes:F1} limit={minuteLimit}");
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private bool InterruptibleSleep(int milliseconds, CancellationToken token)
@@ -328,6 +390,8 @@ namespace CvAut
                 Console.WriteLine("[FSM-CS] phase=cycle status=pending mode=fast_attack");
             }
 
+            MainVillageConfig mainConfig = GetMainVillageConfig(cfg, _currentVillageIdx);
+
             // 1. Xác thực màn hình Làng chính (Home Base)
             WaitIfPaused(token);
             if (CheckStop(token)) return;
@@ -337,6 +401,14 @@ namespace CvAut
             if (!isHome)
             {
                 Console.WriteLine("[FSM-CS ERROR] phase=cycle status=skip reason=home_not_detected");
+                return;
+            }
+
+            if (mainConfig.AttackMode == AttackMode.DonateOnly)
+            {
+                RunDonateOnlyCycle(mainConfig, token);
+                _cycleCount++;
+                Console.WriteLine($"[FSM-CS] phase=cycle status=success village={_currentVillageIdx} mode=donate_only");
                 return;
             }
 
@@ -396,16 +468,19 @@ namespace CvAut
                 {
                     return;
                 }
+
+                TryUseCakeIfConfigured(mainConfig, token);
+                TryRequestTroopsIfConfigured(mainConfig, token);
             }
 
             // 6. Tìm kiếm tài nguyên (Scouting loop)
             WaitIfPaused(token);
             if (CheckStop(token)) return;
 
-            var (goldReq, elixirReq, deReq) = GetFarmingThresholds(cfg, _currentVillageIdx);
+            FarmingTargetConfig targetConfig = mainConfig.Target;
 
-            Console.WriteLine($"[CONFIG-CS] phase=startup active_village={_currentVillageIdx} gold_req={goldReq} elixir_req={elixirReq} dark_elixir_req={deReq}");
-            Console.WriteLine($"[SCOUT-CS] phase=scout status=start village={_currentVillageIdx} gold_req={goldReq} elixir_req={elixirReq} dark_elixir_req={deReq}");
+            Console.WriteLine($"[CONFIG-CS] phase=startup active_village={_currentVillageIdx} gold_req={targetConfig.GoldThreshold} elixir_req={targetConfig.ElixirThreshold} dark_elixir_req={targetConfig.DarkElixirThreshold} total_req={targetConfig.TotalResourceThreshold} target_logic={targetConfig.Logic}");
+            Console.WriteLine($"[SCOUT-CS] phase=scout status=start village={_currentVillageIdx} gold_req={targetConfig.GoldThreshold} elixir_req={targetConfig.ElixirThreshold} dark_elixir_req={targetConfig.DarkElixirThreshold} total_req={targetConfig.TotalResourceThreshold} target_logic={targetConfig.Logic}");
 
             // Bấm nút Tấn công (Attack) để mở giao diện tìm kiếm
             SearchAttack();
@@ -463,23 +538,24 @@ namespace CvAut
                 var resources = IsTarget.ExtractResources(_adb, _vision);
 
                 // Kiểm tra xem lượng tài nguyên có đạt tiêu chí cấu hình hay không
-                if (resources.Gold >= goldReq && resources.Elixir >= elixirReq && resources.DarkElixir >= deReq)
+                bool targetAccepted = ShouldAcceptTarget(resources, targetConfig, out string targetReason);
+                if (targetAccepted)
                 {
-                    Console.WriteLine($"[SCOUT-CS] phase=scout status=success gold={resources.Gold} elixir={resources.Elixir} dark_elixir={resources.DarkElixir} details=\"target_accepted\"");
+                    Console.WriteLine($"[SCOUT-CS] phase=scout status=success gold={resources.Gold} elixir={resources.Elixir} dark_elixir={resources.DarkElixir} total={resources.Gold + resources.Elixir} target_logic={targetConfig.Logic} reason={targetReason} details=\"target_accepted\"");
                     Console.WriteLine("[SCOUT-CS] phase=scout status=pending action=prepare_attack");
                     if (InterruptibleSleep(1500, token)) break;
 
                     // Chạy script tự động rải quân tấn công
                     string attackStrategy = GetAttackStrategy(cfg, _currentVillageIdx);
                     Console.WriteLine($"[ATTACK-CS] phase=select_strategy status=success village={_currentVillageIdx} strategy={attackStrategy}");
-                    _attacks.Run(attackStrategy, token);
+                    _attacks.Run(attackStrategy, token, mainConfig.UseEventTroops);
                     battleExecuted = true;
 
                     WaitIfPaused(token);
                     if (CheckStop(token)) break;
 
                     // Chờ trận đấu tự động kết thúc hoặc hết giờ
-                    bool battleWaitOk = WaitBattleEnd(token);
+                    bool battleWaitOk = WaitBattleEnd(token, mainConfig.SmartSurrender);
                     if (!battleWaitOk)
                     {
                         return;
@@ -499,6 +575,7 @@ namespace CvAut
                     {
                         Console.WriteLine("[FSM-CS] phase=battle_stats status=skip reason=stats_disabled");
                     }
+                    _sessionBattlesCompleted++;
 
                     // Bấm nút quay trở về Làng chính
                     bool returnedHome = ReturnHome();
@@ -516,10 +593,14 @@ namespace CvAut
                         {
                             if (EnsureHomeBase(maxWaitSeconds: 20))
                             {
-                                _wallUpdater.HandleHomeResources(
+                                int upgradedWalls = _wallUpdater.HandleHomeResources(
                                     wallConfig.WallLevel,
                                     wallConfig.GoldThreshold,
                                     wallConfig.ElixirThreshold);
+                                if (upgradedWalls > 0 && GetBoolOrDefault(cfg, "enable_stats", false))
+                                {
+                                    UpdateWallStats(_currentVillageIdx, upgradedWalls);
+                                }
                             }
                             else
                             {
@@ -532,11 +613,12 @@ namespace CvAut
                         }
                     }
 
+                    CheckAutoStop();
                     break;
                 }
                 else
                 {
-                    Console.WriteLine("[SCOUT-CS] phase=scout status=skip details=\"target_skipped\"");
+                    Console.WriteLine($"[SCOUT-CS] phase=scout status=skip gold={resources.Gold} elixir={resources.Elixir} dark_elixir={resources.DarkElixir} total={resources.Gold + resources.Elixir} target_logic={targetConfig.Logic} reason={targetReason} details=\"target_skipped\"");
                     // Bấm tìm kiếm đối thủ tiếp theo
                     SearchNext();
                     searchCount++;
@@ -577,6 +659,7 @@ namespace CvAut
                 while (!CheckStop(token))
                 {
                     OneCycle(Config, token);
+                    if (CheckStop(token)) break;
                     // Nghỉ ngắt quãng giữa các chu kỳ. Nếu vừa đánh xong, delay ngắn hơn để đánh tiếp ngay
                     InterruptibleSleep(_fastAttackQueued ? FastAttackCycleDelayMs : NormalCycleDelayMs, token);
                 }
@@ -584,37 +667,61 @@ namespace CvAut
             }
 
             // Chế độ chạy nhiều tài khoản (Multi Account)
-            int intervalSecs = GetIntOrDefault(multiConfig, "multi_interval_mins", 60) * 60;
+            AccountConfig[] accounts = GetConfiguredAccounts(multiConfig);
+            int intervalSecs = Math.Max(1, GetIntOrDefault(multiConfig, "multi_interval_mins", 60)) * 60;
+            bool switchByMinutes = GetBoolOrDefault(multiConfig, "switch_after_minutes_enabled", true);
+            bool switchByBattles = GetBoolOrDefault(multiConfig, "switch_after_battles_enabled", false);
+            int battleLimit = GetIntOrDefault(multiConfig, "switch_after_battles", 0);
+            bool switchByClanPoints = GetBoolOrDefault(multiConfig, "switch_after_clan_points_enabled", false);
+            int clanPointLimit = GetIntOrDefault(multiConfig, "switch_after_clan_points", 0);
 
             while (!CheckStop(token))
             {
-                int[] selectedVillages = GetSelectedVillages(multiConfig);
-
-                foreach (int idx in selectedVillages)
+                foreach (AccountConfig account in accounts)
                 {
                     WaitIfPaused(token);
                     if (CheckStop(token)) break;
 
+                    int idx = account.ProfileVillage;
                     _currentVillageIdx = idx;
                     _fastAttackQueued = false;
-                    Console.WriteLine($"[FSM-CS] phase=worker_loop status=pending action=switch_village target={idx}");
+                    Console.WriteLine($"[FSM-CS] phase=worker_loop status=pending action=switch_account target={idx} account=\"{account.Name}\"");
 
                     // Thực hiện thay đổi tài khoản tương ứng
-                    SwitchToVillagePlaceholder(idx);
+                    if (!SwitchToAccount(account, token))
+                    {
+                        Console.WriteLine($"[FSM-CS WARNING] phase=account_switch status=fail target={idx} account=\"{account.Name}\" action=skip_account");
+                        continue;
+                    }
                     _wallUpdater.ResetSavedOffset();
 
                     DateTime slotStart = DateTime.Now;
+                    int slotBattleStart = _sessionBattlesCompleted;
+                    int slotClanPointStart = ReadClanGamesPoints(idx);
                     _cycleCount = 0;
 
-                    // Chơi tài khoản này cho đến khi hết thời lượng phân bổ (mặc định 60 phút)
-                    while ((DateTime.Now - slotStart).TotalSeconds < intervalSecs && !CheckStop(token))
+                    // Chơi tài khoản này cho đến khi một điều kiện đổi account được kích hoạt.
+                    string switchReason = "none";
+                    while (!ShouldSwitchAccount(
+                        slotStart,
+                        slotBattleStart,
+                        slotClanPointStart,
+                        idx,
+                        switchByMinutes,
+                        intervalSecs,
+                        switchByBattles,
+                        battleLimit,
+                        switchByClanPoints,
+                        clanPointLimit,
+                        out switchReason) && !CheckStop(token))
                     {
                         WaitIfPaused(token);
                         OneCycle(Config, token);
+                        if (CheckStop(token)) break;
                         InterruptibleSleep(_fastAttackQueued ? FastAttackCycleDelayMs : 15000, token);
                     }
 
-                    Console.WriteLine($"[FSM-CS] phase=worker_loop status=pending action=switch_village target={idx} outcome=success");
+                    Console.WriteLine($"[FSM-CS] phase=worker_loop status=pending action=switch_account target={idx} outcome=next reason={switchReason}");
                 }
 
                 InterruptibleSleep(5000, token);
@@ -1182,6 +1289,104 @@ namespace CvAut
             return score >= threshold;
         }
 
+        private static AttackDelayConfig ReadAttackDelayConfig(JsonElement cfg)
+        {
+            JsonElement advanced = GetObjectOrDefault(cfg, "advanced_config");
+            bool useDefault = GetBoolOrDefault(advanced, "use_default_config", true);
+            JsonElement attackDelays = useDefault ? default : GetObjectOrDefault(advanced, "attack_delays");
+
+            return new AttackDelayConfig
+            {
+                TroopDeployDelayMs = Clamp(GetIntOrDefault(attackDelays, "troop_deploy_delay_ms", 60), 20, 500),
+                RageSpellDelayMs = Clamp(GetIntOrDefault(attackDelays, "rage_spell_delay_ms", 650), 100, 5000),
+                FreezeSpellDelayMs = Clamp(GetIntOrDefault(attackDelays, "freeze_spell_delay_ms", 850), 100, 5000),
+                GrandWardenAbilityDelayMs = Clamp(GetIntOrDefault(attackDelays, "grand_warden_ability_delay_ms", 2500), 500, 15000)
+            };
+        }
+
+        private static AttackCoordinateConfig ReadAttackCoordinateConfig(JsonElement cfg)
+        {
+            JsonElement advanced = GetObjectOrDefault(cfg, "advanced_config");
+            bool useDefault = GetBoolOrDefault(advanced, "use_default_config", true);
+            JsonElement spellCoordinates = useDefault ? default : GetObjectOrDefault(advanced, "spell_coordinates");
+            AttackCoordinateConfig coordinateConfig = new();
+
+            foreach (string direction in new[] { "top_left", "top_right", "bottom_left", "bottom_right" })
+            {
+                JsonElement directionNode = GetObjectOrDefault(spellCoordinates, direction);
+                SpellDeploymentGroups groups = new()
+                {
+                    RageInitial = ReadPointList(directionNode, "rage_initial"),
+                    Freeze = ReadPointList(directionNode, "freeze"),
+                    RageRemaining = ReadPointList(directionNode, "rage_remaining")
+                };
+
+                if (groups.RageInitial.Count > 0 || groups.Freeze.Count > 0 || groups.RageRemaining.Count > 0)
+                {
+                    coordinateConfig.SpellCoordinates[direction] = groups;
+                }
+            }
+
+            return coordinateConfig;
+        }
+
+        private static List<Point> ReadPointList(JsonElement element, string propertyName)
+        {
+            if (element.ValueKind != JsonValueKind.Object
+                || !element.TryGetProperty(propertyName, out JsonElement points)
+                || points.ValueKind != JsonValueKind.Array)
+            {
+                return new List<Point>();
+            }
+
+            List<Point> result = new();
+            foreach (JsonElement point in points.EnumerateArray())
+            {
+                if (TryReadPoint(point, out Point parsed))
+                {
+                    result.Add(parsed);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool TryReadPoint(JsonElement point, out Point parsed)
+        {
+            parsed = default;
+            int x;
+            int y;
+
+            if (point.ValueKind == JsonValueKind.Object)
+            {
+                x = GetIntOrDefault(point, "x", -1);
+                y = GetIntOrDefault(point, "y", -1);
+            }
+            else if (point.ValueKind == JsonValueKind.Array && point.GetArrayLength() >= 2)
+            {
+                JsonElement xNode = point[0];
+                JsonElement yNode = point[1];
+                if (!xNode.TryGetInt32(out x) || !yNode.TryGetInt32(out y))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                return false;
+            }
+
+            if (x < 0 || y < 0)
+            {
+                return false;
+            }
+
+            parsed = new Point(Clamp(x, 0, 1599), Clamp(y, 0, 899));
+            return true;
+        }
+
+        private static int Clamp(int value, int min, int max) => Math.Min(Math.Max(value, min), max);
+
         private static string GetStringOrDefault(JsonElement element, string propertyName, string fallback)
         {
             if (element.ValueKind == JsonValueKind.Object
@@ -1247,17 +1452,55 @@ namespace CvAut
             return GetIntOrDefault(profile, profileKey, rootFallback);
         }
 
-        private static (int Gold, int Elixir, int DarkElixir) GetFarmingThresholds(JsonElement cfg, int villageIdx)
+        private static MainVillageConfig GetMainVillageConfig(JsonElement cfg, int villageIdx)
         {
             JsonElement profile = LoadVillageProfile(villageIdx);
             JsonElement farming = GetObjectOrDefault(cfg, "farming_thresholds");
             JsonElement target = GetObjectOrDefault(cfg, "target_data_threshold");
 
-            return (
-                GetThresholdOrDefault(profile, farming, target, "gold_threshold", "gold", 0),
-                GetThresholdOrDefault(profile, farming, target, "elixir_threshold", "elixir", 0),
-                GetThresholdOrDefault(profile, farming, target, "dark_elixir_threshold", "dark_elixir", 0)
-            );
+            var targetConfig = new FarmingTargetConfig(
+                GoldThreshold: GetThresholdOrDefault(profile, farming, target, "gold_threshold", "gold", 0),
+                ElixirThreshold: GetThresholdOrDefault(profile, farming, target, "elixir_threshold", "elixir", 0),
+                DarkElixirThreshold: GetThresholdOrDefault(profile, farming, target, "dark_elixir_threshold", "dark_elixir", 0),
+                TotalResourceThreshold: GetThresholdOrDefault(profile, farming, target, "total_resource_threshold", "total", 0),
+                Logic: ParseTargetSelectionLogic(GetStringOrDefault(profile, "target_logic", GetStringOrDefault(farming, "target_logic", "total"))));
+
+            int defaultTotal = targetConfig.GoldThreshold + targetConfig.ElixirThreshold;
+            if (targetConfig.TotalResourceThreshold <= 0)
+            {
+                targetConfig = targetConfig with { TotalResourceThreshold = defaultTotal };
+            }
+
+            string attackModeText = GetStringOrDefault(profile, "attack_mode", GetStringOrDefault(cfg, "attack_mode", "attack"));
+            AttackMode attackMode = string.Equals(attackModeText, "donate_only", StringComparison.OrdinalIgnoreCase)
+                ? AttackMode.DonateOnly
+                : AttackMode.Attack;
+
+            var surrender = new SmartSurrenderConfig(
+                Enabled: GetBoolOrDefault(profile, "smart_surrender_enabled", GetBoolOrDefault(cfg, "smart_surrender_enabled", false)),
+                AfterSecondsEnabled: GetBoolOrDefault(profile, "surrender_after_seconds_enabled", GetBoolOrDefault(cfg, "surrender_after_seconds_enabled", false)),
+                AfterSeconds: GetIntOrDefault(profile, "surrender_after_seconds", GetIntOrDefault(cfg, "surrender_after_seconds", 0)),
+                LowResourcesEnabled: GetBoolOrDefault(profile, "surrender_low_resources_enabled", GetBoolOrDefault(cfg, "surrender_low_resources_enabled", false)),
+                LowResourcesThreshold: GetIntOrDefault(profile, "surrender_low_resources_threshold", GetIntOrDefault(cfg, "surrender_low_resources_threshold", 0)));
+
+            return new MainVillageConfig(
+                AttackMode: attackMode,
+                Target: targetConfig,
+                RequestTroops: GetBoolOrDefault(profile, "request_troops", GetBoolOrDefault(cfg, "request_troops", false)),
+                RequestTroopsMessage: GetStringOrDefault(profile, "request_troops_message", GetStringOrDefault(cfg, "request_troops_message", "")),
+                UseEventTroops: GetBoolOrDefault(profile, "use_event_troops", GetBoolOrDefault(cfg, "use_event_troops", false)),
+                UseCake: GetBoolOrDefault(profile, "use_cake", GetBoolOrDefault(cfg, "use_cake", false)),
+                SmartSurrender: surrender);
+        }
+
+        private static TargetSelectionLogic ParseTargetSelectionLogic(string logic)
+        {
+            return logic.Trim().ToLowerInvariant() switch
+            {
+                "and" => TargetSelectionLogic.And,
+                "or" => TargetSelectionLogic.Or,
+                _ => TargetSelectionLogic.Total
+            };
         }
 
         private static TrainingConfig GetTrainingConfig(JsonElement cfg, int villageIdx)
@@ -1387,6 +1630,90 @@ namespace CvAut
             return new[] { 1, 2 };
         }
 
+        private static AccountConfig[] GetConfiguredAccounts(JsonElement multiConfig)
+        {
+            if (multiConfig.ValueKind == JsonValueKind.Object
+                && multiConfig.TryGetProperty("accounts", out JsonElement accounts)
+                && accounts.ValueKind == JsonValueKind.Array)
+            {
+                AccountConfig[] parsed = accounts.EnumerateArray()
+                    .Select((account, index) => ParseAccountConfig(account, index + 1))
+                    .Where(account => account.Enabled)
+                    .ToArray();
+
+                if (parsed.Length > 0)
+                {
+                    return parsed;
+                }
+            }
+
+            return GetSelectedVillages(multiConfig)
+                .Select(village => new AccountConfig(
+                    Id: $"acc_{village}",
+                    Name: $"Account {village}",
+                    ProfileVillage: village,
+                    TargetVillage: "main_village",
+                    TemplatePath: string.Empty,
+                    Enabled: true,
+                    ConfigPreset: string.Empty))
+                .ToArray();
+        }
+
+        private static AccountConfig ParseAccountConfig(JsonElement account, int fallbackIndex)
+        {
+            int profileVillage = Math.Clamp(GetIntOrDefault(account, "profileVillage", fallbackIndex), 1, 5);
+            string id = GetStringOrDefault(account, "id", $"acc_{profileVillage}");
+            string name = GetStringOrDefault(account, "name", $"Account {profileVillage}");
+            string targetVillage = GetStringOrDefault(account, "targetVillage", "main_village");
+            string templatePath = GetStringOrDefault(account, "templatePath", string.Empty);
+            bool enabled = GetBoolOrDefault(account, "enabled", true);
+            string configPreset = GetStringOrDefault(account, "configPreset", string.Empty);
+
+            return new AccountConfig(id, name, profileVillage, targetVillage, templatePath, enabled, configPreset);
+        }
+
+        private bool ShouldSwitchAccount(
+            DateTime slotStart,
+            int slotBattleStart,
+            int slotClanPointStart,
+            int villageIdx,
+            bool switchByMinutes,
+            int intervalSecs,
+            bool switchByBattles,
+            int battleLimit,
+            bool switchByClanPoints,
+            int clanPointLimit,
+            out string reason)
+        {
+            if (switchByBattles && battleLimit > 0 && _sessionBattlesCompleted - slotBattleStart >= battleLimit)
+            {
+                reason = "battle_limit";
+                return true;
+            }
+
+            if (switchByClanPoints && clanPointLimit > 0 && ReadClanGamesPoints(villageIdx) - slotClanPointStart >= clanPointLimit)
+            {
+                reason = "clan_games_points";
+                return true;
+            }
+
+            if (switchByMinutes && intervalSecs > 0 && (DateTime.Now - slotStart).TotalSeconds >= intervalSecs)
+            {
+                reason = "minute_limit";
+                return true;
+            }
+
+            reason = "none";
+            return false;
+        }
+
+        private static int ReadClanGamesPoints(int villageIdx)
+        {
+            string path = StatsFilePath(villageIdx);
+            JsonObject stats = LoadStatsFromDisk(path);
+            return GetJsonInt(stats, "clan_games_points");
+        }
+
         // --- Liên kết thư viện ngoài (DLL Import) của hệ điều hành Windows ---
         // Phục vụ gửi phím ngầm (PostMessage) và gắn kết tiến trình (AttachThreadInput)
         [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
@@ -1470,11 +1797,159 @@ namespace CvAut
             }
         }
 
+        private static bool ShouldAcceptTarget((int Gold, int Elixir, int DarkElixir) resources, FarmingTargetConfig config, out string reason)
+        {
+            int total = resources.Gold + resources.Elixir;
+            bool goldOk = resources.Gold >= config.GoldThreshold;
+            bool elixirOk = resources.Elixir >= config.ElixirThreshold;
+            bool darkOk = config.DarkElixirThreshold <= 0 || resources.DarkElixir >= config.DarkElixirThreshold;
+            bool totalOk = total >= config.TotalResourceThreshold;
+
+            bool accepted = config.Logic switch
+            {
+                TargetSelectionLogic.And => goldOk && elixirOk && darkOk,
+                TargetSelectionLogic.Or => goldOk || elixirOk || darkOk,
+                _ => totalOk && darkOk
+            };
+
+            reason = config.Logic switch
+            {
+                TargetSelectionLogic.And => $"and gold_ok={goldOk} elixir_ok={elixirOk} dark_ok={darkOk}",
+                TargetSelectionLogic.Or => $"or gold_ok={goldOk} elixir_ok={elixirOk} dark_ok={darkOk}",
+                _ => $"total total_ok={totalOk} dark_ok={darkOk}"
+            };
+            return accepted;
+        }
+
+        private void RunDonateOnlyCycle(MainVillageConfig config, CancellationToken token)
+        {
+            Console.WriteLine("[DONATE-CS] phase=donate_only status=start");
+            TryUseCakeIfConfigured(config, token);
+            TryRequestTroopsIfConfigured(config, token);
+            TryDonateOnce(token);
+            InterruptibleSleep(5000, token);
+            Console.WriteLine("[DONATE-CS] phase=donate_only status=success");
+        }
+
+        private void TryRequestTroopsIfConfigured(MainVillageConfig config, CancellationToken token)
+        {
+            if (!config.RequestTroops || CheckStop(token)) return;
+
+            Console.WriteLine("[REQUEST-CS] phase=request_troops status=start");
+            if (TapFirstVisibleTemplate(new[] { @"ui\request_button_unavailable", "request_button_unavailable" }, 0.78, null, out _, tap: false))
+            {
+                Console.WriteLine("[REQUEST-CS] phase=request_troops status=skip reason=cooldown_or_unavailable");
+                return;
+            }
+
+            if (!TapFirstVisibleTemplate(new[] { @"ui\request_troops", @"ui\request_button", "request_button" }, 0.70, null, out string matched))
+            {
+                Console.WriteLine("[REQUEST-CS] phase=request_troops status=fail reason=request_button_not_found");
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(config.RequestTroopsMessage))
+            {
+                string escaped = config.RequestTroopsMessage.Replace("'", "");
+                _adb.ExecuteShell($"input text '{escaped.Replace(" ", "%s")}'");
+                InterruptibleSleep(300, token);
+            }
+
+            TapFirstVisibleTemplate(new[] { @"ui\request_button", "request_button" }, 0.70, null, out _, tap: true);
+            Console.WriteLine($"[REQUEST-CS] phase=request_troops status=success template=\"{matched}\"");
+        }
+
+        private void TryUseCakeIfConfigured(MainVillageConfig config, CancellationToken token)
+        {
+            if (!config.UseCake || CheckStop(token)) return;
+
+            Console.WriteLine("[EVENT-CS] phase=use_cake status=start");
+            if (TapFirstVisibleTemplate(new[] { @"ui\clan_castle_cake", "clan_castle_cake" }, 0.72, null, out string matched))
+            {
+                Console.WriteLine($"[EVENT-CS] phase=use_cake status=success template=\"{matched}\"");
+                InterruptibleSleep(1000, token);
+                return;
+            }
+
+            Console.WriteLine("[EVENT-CS] phase=use_cake status=skip reason=item_not_found");
+        }
+
+        private void TryDonateOnce(CancellationToken token)
+        {
+            if (CheckStop(token)) return;
+
+            Console.WriteLine("[DONATE-CS] phase=scan_chat status=start");
+            if (!TapFirstVisibleTemplate(new[] { @"ui\donate_button", "donate_button" }, 0.72, null, out string matched))
+            {
+                Console.WriteLine("[DONATE-CS] phase=scan_chat status=skip reason=donate_button_not_found");
+                return;
+            }
+
+            Console.WriteLine($"[DONATE-CS] phase=donate status=pending template=\"{matched}\" details=\"donate_panel_opened\"");
+            InterruptibleSleep(700, token);
+        }
+
+        private bool TapFirstVisibleTemplate(string[] templates, double threshold, Rect? roi, out string matchedTemplate, bool tap = true)
+        {
+            matchedTemplate = string.Empty;
+            using Mat? screenshot = _adb.TakeScreenshot();
+            if (screenshot == null || screenshot.Empty()) return false;
+
+            foreach (string template in templates)
+            {
+                Point? center = _vision.FindElement(screenshot, template, threshold, roi, out double score);
+                if (center == null) continue;
+
+                matchedTemplate = template;
+                Console.WriteLine($"[VISION] phase=template_match status=success template=\"{template}\" score={score:F2} center=({center.Value.X},{center.Value.Y})");
+                if (tap)
+                {
+                    _adb.Tap(center.Value.X, center.Value.Y);
+                }
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool ShouldSmartSurrender(DateTime battleStart, SmartSurrenderConfig config, out string reason)
+        {
+            reason = "none";
+            double elapsedSeconds = (DateTime.Now - battleStart).TotalSeconds;
+            if (config.AfterSecondsEnabled && config.AfterSeconds > 0 && elapsedSeconds >= config.AfterSeconds)
+            {
+                reason = "time_limit";
+                return true;
+            }
+
+            if (config.LowResourcesEnabled && config.LowResourcesThreshold > 0)
+            {
+                var resources = IsTarget.ExtractResources(_adb, _vision);
+                int remainingTotal = resources.Gold + resources.Elixir;
+                if (remainingTotal > 0 && remainingTotal <= config.LowResourcesThreshold)
+                {
+                    reason = "low_resources";
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void ExecuteSurrender(string reason, CancellationToken token)
+        {
+            _adb.Tap(80, 780);
+            if (InterruptibleSleep(1000, token)) return;
+            _adb.Tap(960, 560);
+            Console.WriteLine($"[ATTACK-CS] phase=surrender status=success reason={reason}");
+            InterruptibleSleep(2000, token);
+        }
+
         /// <summary>
         /// Vòng lặp chờ đợi trận đánh kết thúc.
         /// Quét nhận diện liên tục nút Tiếp tục (Continue) hoặc vạch hiển thị kết quả chiến tích cướp tài nguyên.
         /// </summary>
-        private bool WaitBattleEnd(CancellationToken token)
+        private bool WaitBattleEnd(CancellationToken token, SmartSurrenderConfig? surrenderConfig = null)
         {
             Console.WriteLine("[FSM-CS] phase=battle_wait status=start");
 
@@ -1482,6 +1957,7 @@ namespace CvAut
             int stableResultMatches = 0;
             bool waitingLogged = false;
             bool resultDetectedLogged = false;
+            bool smartSurrenderExecuted = false;
             while (!CheckStop(token))
             {
                 WaitIfPaused(token);
@@ -1518,6 +1994,14 @@ namespace CvAut
                     Console.WriteLine("[FSM-CS WARNING] phase=battle_wait status=fail reason=connection_lost");
                     BootRecovery();
                     return false;
+                }
+
+                if (surrenderConfig?.Enabled == true && !smartSurrenderExecuted && !resultDetectedLogged && ShouldSmartSurrender(start, surrenderConfig, out string surrenderReason))
+                {
+                    Console.WriteLine($"[ATTACK-CS] phase=surrender status=start reason={surrenderReason}");
+                    smartSurrenderExecuted = true;
+                    ExecuteSurrender("smart_" + surrenderReason, token);
+                    continue;
                 }
 
                 if ((DateTime.Now - start).TotalSeconds >= MaxWaitBattleSeconds)
@@ -1979,11 +2463,61 @@ namespace CvAut
             Console.WriteLine($"[FSM-CS] phase=battle_stats status=success action=save_file path=\"{path}\"");
         }
 
+        private void UpdateWallStats(int villageIdx, int upgradedCount)
+        {
+            if (upgradedCount <= 0) return;
+
+            string path = StatsFilePath(villageIdx);
+            JsonObject stats = LoadStatsFromDisk(path);
+            stats["walls_upgraded"] = GetJsonInt(stats, "walls_upgraded") + upgradedCount;
+            stats["last_update_ts"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, stats.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"[FSM-CS] phase=wall_stats status=success count={upgradedCount} action=save_file path=\"{path}\"");
+        }
+
         private static string StatsFilePath(int villageIdx)
         {
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             return Path.Combine(appData, "SimpliMixi", "profiles", $"Stats_{villageIdx}.json");
         }
+
+        private enum AttackMode
+        {
+            Attack,
+            DonateOnly
+        }
+
+        private enum TargetSelectionLogic
+        {
+            Or,
+            And,
+            Total
+        }
+
+        private sealed record FarmingTargetConfig(
+            int GoldThreshold,
+            int ElixirThreshold,
+            int DarkElixirThreshold,
+            int TotalResourceThreshold,
+            TargetSelectionLogic Logic);
+
+        private sealed record SmartSurrenderConfig(
+            bool Enabled,
+            bool AfterSecondsEnabled,
+            int AfterSeconds,
+            bool LowResourcesEnabled,
+            int LowResourcesThreshold);
+
+        private sealed record MainVillageConfig(
+            AttackMode AttackMode,
+            FarmingTargetConfig Target,
+            bool RequestTroops,
+            string RequestTroopsMessage,
+            bool UseEventTroops,
+            bool UseCake,
+            SmartSurrenderConfig SmartSurrender);
 
         private sealed record WallUpgradeConfig(
             bool Enabled,
@@ -1995,6 +2529,15 @@ namespace CvAut
             string Mode,
             int QuickSlot,
             string AttackStrategy);
+
+        private sealed record AccountConfig(
+            string Id,
+            string Name,
+            int ProfileVillage,
+            string TargetVillage,
+            string TemplatePath,
+            bool Enabled,
+            string ConfigPreset = "");
 
         private static JsonObject LoadStatsFromDisk(string path)
         {
@@ -2173,11 +2716,212 @@ namespace CvAut
             return false;
         }
 
-        private void SwitchToVillagePlaceholder(int villageIdx)
+        private bool SwitchToAccount(AccountConfig account, CancellationToken token)
         {
-            // Placeholder cho chức năng luân chuyển tài khoản trong tương lai
-            Console.WriteLine($"[FSM-CS] phase=worker_loop status=pending action=switch_village target={villageIdx}");
-            Thread.Sleep(3000);
+            string previousAccount = _activeAccountName;
+            Console.WriteLine($"[ACCOUNT-CS] phase=switch status=start current=\"{previousAccount}\" target=\"{account.Name}\" village={account.ProfileVillage} target_village={account.TargetVillage}");
+
+            if (!EnsureHomeBase(maxWaitSeconds: 20))
+            {
+                Console.WriteLine("[ACCOUNT-CS] phase=switch status=fail reason=home_not_detected");
+                return false;
+            }
+
+            if (!TapFirstVisibleTemplate(new[] { @"ui\settings_logo", "settings_logo", "game_setting" }, 0.68, GameSettingHomeRoi, out string settingsTemplate))
+            {
+                Console.WriteLine("[ACCOUNT-CS] phase=switch status=fail step=open_settings reason=settings_button_not_found");
+                return false;
+            }
+            Console.WriteLine($"[ACCOUNT-CS] phase=switch status=pending step=open_settings template=\"{settingsTemplate}\"");
+            if (InterruptibleSleep(1200, token)) return false;
+
+            if (!TapFirstVisibleTemplate(new[] { @"ui\supercell_ID", "supercell_ID" }, 0.68, null, out string supercellTemplate))
+            {
+                Console.WriteLine("[ACCOUNT-CS] phase=switch status=fail step=open_supercell_id reason=template_not_found");
+                _adb.ExecuteShell("input keyevent KEYCODE_BACK");
+                return false;
+            }
+            Console.WriteLine($"[ACCOUNT-CS] phase=switch status=pending step=open_supercell_id template=\"{supercellTemplate}\"");
+            if (InterruptibleSleep(1800, token)) return false;
+
+            if (!TapFirstVisibleTemplate(new[] { @"ui\switch_button", "switch_button", @"ui\icon_switch", "icon_switch" }, 0.68, null, out string switchTemplate))
+            {
+                Console.WriteLine("[ACCOUNT-CS] phase=switch status=fail step=open_switch_account reason=template_not_found");
+                _adb.ExecuteShell("input keyevent KEYCODE_BACK");
+                return false;
+            }
+            Console.WriteLine($"[ACCOUNT-CS] phase=switch status=pending step=open_switch_account template=\"{switchTemplate}\"");
+            if (InterruptibleSleep(1800, token)) return false;
+
+            if (!TapAccountTemplate(account, out double accountScore))
+            {
+                Console.WriteLine($"[ACCOUNT-CS] phase=switch status=pending step=show_all_accounts account=\"{account.Name}\"");
+                TryShowAllAccounts(token);
+            }
+
+            if (!TapAccountTemplate(account, out accountScore))
+            {
+                Console.WriteLine($"[ACCOUNT-CS] phase=switch status=fail step=select_account reason=account_template_not_found account=\"{account.Name}\" template=\"{account.TemplatePath}\"");
+                _adb.ExecuteShell("input keyevent KEYCODE_BACK");
+                return false;
+            }
+            Console.WriteLine($"[ACCOUNT-CS] phase=switch status=pending step=select_account account=\"{account.Name}\" score={accountScore:F2}");
+            if (InterruptibleSleep(2500, token)) return false;
+
+            TapFirstVisibleTemplate(new[] { @"ui\play_button", "play_button", @"ui\open_button", "open_button", @"ui\open_button_2", "open_button_2" }, 0.66, null, out _, tap: true);
+            InterruptibleSleep(5000, token);
+
+            bool loaded = EnsureHomeBase(maxWaitSeconds: 45);
+            if (loaded)
+            {
+                _activeAccountName = account.Name;
+                if (!string.IsNullOrEmpty(account.ConfigPreset))
+                {
+                    ApplyPresetToProfile(account.ProfileVillage, account.ConfigPreset);
+                }
+            }
+            Console.WriteLine($"[ACCOUNT-CS] phase=switch status={(loaded ? "success" : "fail")} current=\"{previousAccount}\" target=\"{account.Name}\" village={account.ProfileVillage}");
+            return loaded;
+        }
+
+        private static void ApplyPresetToProfile(int villageId, string presetIdOrName)
+        {
+            if (string.IsNullOrEmpty(presetIdOrName)) return;
+
+            string userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimpliMixi");
+            string presetsPath = Path.Combine(userData, "Config", "presets.json");
+            if (!File.Exists(presetsPath)) return;
+
+            try
+            {
+                string presetsJson = File.ReadAllText(presetsPath);
+                var presetsNode = JsonNode.Parse(presetsJson) as JsonArray;
+                if (presetsNode == null) return;
+
+                JsonObject? targetPresetConfig = null;
+                foreach (var node in presetsNode)
+                {
+                    if (node is JsonObject presetObj)
+                    {
+                        string? id = presetObj["id"]?.ToString();
+                        string? name = presetObj["name"]?.ToString();
+                        if (string.Equals(id, presetIdOrName, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(name, presetIdOrName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            targetPresetConfig = presetObj["config"] as JsonObject;
+                            break;
+                        }
+                    }
+                }
+
+                if (targetPresetConfig == null) return;
+
+                string profilePath = Path.Combine(userData, "profiles", $"Village_{villageId}.json");
+                JsonObject profile;
+                if (File.Exists(profilePath))
+                {
+                    string profileJson = File.ReadAllText(profilePath);
+                    profile = JsonNode.Parse(profileJson) as JsonObject ?? new JsonObject();
+                }
+                else
+                {
+                    profile = new JsonObject();
+                }
+
+                foreach (var kvp in targetPresetConfig)
+                {
+                    var clonedValue = kvp.Value?.DeepClone();
+                    profile[kvp.Key] = clonedValue;
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(profilePath)!);
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                File.WriteAllText(profilePath, profile.ToJsonString(options));
+                Console.WriteLine($"[ACCOUNT-CS] Successfully applied preset '{presetIdOrName}' to profile Village_{villageId}.json");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ACCOUNT-CS] Error applying preset: {ex.Message}");
+            }
+        }
+
+        private void TryShowAllAccounts(CancellationToken token)
+        {
+            if (TapFirstVisibleTemplate(new[] { @"ui\account_counter_2", "account_counter_2", @"ui\account_counter", "account_counter" }, 0.66, null, out string counterTemplate))
+            {
+                Console.WriteLine($"[ACCOUNT-CS] phase=switch status=pending step=show_all_accounts template=\"{counterTemplate}\"");
+                InterruptibleSleep(1200, token);
+                return;
+            }
+
+            _adb.Swipe(820, 720, 820, 260, 450);
+            InterruptibleSleep(700, token);
+        }
+
+        private bool TapAccountTemplate(AccountConfig account, out double score)
+        {
+            score = 0;
+            if (string.IsNullOrWhiteSpace(account.TemplatePath))
+            {
+                return false;
+            }
+
+            using Mat? screenshot = _adb.TakeScreenshot();
+            if (screenshot == null || screenshot.Empty())
+            {
+                return false;
+            }
+
+            string? templatePath = ResolveAccountTemplatePath(account.TemplatePath);
+            if (templatePath == null)
+            {
+                Console.WriteLine($"[ACCOUNT-CS] phase=switch status=fail reason=template_file_missing template=\"{account.TemplatePath}\"");
+                return false;
+            }
+
+            using Mat template = Cv2.ImRead(templatePath, ImreadModes.Grayscale);
+            if (template.Empty())
+            {
+                Console.WriteLine($"[ACCOUNT-CS] phase=switch status=fail reason=template_unreadable template=\"{templatePath}\"");
+                return false;
+            }
+
+            using Mat gray = new Mat();
+            Cv2.CvtColor(screenshot, gray, ColorConversionCodes.BGR2GRAY);
+            if (gray.Width < template.Width || gray.Height < template.Height)
+            {
+                return false;
+            }
+
+            using Mat result = new Mat();
+            Cv2.MatchTemplate(gray, template, result, TemplateMatchModes.CCoeffNormed);
+            Cv2.MinMaxLoc(result, out _, out score, out _, out Point maxLoc);
+            if (score < 0.70)
+            {
+                return false;
+            }
+
+            int centerX = maxLoc.X + template.Width / 2;
+            int centerY = maxLoc.Y + template.Height / 2;
+            _adb.Tap(centerX, centerY);
+            return true;
+        }
+
+        private string? ResolveAccountTemplatePath(string templatePath)
+        {
+            string trimmed = templatePath.Trim();
+            string[] candidates = Path.IsPathRooted(trimmed)
+                ? new[] { trimmed }
+                : new[]
+                {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimpliMixi", "account_templates", trimmed),
+                    Path.Combine(Directory.GetCurrentDirectory(), trimmed),
+                    Path.Combine(AppContext.BaseDirectory, trimmed),
+                    Path.Combine(_templatesPath, "accounts", trimmed),
+                    Path.Combine(_templatesPath, trimmed)
+                };
+
+            return candidates.FirstOrDefault(File.Exists);
         }
 
         public void Dispose()

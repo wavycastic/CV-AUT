@@ -19,7 +19,7 @@ namespace CvAut
     /// - Điều khiển thu phóng nâng cao qua UIAutomator2 Server bằng giao thức JSON-RPC (PinchIn).
     /// - Chụp ảnh màn hình giả lập tốc độ cao bằng exec-out screencap, kèm cơ chế chống ảnh lỗi/trống.
     /// </summary>
-    internal class ADBHelper : IDisposable
+    public class ADBHelper : IDisposable
     {
         private bool _disposed;
         private readonly string _deviceAddress;
@@ -36,17 +36,16 @@ namespace CvAut
 
         public Func<bool>? BeforeInputAction { get; set; }
 
+        public string DeviceAddress => _deviceAddress;
+
         /// <summary>
         /// Khởi tạo đối tượng kết nối ADB tới giả lập Android.
         /// Tự động bật ADB Server và kết nối tới thiết bị mong muốn.
         /// </summary>
         /// <param name="host">Địa chỉ IP giả lập (Thường là localhost hoặc 127.0.0.1).</param>
         /// <param name="port">Cổng ADB (ví dụ: 5556 cho BlueStacks, 5555 cho MEmu).</param>
-        public ADBHelper(string host = "127.0.0.1", int port = 5556)
+        public ADBHelper(string host = "127.0.0.1", int port = 5556, string? preferredSerial = null)
         {
-            _host = host;
-            _port = port;
-
             // Khởi chạy ADB Server cục bộ
             AdbServer server = new AdbServer();
             try
@@ -58,23 +57,61 @@ namespace CvAut
                 Console.WriteLine($"[ADB WARNING] phase=init status=fail action=start_server reason=\"{ex.Message}\"");
             }
 
-            _deviceAddress = $"{host}:{port}";
+            string activeHost = host;
+            int activePort = port;
+            string activeAddress = string.IsNullOrWhiteSpace(preferredSerial) ? $"{host}:{port}" : preferredSerial.Trim();
+            DeviceData activeDevice;
+
+            // Lấy thêm các cổng tự động từ bluestacks.conf nếu có
+            var dynamicPorts = GetBlueStacksPortsFromConfig();
+            var fallbackPorts = new System.Collections.Generic.List<int>();
+            foreach (int dp in dynamicPorts)
+            {
+                if (dp != port && !fallbackPorts.Contains(dp))
+                {
+                    fallbackPorts.Add(dp);
+                }
+            }
+            int[] defaultFallbacks = { 5555, 5556, 5557, 5554, 5565 };
+            foreach (int df in defaultFallbacks)
+            {
+                if (df != port && !fallbackPorts.Contains(df))
+                {
+                    fallbackPorts.Add(df);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(preferredSerial) && TrySelectExistingDevice(preferredSerial.Trim(), out activeDevice))
+            {
+                _host = activeHost;
+                _port = activePort;
+                _deviceAddress = activeAddress;
+                _device = activeDevice;
+                Console.WriteLine("[ADB] phase=connect status=success details=\"preferred_device_selected\"");
+                return;
+            }
 
             // 1. Ưu tiên đúng địa chỉ cổng cấu hình cụ thể để tránh điều khiển nhầm giả lập khác đang mở.
-            if (TryConnectAndSelectDevice(_host, _port, out _device))
+            if (TryConnectAndSelectDevice(activeHost, activePort, out activeDevice))
             {
+                _host = activeHost;
+                _port = activePort;
+                _deviceAddress = activeDevice.Serial;
+                _device = activeDevice;
                 Console.WriteLine("[ADB] phase=connect status=success details=\"device_connected\"");
                 return;
             }
 
             // 2. Thử kết nối dự phòng sang các cổng phổ biến khác của BlueStacks, MEmu, LDPlayer, v.v.
-            int[] fallbackPorts = { 5555, 5556, 5557, 5554, 5565 };
             foreach (int p in fallbackPorts)
             {
-                if (p == port) continue;
-                if (TryConnectAndSelectDevice(_host, p, out _device))
+                if (TryConnectAndSelectDevice(activeHost, p, out activeDevice))
                 {
-                    _deviceAddress = $"{_host}:{p}";
+                    activePort = p;
+                    _host = activeHost;
+                    _port = activePort;
+                    _deviceAddress = $"{activeHost}:{p}";
+                    _device = activeDevice;
                     Console.WriteLine("[ADB] phase=connect status=success details=\"device_connected_fallback\"");
                     return;
                 }
@@ -86,8 +123,17 @@ namespace CvAut
                 var connectedDevices = AdbClient.Instance.GetDevices();
                 if (connectedDevices != null && connectedDevices.Count > 0)
                 {
-                    _device = connectedDevices[0];
-                    _deviceAddress = _device.Serial;
+                    activeDevice = connectedDevices[0];
+                    activeAddress = activeDevice.Serial;
+                    if (TryParseEndpointSerial(activeAddress, out string parsedHost, out int parsedPort))
+                    {
+                        activeHost = parsedHost;
+                        activePort = parsedPort;
+                    }
+                    _host = activeHost;
+                    _port = activePort;
+                    _deviceAddress = activeAddress;
+                    _device = activeDevice;
                     Console.WriteLine("[ADB] phase=connect status=success details=\"active_device_detected\"");
                     return;
                 }
@@ -98,7 +144,11 @@ namespace CvAut
             }
 
             // Mặc định tạo dữ liệu thiết bị trống nếu hoàn toàn không kết nối được (để tránh NullReference)
-            _device = new DeviceData { Serial = _deviceAddress };
+            activeDevice = new DeviceData { Serial = activeAddress };
+            _host = activeHost;
+            _port = activePort;
+            _deviceAddress = activeAddress;
+            _device = activeDevice;
             Console.WriteLine("[ADB WARNING] phase=connect status=pending reason=\"no_device_detected\"");
         }
 
@@ -114,6 +164,28 @@ namespace CvAut
                 try { _uiautomatorProcess.Kill(); } catch { }
                 _uiautomatorProcess.Dispose();
             }
+        }
+
+        private bool TrySelectExistingDevice(string serial, out DeviceData device)
+        {
+            try
+            {
+                foreach (var connectedDevice in AdbClient.Instance.GetDevices())
+                {
+                    if (string.Equals(connectedDevice.Serial, serial, StringComparison.OrdinalIgnoreCase))
+                    {
+                        device = connectedDevice;
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore and fall back to host/port probing.
+            }
+
+            device = new DeviceData { Serial = serial };
+            return false;
         }
 
         /// <summary>
@@ -165,7 +237,10 @@ namespace CvAut
             {
                 try
                 {
-                    AdbClient.Instance.Connect(new IPEndPoint(IPAddress.Parse(_host), _port));
+                    if (IPAddress.TryParse(_host, out IPAddress? ipAddress))
+                    {
+                        AdbClient.Instance.Connect(new IPEndPoint(ipAddress, _port));
+                    }
                 }
                 catch
                 {
@@ -714,6 +789,55 @@ namespace CvAut
             }
 
             return null;
+        }
+
+        private static System.Collections.Generic.List<int> GetBlueStacksPortsFromConfig()
+        {
+            var ports = new System.Collections.Generic.List<int>();
+            try
+            {
+                string confPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    @"BlueStacks_nxt\bluestacks.conf");
+                if (File.Exists(confPath))
+                {
+                    foreach (var line in File.ReadLines(confPath))
+                    {
+                        if (line.Contains(".status.adb_port="))
+                        {
+                            int eqIdx = line.IndexOf('=');
+                            if (eqIdx > 0)
+                            {
+                                string val = line.Substring(eqIdx + 1).Trim(' ', '"', '\'', ';');
+                                if (int.TryParse(val, out int port))
+                                {
+                                    ports.Add(port);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ADB WARNING] Failed to read BlueStacks ports from config: {ex.Message}");
+            }
+            return ports;
+        }
+
+        private static bool TryParseEndpointSerial(string serial, out string host, out int port)
+        {
+            host = "127.0.0.1";
+            port = 5556;
+            if (string.IsNullOrWhiteSpace(serial)) return false;
+
+            int colonIndex = serial.LastIndexOf(':');
+            if (colonIndex <= 0 || colonIndex >= serial.Length - 1) return false;
+            if (!int.TryParse(serial[(colonIndex + 1)..], out int parsedPort)) return false;
+
+            host = serial[..colonIndex];
+            port = Math.Clamp(parsedPort, 1, 65535);
+            return true;
         }
     }
 }

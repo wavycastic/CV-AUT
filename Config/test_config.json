@@ -23,14 +23,40 @@
   "farming_thresholds": {
     "gold_threshold": 400000,
     "elixir_threshold": 400000,
-    "dark_elixir_threshold": 0
+    "dark_elixir_threshold": 0,
+    "total_resource_threshold": 800000,
+    "target_logic": "total"
   },
+  "attack_mode": "attack",
   "multi_account": {
     "enable_multi_account": false,
     "multi_interval_mins": 60,
+    "switch_after_battles_enabled": false,
+    "switch_after_battles": 0,
+    "switch_after_minutes_enabled": true,
+    "switch_after_clan_points_enabled": false,
+    "switch_after_clan_points": 0,
     "selected_villages": [
       1,
       2
+    ],
+    "accounts": [
+      {
+        "id": "acc_1",
+        "name": "Account 1",
+        "profileVillage": 1,
+        "targetVillage": "main_village",
+        "templatePath": "profiles\\account_1.png",
+        "enabled": true
+      },
+      {
+        "id": "acc_2",
+        "name": "Account 2",
+        "profileVillage": 2,
+        "targetVillage": "main_village",
+        "templatePath": "profiles\\account_2.png",
+        "enabled": true
+      }
     ]
   },
   "attack": "Dragon_Attack",
@@ -41,6 +67,14 @@
   "wall_gold_threshold": 10000000,
   "wall_elixir_threshold": 10000000,
   "request_troops": false,
+  "request_troops_message": "",
+  "use_event_troops": false,
+  "use_cake": false,
+  "smart_surrender_enabled": false,
+  "surrender_after_seconds_enabled": false,
+  "surrender_after_seconds": 0,
+  "surrender_low_resources_enabled": false,
+  "surrender_low_resources_threshold": 0,
   "enable_clan_games": false,
   "enable_clan_capital": false,
   "capital_hall_level": 9

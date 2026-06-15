@@ -27,6 +27,8 @@ namespace CvAut
         /// Khởi tạo VisionEngine với đường dẫn thư mục chứa các tệp mẫu.
         /// </summary>
         /// <param name="templatesDir">Đường dẫn thư mục chứa template.</param>
+        public string TemplatesDirectory => _templatesDir;
+
         public VisionEngine(string templatesDir = "Templates")
         {
             _templatesDir = templatesDir;

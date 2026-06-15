@@ -12,6 +12,7 @@ ENV/
 # IDEs and editors
 .vscode/
 .idea/
+node_modules/
 *.suo
 *.ntvs*
 *.njsproj
@@ -46,10 +47,8 @@ obj/
 .vs/
 *.user
 
-# Local WPF UI gallery reference
-docs/wpf-ui/gallery/
+
 Legacy/Simplicity
 
 # Cloudflare Wrangler cache
 .wrangler/
-
