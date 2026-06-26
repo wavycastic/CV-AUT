@@ -7,6 +7,11 @@
     <RootNamespace>CvAut</RootNamespace>
     <AssemblyName>Simplimixi.Backend</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- Native AOT: compiles to native code at publish time (no IL shipped),
+         significantly harder to reverse-engineer than ReadyToRun. Verified working.
+         Publish from a Developer Command Prompt (vcvars64) with IlcUseEnvironmentalTools=true,
+         and ensure MSVC link.exe precedes Git's usr/bin/link.exe in PATH. -->
+    <PublishAot>true</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>

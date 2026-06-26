@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using OpenCvSharp;
 using SharpAdbClient;
@@ -588,15 +590,17 @@ namespace CvAut
         {
             try
             {
-                var payload = new Dictionary<string, object?>
+                // AOT-safe: JsonNode (DOM) avoids reflection-based JsonSerializer.Serialize
+                // that breaks under Native AOT trimming.
+                var payload = new JsonObject
                 {
                     ["jsonrpc"] = "2.0",
                     ["id"] = 1,
                     ["method"] = method,
-                    ["params"] = parameters
+                    ["params"] = JsonArrayFromParameters(parameters)
                 };
 
-                string json = JsonSerializer.Serialize(payload);
+                string json = payload.ToJsonString();
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
                 using HttpResponseMessage response = UiAutomatorHttp.PostAsync(
@@ -625,6 +629,62 @@ namespace CvAut
             {
                 Console.WriteLine($"[ADB WARNING] phase=uia2 status=fail action=rpc reason=\"exception\" details=\"{ex.Message}\"");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Converts a heterogeneous object[] (strings, ints, nested dictionaries, arrays)
+        /// into an AOT-safe JsonArray without reflection-based serialization.
+        /// </summary>
+        private static JsonArray JsonArrayFromParameters(object[] parameters)
+        {
+            var array = new JsonArray();
+            foreach (object? p in parameters)
+            {
+                array.Add(ToJsonNode(p));
+            }
+            return array;
+        }
+
+        private static JsonNode? ToJsonNode(object? value)
+        {
+            switch (value)
+            {
+                case null:
+                    return null;
+                case JsonNode node:
+                    return node.DeepClone();
+                case string s:
+                    return JsonValue.Create(s);
+                case int i:
+                    return JsonValue.Create(i);
+                case long l:
+                    return JsonValue.Create(l);
+                case double d:
+                    return JsonValue.Create(d);
+                case bool b:
+                    return JsonValue.Create(b);
+                case IDictionary<string, object> dict:
+                    {
+                        var obj = new JsonObject();
+                        foreach (KeyValuePair<string, object> kv in dict)
+                        {
+                            obj[kv.Key] = ToJsonNode(kv.Value);
+                        }
+                        return obj;
+                    }
+                case IEnumerable<object> seq:
+                    {
+                        var arr = new JsonArray();
+                        foreach (object? item in seq)
+                        {
+                            arr.Add(ToJsonNode(item));
+                        }
+                        return arr;
+                    }
+                default:
+                    // Fallback for unexpected types; ToString is safe (no reflection emit).
+                    return JsonValue.Create(value.ToString());
             }
         }
 

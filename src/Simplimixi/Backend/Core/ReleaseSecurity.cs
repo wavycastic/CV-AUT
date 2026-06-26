@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 
 namespace CvAut
@@ -18,16 +19,11 @@ namespace CvAut
         }
     }
 
-    public static class ReleaseSecurity
+    public static partial class ReleaseSecurity
     {
         private const string IntegrityManifestRelativePath = @"security\integrity.manifest.json";
         private const string AllowDebuggerVariable = "SIMPLIMIXI_ALLOW_DEBUGGER";
         private const int RuntimeCheckIntervalMs = 15000;
-
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNameCaseInsensitive = true
-        };
 
         private static int _startupValidated;
         private static long _lastRuntimeCheckTicks;
@@ -133,7 +129,9 @@ namespace CvAut
         private static IntegrityManifest? LoadManifest(string manifestPath)
         {
             using FileStream stream = File.OpenRead(manifestPath);
-            return JsonSerializer.Deserialize<IntegrityManifest>(stream, JsonOptions);
+            // AOT-safe overload: pass the source-generated JsonTypeInfo directly so the
+            // analyzer can statically verify the deserialization graph (no reflection).
+            return JsonSerializer.Deserialize(stream, SecurityJsonContext.Default.IntegrityManifest);
         }
 
         private static void ValidateManifestEntry(string baseDirectory, IntegrityManifestEntry entry)
@@ -180,12 +178,12 @@ namespace CvAut
             return Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
         }
 
-        private sealed class IntegrityManifest
+        internal sealed class IntegrityManifest
         {
             public List<IntegrityManifestEntry> Files { get; set; } = new();
         }
 
-        private sealed class IntegrityManifestEntry
+        internal sealed class IntegrityManifestEntry
         {
             public string Path { get; set; } = string.Empty;
 
@@ -204,6 +202,12 @@ namespace CvAut
             [return: MarshalAs(UnmanagedType.Bool)]
             public static extern bool CheckRemoteDebuggerPresent(IntPtr hProcess, [MarshalAs(UnmanagedType.Bool)] out bool isDebuggerPresent);
         }
+
+        // AOT-safe source-generated JSON context for the integrity manifest types.
+        [JsonSerializable(typeof(IntegrityManifest))]
+        [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+        internal sealed partial class SecurityJsonContext : JsonSerializerContext
+        {
+        }
     }
 }
-
