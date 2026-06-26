@@ -28,8 +28,11 @@ toAttack.png
 screen.png
 Validate_Upgrade/
 Diagnostics/Logs/
+Diagnostics/Screenshots/
+Screenshot_*.png
 logs/
 scratch/
+tmp/
 
 # Local ADB Binaries
 adb/
