@@ -1,0 +1,21 @@
+# Normalize line endings: store as LF in the repository, convert to the
+# platform's native ending on checkout. Stops the recurring LF<->CRLF churn
+# on Windows regardless of each developer's core.autocrlf setting.
+* text=auto
+
+# Scripts that must keep LF on every platform.
+*.sh text eol=lf
+
+# Binary assets — Git must never touch their bytes.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.bmp  binary
+*.ico  binary
+*.onnx binary
+*.dll  binary
+*.exe  binary
+*.pdb  binary
+*.dat  binary
+*.zip  binary
