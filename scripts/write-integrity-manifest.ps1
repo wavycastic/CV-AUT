@@ -27,7 +27,9 @@ function Add-ManifestEntry
     }) | Out-Null
 }
 
-Add-ManifestEntry (Join-Path $resolvedRoot "Simplimixi.Backend.dll")
+# Native AOT links the whole app (frontend + backend) into a single native SimpliMixi.exe.
+# There is no separate Simplimixi.Backend.dll anymore, so the manifest guards the exe itself.
+Add-ManifestEntry (Join-Path $resolvedRoot "SimpliMixi.exe")
 Add-ManifestEntry (Join-Path $resolvedRoot "simplimixi_native.dll")
 
 $templateRoot = Join-Path $resolvedRoot "assets\Templates"

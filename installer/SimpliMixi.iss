@@ -65,40 +65,6 @@ begin
   StopRunningProcess('adb.exe');
 end;
 
-function IsDotNetDesktopRuntime8Installed(): Boolean;
-var
-  Versions: TArrayOfString;
-  I: Integer;
-begin
-  Result := False;
-
-  // Try checking the 32-bit registry hive (where x64 runtimes are often registered on 64-bit OS due to WOW6432Node redirection)
-  if RegGetValueNames(HKLM32, 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App', Versions) then
-  begin
-    for I := 0 to GetArrayLength(Versions) - 1 do
-    begin
-      if Pos('8.', Versions[I]) = 1 then
-      begin
-        Result := True;
-        exit;
-      end;
-    end;
-  end;
-
-  // Fallback: Try checking the 64-bit registry hive
-  if RegGetValueNames(HKLM64, 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App', Versions) then
-  begin
-    for I := 0 to GetArrayLength(Versions) - 1 do
-    begin
-      if Pos('8.', Versions[I]) = 1 then
-      begin
-        Result := True;
-        exit;
-      end;
-    end;
-  end;
-end;
-
 procedure DeleteOldVersionItemsInDir(Dir: String);
 var
   FindRec: TFindRec;
@@ -137,17 +103,8 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
-var
-  ResultCode: Integer;
 begin
   Result := True;
   StopRunningAppProcesses();
   DeleteOldVersionItems();
-
-  if not IsDotNetDesktopRuntime8Installed() then
-  begin
-    MsgBox('Ứng dụng yêu cầu Microsoft .NET 8 Desktop Runtime (x64) để hoạt động.' + #13#10 + 'Hệ thống sẽ tự động mở trang web tải về của Microsoft để bạn cài đặt .NET 8.', mbCriticalError, MB_OK);
-    ShellExec('open', 'https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0.0-windows-x64-installer', '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
-    Result := False;
-  end;
 end;

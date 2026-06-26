@@ -1,45 +1,21 @@
 param(
     [string]$Runtime = "win-x64",
-    [string]$Configuration = "Release",
-    [switch]$SelfContained = $false
+    [string]$Configuration = "Release"
 )
 
 $ErrorActionPreference = "Stop"
 
+# Native AOT release pipeline for the Avalonia frontend (src\Simplimixi\Simplimixi.csproj).
+# The whole app (frontend + backend) compiles to a single native SimpliMixi.exe — no IL,
+# no Obfuscar, no .NET runtime redist. Requires the MSVC toolchain (link.exe) on PATH.
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $publishRoot = Join-Path $repoRoot "publish"
 $publishDir = Join-Path $publishRoot $Runtime
-$protectedDir = Join-Path $publishRoot "$Runtime-protected"
 $packageDir = Join-Path $publishRoot "SimpliMixi-v0.6.2"
-$obfuscatedInputDir = Join-Path $publishRoot "$Runtime-obfuscator-input"
-$obfuscatedDepsDir = Join-Path $publishRoot "$Runtime-obfuscator-deps"
-$obfuscatedDir = Join-Path $publishRoot "$Runtime-obfuscated"
-$projectPath = Join-Path $repoRoot "CV-AUT.csproj"
-$backendBuildAssembly = Join-Path $repoRoot "src\Simplimixi\Backend\bin\$Configuration\net8.0-windows\Simplimixi.Backend.dll"
-$configPath = Join-Path $repoRoot "Obfuscar.xml"
+$projectPath = Join-Path $repoRoot "src\Simplimixi\Simplimixi.csproj"
 $issPath = Join-Path $repoRoot "installer\SimpliMixi.iss"
 $setupPath = Join-Path $repoRoot "publish\SimpliMixi-v0.6.2-Setup.exe"
-$dotNetRuntimePath = Join-Path $repoRoot "redist\windowsdesktop-runtime-8.0.0-win-x64.exe"
-
-function Find-ObfuscarCli
-{
-    $obfuscar = Get-Command obfuscar.console -ErrorAction SilentlyContinue
-    if (-not $obfuscar)
-    {
-        $obfuscar = Get-Command Obfuscar.Console -ErrorAction SilentlyContinue
-    }
-    if (-not $obfuscar)
-    {
-        $obfuscar = Get-Command obfuscar -ErrorAction SilentlyContinue
-    }
-
-    if (-not $obfuscar)
-    {
-        throw "Obfuscar CLI was not found. Install it first, then rerun this script. Example: dotnet tool install --global Obfuscar.GlobalTool"
-    }
-
-    return $obfuscar.Source
-}
 
 function Find-InnoCompiler
 {
@@ -66,6 +42,73 @@ function Find-InnoCompiler
     return $iscc.Source
 }
 
+function Find-VcVars64
+{
+    # Prefer vswhere to locate the latest VS install with the C++ toolchain.
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswhere)
+    {
+        $vcvars = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -find "VC\Auxiliary\Build\vcvars64.bat" 2>$null | Select-Object -First 1
+        if ($vcvars -and (Test-Path $vcvars))
+        {
+            return $vcvars
+        }
+    }
+
+    # Common fallback locations.
+    $candidates = @(
+        "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat",
+        "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat",
+        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+    )
+    foreach ($candidate in $candidates)
+    {
+        if (Test-Path $candidate)
+        {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+function Import-vcVars64
+{
+    param([string]$VcVarsPath)
+
+    # Run vcvars64.bat in a child cmd and capture the resulting environment block,
+    # then apply it to this PowerShell session so the AOT compiler/linker can find MSVC.
+    $envOutput = cmd /c "call `"$VcVarsPath`" >nul 2>&1 && set" 2>&1
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "vcvars64.bat failed with exit code $LASTEXITCODE."
+    }
+
+    foreach ($line in $envOutput)
+    {
+        if ($line -match '^([^=]+)=(.*)$')
+        {
+            Set-Item -Path "env:$($matches[1])" -Value $matches[2]
+        }
+    }
+}
+
+function Sanitize-PathForNativeLink
+{
+    # Git ships a Unix hardlink tool at <Git>\usr\bin\link.exe that shadows MSVC's link.exe
+    # and breaks the AOT LinkNative step. Strip Git's usr\bin (and the compat bin) from PATH
+    # so the MSVC linker discovered via vcvars64 wins.
+    $segments = $env:PATH -split ';'
+    $filtered = $segments | Where-Object {
+        $_ -and
+        ($_ -notmatch '\\Git\\usr\\bin') -and
+        ($_ -notmatch '\\Git\\mingw(\\|$)')
+    }
+    $env:PATH = $filtered -join ';'
+}
+
 function Test-NoSensitiveTerms
 {
     param(
@@ -75,13 +118,13 @@ function Test-NoSensitiveTerms
 
     if (-not (Test-Path $AssemblyPath))
     {
-        throw "Protected assembly was not found at $AssemblyPath"
+        throw "Protected file was not found at $AssemblyPath"
     }
 
     $assemblyInfo = Get-Item $AssemblyPath
     if ($assemblyInfo.Length -le 0)
     {
-        throw "Protected assembly '$([System.IO.Path]::GetFileName($AssemblyPath))' is empty."
+        throw "Protected file '$([System.IO.Path]::GetFileName($AssemblyPath))' is empty."
     }
 
     $bytes = [System.IO.File]::ReadAllBytes($AssemblyPath)
@@ -107,11 +150,16 @@ function Test-NoSensitiveTerms
                 break
             }
         }
+
+        if ($hits.Count -gt 0)
+        {
+            break
+        }
     }
 
     if ($hits.Count -gt 0)
     {
-        throw "Protected assembly '$([System.IO.Path]::GetFileName($AssemblyPath))' still exposes sensitive terms: $($hits -join ', ')"
+        throw "Protected file '$([System.IO.Path]::GetFileName($AssemblyPath))' still exposes sensitive terms: $($hits -join ', ')"
     }
 }
 
@@ -119,17 +167,15 @@ function Test-ProtectedPackage
 {
     param([string]$PackagePath)
 
-    $appAssembly = Join-Path $PackagePath "SimpliMixi.dll"
-    $backendAssembly = Join-Path $PackagePath "Simplimixi.Backend.dll"
+    # Native AOT links frontend + backend into a single SimpliMixi.exe, so both the
+    # app-level and backend-level sensitive terms are scanned against that one binary.
+    $appExe = Join-Path $PackagePath "SimpliMixi.exe"
     $nativeLibrary = Join-Path $PackagePath "simplimixi_native.dll"
     $oldTemplateKeys = @("SimpliMixi-Templates-051")
     $runtimeConfigAllowList = @(
-        "SimpliMixi.deps.json",
-        "SimpliMixi.runtimeconfig.json",
         "Config\test_config.json",
         "security\integrity.manifest.json"
     )
-    $devOnlyPathPattern = '(^|\\)(tests?|samples?|fixtures?|debug|scripts?|tools?|devtools?|bench|diagnostics|\.git|\.vs|obj|TestResults)(\\|$)'
     $backendSensitiveTerms = @(
         "CVAutomationFramework",
         "VisionEngine",
@@ -159,9 +205,8 @@ function Test-ProtectedPackage
         "simplimixi_decode_template"
     )
 
-    Test-NoSensitiveTerms -AssemblyPath $appAssembly -Terms $oldTemplateKeys
-    Test-NoSensitiveTerms -AssemblyPath $backendAssembly -Terms $oldTemplateKeys
-    Test-NoSensitiveTerms -AssemblyPath $backendAssembly -Terms $backendSensitiveTerms
+    Test-NoSensitiveTerms -AssemblyPath $appExe -Terms $oldTemplateKeys
+    Test-NoSensitiveTerms -AssemblyPath $appExe -Terms $backendSensitiveTerms
 
     if (Test-Path $nativeLibrary)
     {
@@ -207,6 +252,7 @@ function Test-ProtectedPackage
     }
 
     # 4. Scan for dev/test-only directories or artifacts accidentally copied into the package
+    $devOnlyPathPattern = '(^|\\)(tests?|samples?|fixtures?|debug|scripts?|tools?|devtools?|bench|diagnostics|\.git|\.vs|obj|TestResults)(\\|$)'
     $devOnlyArtifacts = $packageFiles | Where-Object {
         $relativePath = [System.IO.Path]::GetRelativePath($PackagePath, $_.FullName)
         $normalizedPath = $relativePath.Replace('/', '\')
@@ -215,16 +261,6 @@ function Test-ProtectedPackage
     if ($devOnlyArtifacts)
     {
         throw "Protected package contains development-only assets or directories: $($devOnlyArtifacts.FullName -join ', ')"
-    }
-
-    $devOnlyDirectories = Get-ChildItem $PackagePath -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object {
-        $relativePath = [System.IO.Path]::GetRelativePath($PackagePath, $_.FullName)
-        $normalizedPath = $relativePath.Replace('/', '\')
-        $normalizedPath -match $devOnlyPathPattern
-    }
-    if ($devOnlyDirectories)
-    {
-        throw "Protected package contains development-only directories: $($devOnlyDirectories.FullName -join ', ')"
     }
 
     # 5. Scan for debug symbols or documentation
@@ -236,6 +272,7 @@ function Test-ProtectedPackage
         throw "Protected package contains debug artifacts: $($debugArtifacts.FullName -join ', ')"
     }
 }
+
 function Protect-TemplateAssets
 {
     param([string]$TemplateRoot)
@@ -303,72 +340,77 @@ public static class SimpliMixiTemplateEncryptor
     [SimpliMixiTemplateEncryptor]::EncryptDirectory($TemplateRoot)
 }
 
-if (-not (Test-Path $dotNetRuntimePath))
+# --- Pipeline start ---
+
+Write-Host "Locating MSVC toolchain for Native AOT..."
+$vcvars = Find-VcVars64
+if (-not $vcvars)
 {
-    throw "Missing .NET Desktop Runtime installer at $dotNetRuntimePath. Download Microsoft Windows Desktop Runtime 8 x64 and rename it to windowsdesktop-runtime-8.0.0-win-x64.exe."
+    throw "vcvars64.bat was not found. Install Visual Studio 2022 (or Build Tools) with the 'Desktop development with C++' workload, then rerun this script."
+}
+Write-Host "Using vcvars64: $vcvars"
+Import-vcVars64 -VcVarsPath $vcvars
+
+# AOT must use the environmental (MSVC) linker; without this the publish reports
+# "Platform linker not found" even when vcvars64 has been imported.
+$env:IlcUseEnvironmentalTools = "true"
+Sanitize-PathForNativeLink
+
+if (-not (Get-Command link.exe -ErrorAction SilentlyContinue))
+{
+    throw "MSVC link.exe is not on PATH after importing vcvars64. Verify the C++ workload is installed."
 }
 
-Write-Host "Publishing $Configuration $Runtime..."
-Remove-Item $publishDir, $protectedDir, $packageDir, $obfuscatedInputDir, $obfuscatedDepsDir, $obfuscatedDir, $setupPath -Recurse -Force -ErrorAction SilentlyContinue
-
-$selfContainedArg = if ($SelfContained)
-{ "true"
-} else
-{ "false"
+Write-Host "Building native helper library (simplimixi_native.dll)..."
+& (Join-Path $PSScriptRoot "build-native.ps1") -Runtime $Runtime -Configuration $Configuration
+if ($LASTEXITCODE -ne 0)
+{
+    throw "build-native.ps1 failed with exit code $LASTEXITCODE."
 }
-dotnet publish $projectPath -c $Configuration -r $Runtime --self-contained $selfContainedArg -o $publishDir
+
+Write-Host "Publishing $Configuration $Runtime (Native AOT)..."
+Remove-Item $publishDir, $packageDir, $setupPath -Recurse -Force -ErrorAction SilentlyContinue
+dotnet publish $projectPath -c $Configuration -r $Runtime -o $publishDir
 if ($LASTEXITCODE -ne 0)
 {
     throw "dotnet publish failed with exit code $LASTEXITCODE."
 }
 
+$nativeExe = Join-Path $publishDir "SimpliMixi.exe"
+if (-not (Test-Path $nativeExe))
+{
+    throw "Native AOT publish did not produce SimpliMixi.exe in $publishDir"
+}
+
 Write-Host "Removing debug artifacts and unused dependencies..."
 Get-ChildItem $publishDir -Recurse -Include *.pdb,*.xml,opencv_videoio_ffmpeg*.dll -ErrorAction SilentlyContinue | Remove-Item -Force
 
-Write-Host "Preparing Obfuscar input..."
-New-Item -ItemType Directory -Path $obfuscatedInputDir -Force | Out-Null
-New-Item -ItemType Directory -Path $obfuscatedDepsDir -Force | Out-Null
-Copy-Item $backendBuildAssembly (Join-Path $obfuscatedInputDir "Simplimixi.Backend.dll") -Force
-Copy-Item (Join-Path $publishDir "OpenCvSharp.dll") (Join-Path $obfuscatedDepsDir "OpenCvSharp.dll") -Force
-Copy-Item (Join-Path $publishDir "SharpAdbClient.dll") (Join-Path $obfuscatedDepsDir "SharpAdbClient.dll") -Force
-
-Write-Host "Running Obfuscar..."
-$obfuscar = Find-ObfuscarCli
-& $obfuscar $configPath
-if ($LASTEXITCODE -ne 0)
-{
-    throw "Obfuscar failed with exit code $LASTEXITCODE."
-}
-
-if (-not (Test-Path $obfuscatedDir))
-{
-    throw "Obfuscar output was not found at $obfuscatedDir"
-}
-
 Write-Host "Creating protected package..."
-New-Item -ItemType Directory -Path $protectedDir -Force | Out-Null
-Copy-Item (Join-Path $publishDir "*") $protectedDir -Recurse -Force
-Copy-Item (Join-Path $obfuscatedDir "Simplimixi.Backend.dll") (Join-Path $protectedDir "Simplimixi.Backend.dll") -Force
-
-Get-ChildItem $protectedDir -Recurse -Include *.pdb,*.xml -ErrorAction SilentlyContinue | Remove-Item -Force
-Remove-Item (Join-Path $protectedDir "Backgrounds"), (Join-Path $protectedDir "AppIcon"), (Join-Path $protectedDir "Templates") -Recurse -Force -ErrorAction SilentlyContinue
-
 New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
-Copy-Item (Join-Path $protectedDir "*") $packageDir -Recurse -Force
+Copy-Item (Join-Path $publishDir "*") $packageDir -Recurse -Force
 
 Write-Host "Encrypting template assets..."
 Protect-TemplateAssets -TemplateRoot (Join-Path $packageDir "assets\Templates")
+
+Write-Host "Writing integrity manifest..."
+& (Join-Path $PSScriptRoot "write-integrity-manifest.ps1") -PackageRoot $packageDir
+if ($LASTEXITCODE -ne 0)
+{
+    throw "write-integrity-manifest.ps1 failed with exit code $LASTEXITCODE."
+}
 
 $readmePath = Join-Path $packageDir "README.txt"
 @"
 SimpliMixi v0.6.2
 
-Run SimpliMixi.exe to start the app.
+Run SimpliMixi.exe to start the app. This is a self-contained native build;
+no .NET runtime installation is required.
 
 Package layout:
+- SimpliMixi.exe is the native (Native AOT) application executable.
 - adb/ contains the bundled Android Debug Bridge tools.
 - assets/Templates/ contains encrypted .dat templates required by automation.
-- redist runtime is installed by setup if Microsoft .NET 8 Desktop Runtime is missing.
+- security/integrity.manifest.json guards the executable, native helper and templates.
 
 Do not remove files or folders from this package.
 "@ | Set-Content $readmePath -Encoding UTF8
@@ -389,10 +431,6 @@ if (-not (Test-Path $setupPath))
     throw "Installer output was not found at $setupPath"
 }
 
-Write-Host "Protected release ready: $setupPath"
+Write-Host "Protected native release ready: $setupPath"
 Write-Host "Package folder: $packageDir"
-Write-Host "Smoke test before release: install setup, launch app, verify encrypted template images, then test Start/End and ADB/BlueStacks flow."
-
-
-
-
+Write-Host "Smoke test before release: install setup, launch app, verify encrypted template images, then test Start/Pause/Stop and ADB/BlueStacks flow."
