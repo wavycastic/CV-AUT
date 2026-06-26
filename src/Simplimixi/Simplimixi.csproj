@@ -60,6 +60,8 @@
     <Compile Include="Program.cs" />
     <Compile Include="App.axaml.cs" />
     <Compile Include="ViewLocator.cs" />
+    <Compile Include="AppLog.cs" />
+    <Compile Include="ConfigStore.cs" />
     <Compile Include="ViewModels\ViewModelBase.cs" />
     <Compile Include="ViewModels\MainWindowViewModel.cs" />
     <Compile Include="Views\MainWindow.axaml.cs" />
