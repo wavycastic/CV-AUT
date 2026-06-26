@@ -52,3 +52,8 @@ Legacy/Simplicity
 
 # Cloudflare Wrangler cache
 .wrangler/
+
+# Local Avalonia 12 docs reference (downloaded from AvaloniaUI/avalonia-docs)
+# Kept locally for development reference; not tracked to avoid bloating history.
+# See docs/avalonia-12-docs.md for structure and update instructions.
+docs/avalonia-12/
