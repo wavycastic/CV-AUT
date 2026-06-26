@@ -4,20 +4,27 @@
       "settings": {
         "css": {
           "lint": {
-            "unknownAtRules": "ignore"
-          }
+            "unknownAtRules": "ignore",
+          },
         },
         "scss": {
           "lint": {
-            "unknownAtRules": "ignore"
-          }
+            "unknownAtRules": "ignore",
+          },
         },
         "less": {
           "lint": {
-            "unknownAtRules": "ignore"
-          }
-        }
-      }
-    }
-  }
+            "unknownAtRules": "ignore",
+          },
+        },
+      },
+    },
+  },
+  "context_servers": {
+    "gitnexus": {
+      "command": "cmd",
+      "args": ["/c", "npx", "gitnexus", "mcp"],
+      "env": {},
+    },
+  },
 }
