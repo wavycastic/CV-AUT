@@ -20,6 +20,9 @@ namespace CvAut
             // which terminates the process before any window opens. AOT-safe (no reflection).
             ReleaseSecurity.EnforceStartupPolicy();
 
+            // Tee Console output to the UI live log. Must run before any backend logging.
+            AppLog.Install();
+
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
 

@@ -1,50 +1,195 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:CvAut.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="CvAut.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Title="SimpliMixi"
-        WindowStartupLocation="CenterScreen">
+<Window
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DesignWidth="820"
+    d:DesignHeight="640"
+    x:Class="CvAut.Views.MainWindow"
+    x:DataType="vm:MainWindowViewModel"
+    Title="SimpliMixi"
+    Width="820"
+    Height="640"
+    MinWidth="640"
+    MinHeight="480"
+    WindowStartupLocation="CenterScreen"
+>
 
     <Design.DataContext>
-        <!-- Design-time DataContext for the previewer only. -->
-        <vm:MainWindowViewModel/>
+        <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <Grid Margin="16" RowDefinitions="Auto,Auto,Auto,*,Auto">
+    <Grid Margin="16" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
 
-        <TextBlock Grid.Row="0"
-                   Text="{Binding Greeting}"
-                   FontSize="20" FontWeight="SemiBold"
-                   Margin="0,0,0,12" />
+        <TextBlock
+            Grid.Row="0"
+            Text="{Binding Greeting}"
+            FontSize="20"
+            FontWeight="SemiBold"
+            Margin="0,0,0,12"
+        />
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12" Spacing="8">
-            <TextBlock Text="Config:" VerticalAlignment="Center" />
-            <TextBox Text="{Binding ConfigPath}"
-                     MinWidth="360"
-                     IsEnabled="{Binding !IsRunning}" />
-        </StackPanel>
+        <!-- Config + device connection -->
+        <Border
+            Grid.Row="1"
+            Padding="12"
+            CornerRadius="6"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+        >
+            <Grid
+                ColumnDefinitions="Auto,*,Auto,Auto"
+                RowDefinitions="Auto,Auto,Auto"
+            >
+                <TextBlock
+                    Grid.Row="0"
+                    Grid.Column="0"
+                    Text="Config"
+                    VerticalAlignment="Center"
+                    Margin="0,0,8,8"
+                />
+                <TextBox
+                    Grid.Row="0"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="3"
+                    Text="{Binding ConfigPath}"
+                    IsEnabled="{Binding !IsRunning}"
+                    Margin="0,0,0,8"
+                />
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
-            <Button Content="Start"  Command="{Binding StartCommand}" />
-            <Button Content="Pause"  Command="{Binding PauseCommand}" />
-            <Button Content="Resume" Command="{Binding ResumeCommand}" />
-            <Button Content="Stop"   Command="{Binding StopCommand}" />
-        </StackPanel>
+                <TextBlock
+                    Grid.Row="1"
+                    Grid.Column="0"
+                    Text="Host"
+                    VerticalAlignment="Center"
+                    Margin="0,0,8,8"
+                />
+                <TextBox
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    Text="{Binding Host}"
+                    IsEnabled="{Binding !IsRunning}"
+                    Margin="0,0,8,8"
+                />
+                <TextBlock
+                    Grid.Row="1"
+                    Grid.Column="2"
+                    Text="Port"
+                    VerticalAlignment="Center"
+                    Margin="0,0,8,8"
+                />
+                <TextBox
+                    Grid.Row="1"
+                    Grid.Column="3"
+                    Text="{Binding Port}"
+                    Width="90"
+                    IsEnabled="{Binding !IsRunning}"
+                    Margin="0,0,0,8"
+                />
 
-        <Border Grid.Row="3" Margin="0,16,0,0"
-                Padding="12"
-                BorderBrush="{DynamicResource SystemControlDefaultChromeMediumLowBrush}"
-                BorderThickness="1" CornerRadius="4">
-            <TextBlock Text="{Binding Status}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                <TextBlock
+                    Grid.Row="2"
+                    Grid.Column="0"
+                    Text="Device"
+                    VerticalAlignment="Center"
+                    Margin="0,0,8,0"
+                />
+                <ComboBox
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    ItemsSource="{Binding Devices}"
+                    SelectedItem="{Binding SelectedDevice}"
+                    HorizontalAlignment="Stretch"
+                    PlaceholderText="(detect to list connected emulators)"
+                    IsEnabled="{Binding !IsRunning}"
+                    Margin="0,0,8,0"
+                />
+                <Button
+                    Grid.Row="2"
+                    Grid.Column="2"
+                    Grid.ColumnSpan="2"
+                    Content="Detect devices"
+                    Command="{Binding DetectDevicesCommand}"
+                    HorizontalAlignment="Stretch"
+                />
+            </Grid>
         </Border>
 
-        <TextBlock Grid.Row="4"
-                   Text="Skeleton — wires AutomationRunner lifecycle. Add real UI next."
-                   Opacity="0.6" FontSize="12" Margin="0,8,0,0" />
+        <!-- Attack picker -->
+        <StackPanel
+            Grid.Row="2"
+            Orientation="Horizontal"
+            Spacing="8"
+            Margin="0,12,0,0"
+        >
+            <TextBlock Text="Attack" VerticalAlignment="Center" />
+            <ComboBox
+                ItemsSource="{Binding Attacks}"
+                SelectedItem="{Binding SelectedAttack}"
+                MinWidth="240"
+                PlaceholderText="(select an army template)"
+                IsEnabled="{Binding !IsRunning}"
+            />
+        </StackPanel>
+
+        <!-- Lifecycle controls -->
+        <StackPanel
+            Grid.Row="3"
+            Orientation="Horizontal"
+            Spacing="8"
+            Margin="0,12,0,0"
+        >
+            <Button Content="Start" Command="{Binding StartCommand}" />
+            <Button Content="Pause" Command="{Binding PauseCommand}" />
+            <Button Content="Resume" Command="{Binding ResumeCommand}" />
+            <Button Content="Stop" Command="{Binding StopCommand}" />
+            <Button Content="Clear log" Command="{Binding ClearLogCommand}" />
+        </StackPanel>
+
+        <!-- Live log -->
+        <Border
+            Grid.Row="4"
+            Margin="0,12,0,0"
+            Padding="0"
+            CornerRadius="6"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+        >
+            <ScrollViewer Padding="8" HorizontalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding LogLines}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock
+                                Text="{Binding}"
+                                FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                FontSize="12"
+                                TextWrapping="NoWrap"
+                            />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Status bar -->
+        <Border
+            Grid.Row="5"
+            Margin="0,12,0,0"
+            Padding="8,6"
+            CornerRadius="4"
+            Background="{DynamicResource SystemControlBackgroundListLowBrush}"
+        >
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock
+                    Text="Status:"
+                    FontWeight="SemiBold"
+                    VerticalAlignment="Center"
+                />
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
     </Grid>
 
 </Window>

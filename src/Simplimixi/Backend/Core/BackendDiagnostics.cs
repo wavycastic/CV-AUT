@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
 using OpenCvSharp;
+using SharpAdbClient;
 
 namespace CvAut
 {
@@ -11,6 +13,46 @@ namespace CvAut
         public static byte[] LoadTemplatePngBytes(string templatesRoot, string relativePath)
         {
             return TemplateAssetLoader.LoadPngBytes(templatesRoot, relativePath);
+        }
+
+        /// <summary>
+        /// Returns the serials of all ADB devices the local ADB server can see
+        /// (e.g. "127.0.0.1:5556", "emulator-5554"). Starts the bundled ADB server
+        /// first. Used by the UI device picker; never throws.
+        /// </summary>
+        public static IReadOnlyList<string> ListAdbDevices()
+        {
+            var serials = new List<string>();
+            try
+            {
+                var server = new AdbServer();
+                try
+                {
+                    server.StartServer(Path.Combine(AppContext.BaseDirectory, "adb", "adb.exe"), restartServerIfNewer: false);
+                }
+                catch
+                {
+                    // Server may already be running; continue to enumerate.
+                }
+
+                IEnumerable<DeviceData>? devices = AdbClient.Instance.GetDevices();
+                if (devices != null)
+                {
+                    foreach (DeviceData device in devices)
+                    {
+                        if (!string.IsNullOrWhiteSpace(device.Serial))
+                        {
+                            serials.Add(device.Serial);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UI] phase=list_devices status=fail reason=\"{ex.Message}\"");
+            }
+
+            return serials;
         }
 
         public static void DiagnoseSavedArmyWindow(string outputPath, string templatesPath)
