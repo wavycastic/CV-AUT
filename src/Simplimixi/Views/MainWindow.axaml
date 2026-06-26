@@ -1,0 +1,50 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CvAut.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="CvAut.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="SimpliMixi"
+        WindowStartupLocation="CenterScreen">
+
+    <Design.DataContext>
+        <!-- Design-time DataContext for the previewer only. -->
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid Margin="16" RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+        <TextBlock Grid.Row="0"
+                   Text="{Binding Greeting}"
+                   FontSize="20" FontWeight="SemiBold"
+                   Margin="0,0,0,12" />
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12" Spacing="8">
+            <TextBlock Text="Config:" VerticalAlignment="Center" />
+            <TextBox Text="{Binding ConfigPath}"
+                     MinWidth="360"
+                     IsEnabled="{Binding !IsRunning}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+            <Button Content="Start"  Command="{Binding StartCommand}" />
+            <Button Content="Pause"  Command="{Binding PauseCommand}" />
+            <Button Content="Resume" Command="{Binding ResumeCommand}" />
+            <Button Content="Stop"   Command="{Binding StopCommand}" />
+        </StackPanel>
+
+        <Border Grid.Row="3" Margin="0,16,0,0"
+                Padding="12"
+                BorderBrush="{DynamicResource SystemControlDefaultChromeMediumLowBrush}"
+                BorderThickness="1" CornerRadius="4">
+            <TextBlock Text="{Binding Status}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+        </Border>
+
+        <TextBlock Grid.Row="4"
+                   Text="Skeleton — wires AutomationRunner lifecycle. Add real UI next."
+                   Opacity="0.6" FontSize="12" Margin="0,8,0,0" />
+    </Grid>
+
+</Window>
