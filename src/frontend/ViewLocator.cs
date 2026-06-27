@@ -2,7 +2,9 @@ using System;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using CvAut.ViewModels;
+using CvAut.ViewModels.Settings;
 using CvAut.Views;
+using CvAut.Views.Settings;
 
 namespace CvAut
 {
@@ -28,6 +30,12 @@ namespace CvAut
                 AdvancedViewModel => new AdvancedView(),
                 LogsViewModel => new LogsView(),
                 LicenseViewModel => new LicenseView(),
+                DeviceViewModel => new DevicePanelView(),
+                TopBarViewModel => new TopBarView(),
+                SidebarViewModel => new SidebarView(),
+                MainVillageViewModel => new MainVillageView(),
+                NightVillageViewModel => new NightVillageView(),
+                ClanGamesViewModel => new ClanGamesView(),
                 _ => new TextBlock { Text = "Not Found: " + param.GetType().FullName },
             };
         }

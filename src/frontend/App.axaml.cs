@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using CvAut.Services;
 using CvAut.ViewModels;
+using CvAut.ViewModels.Settings;
 using CvAut.Views;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -38,16 +39,28 @@ namespace CvAut
         /// </summary>
         private static void ConfigureServices(IServiceCollection services)
         {
+            // App-scoped state + session manager.
             services.AddSingleton<AppStateService>();
-            services.AddTransient<MainWindowViewModel>();
-            // Phase 0 page/shell view models. Resolvable now; wired into the shell in Phase 1.
-            services.AddTransient<ShellViewModel>();
+            services.AddSingleton<CvAut.Services.Sessions.IDeviceSessionManager, CvAut.Services.Sessions.DeviceSessionManager>();
+
+            // Settings sub-page view models.
+            services.AddTransient<MainVillageViewModel>();
+            services.AddTransient<NightVillageViewModel>();
+            services.AddTransient<ClanGamesViewModel>();
+
+            // Page view models.
             services.AddTransient<DashboardViewModel>();
             services.AddTransient<SettingsViewModel>();
             services.AddTransient<AccountsViewModel>();
             services.AddTransient<AdvancedViewModel>();
             services.AddTransient<LogsViewModel>();
             services.AddTransient<LicenseViewModel>();
+
+            // Shell host (owns TopBar + Sidebar + page tree).
+            services.AddTransient<MainWindowViewModel>();
+
+            // Phase 0 shell skeleton — registered for completeness; not used by the live shell.
+            services.AddTransient<ShellViewModel>();
         }
     }
 }

@@ -1,0 +1,31 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.DeviceListItemView"
+    x:DataType="vm:DeviceViewModel"
+>
+    <Design.DataContext>
+        <vm:DeviceViewModel />
+    </Design.DataContext>
+
+    <Border Padding="10,8" CornerRadius="6"
+            BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            Margin="0,0,0,8">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+            <materialIcons:MaterialIcon Grid.Column="0" Kind="Cellphone" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,10,0" />
+            <StackPanel Grid.Column="1" Orientation="Vertical">
+                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Status}" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" FontSize="12" />
+            </StackPanel>
+            <Border Grid.Column="2" Padding="6,2" CornerRadius="10"
+                    Background="{DynamicResource SystemControlBackgroundListLowBrush}" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Stats.Battles}" FontSize="12" />
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>
