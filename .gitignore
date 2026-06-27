@@ -50,6 +50,11 @@ obj/
 .vs/
 *.user
 
+# Native C compiler artifacts (cl.exe/clang write these next to the build)
+*.obj
+*.exp
+build-native.cmd
+
 
 legacy/Simplicity
 
