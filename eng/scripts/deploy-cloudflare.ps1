@@ -7,10 +7,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $setupFileName = "SimpliMixi-v$Version-Setup.exe"
 $setupPath = Join-Path $repoRoot "publish\$setupFileName"
-$pagesDir = Join-Path $repoRoot "pages"
+$pagesDir = Join-Path $repoRoot "eng\deploy"
 $updatePath = Join-Path $pagesDir "update.json"
 
 if (-not $R2PublicBaseUrl)

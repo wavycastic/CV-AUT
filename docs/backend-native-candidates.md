@@ -6,11 +6,11 @@ This document records backend logic that has high reverse-engineering value and 
 
 | Priority | Candidate | Current Location | Value | Dependency Risk |
 | --- | --- | --- | --- | --- |
-| P1 | Template asset decode/key derivation | `src/Simplimixi/Backend/Core/TemplateAssetLoader.cs` | Protects encrypted template assets and decode key material | Low: byte-array in/out, no UI/ADB dependency |
-| P2 | OCR digit scoring | `src/Simplimixi/Backend/Core/VisionEngine.cs` | Protects digit templates, thresholds, and IoU scoring used for loot/resource reads | Medium: currently tied to OpenCV `Mat`, but can be flattened to bytes |
-| P3 | Target acceptance scoring | `src/Simplimixi/Backend/Core/CVAutomationFramework.cs` and `src/Simplimixi/Backend/Core/IsTarget.cs` | Protects farming decision thresholds and acceptance behavior | Low: numeric inputs/outputs |
-| P4 | Attack coordinate strategy generation | `src/Simplimixi/Backend/Core/Attacks.cs` | Protects deployment patterns, jitter, side mirroring, and ordering | Medium: many points and config variants, but pure after tab detection |
-| P5 | Wall upgrade decision heuristics | `src/Simplimixi/Backend/Core/WallUpdater.cs` | Protects resource choice, candidate ordering, saved offset behavior | Medium: mixed with ADB flow; decision subset can be isolated |
+| P1 | Template asset decode/key derivation | `src/backend/Core/TemplateAssetLoader.cs` | Protects encrypted template assets and decode key material | Low: byte-array in/out, no UI/ADB dependency |
+| P2 | OCR digit scoring | `src/backend/Core/VisionEngine.cs` | Protects digit templates, thresholds, and IoU scoring used for loot/resource reads | Medium: currently tied to OpenCV `Mat`, but can be flattened to bytes |
+| P3 | Target acceptance scoring | `src/backend/Core/CVAutomationFramework.cs` and `src/backend/Core/IsTarget.cs` | Protects farming decision thresholds and acceptance behavior | Low: numeric inputs/outputs |
+| P4 | Attack coordinate strategy generation | `src/backend/Core/Attacks.cs` | Protects deployment patterns, jitter, side mirroring, and ordering | Medium: many points and config variants, but pure after tab detection |
+| P5 | Wall upgrade decision heuristics | `src/backend/Core/WallUpdater.cs` | Protects resource choice, candidate ordering, saved offset behavior | Medium: mixed with ADB flow; decision subset can be isolated |
 
 ## Candidate Signatures
 

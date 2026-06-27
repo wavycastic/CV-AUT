@@ -5,16 +5,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Native AOT release pipeline for the Avalonia frontend (src\Simplimixi\Simplimixi.csproj).
+# Native AOT release pipeline for the Avalonia frontend (src\frontend\Simplimixi.csproj).
 # The whole app (frontend + backend) compiles to a single native SimpliMixi.exe — no IL,
 # no Obfuscar, no .NET runtime redist. Requires the MSVC toolchain (link.exe) on PATH.
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $publishRoot = Join-Path $repoRoot "publish"
 $publishDir = Join-Path $publishRoot $Runtime
 $packageDir = Join-Path $publishRoot "SimpliMixi-v0.6.2"
-$projectPath = Join-Path $repoRoot "src\Simplimixi\Simplimixi.csproj"
-$issPath = Join-Path $repoRoot "installer\SimpliMixi.iss"
+$projectPath = Join-Path $repoRoot "src\frontend\Simplimixi.csproj"
+$issPath = Join-Path $repoRoot "eng\installer\SimpliMixi.iss"
 $setupPath = Join-Path $repoRoot "publish\SimpliMixi-v0.6.2-Setup.exe"
 
 function Find-InnoCompiler

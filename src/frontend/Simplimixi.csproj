@@ -12,7 +12,7 @@
     <AssemblyVersion>0.6.2.0</AssemblyVersion>
     <FileVersion>0.6.2.0</FileVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>..\..\Assets\AppIcon\SimpliMixi.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\assets\AppIcon\SimpliMixi.ico</ApplicationIcon>
     <!-- Compiled bindings are required for Native AOT (no runtime XAML reflection). -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -52,7 +52,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="Backend\Simplimixi.Backend.csproj" />
+    <ProjectReference Include="..\backend\Simplimixi.Backend.csproj" />
   </ItemGroup>
 
   <!-- Avalonia app sources (FE only — Program.cs here replaces the headless Core/Program.cs). -->
@@ -68,21 +68,21 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="..\..\Assets\Backgrounds\**\*" />
-    <AvaloniaResource Include="..\..\Assets\AppIcon\SimpliMixiIcon.png" />
+    <AvaloniaResource Include="..\..\assets\Backgrounds\**\*" />
+    <AvaloniaResource Include="..\..\assets\AppIcon\SimpliMixiIcon.png" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\adb\**\*" Link="adb\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="..\..\Assets\Templates\**\*" Link="assets\Templates\%(RecursiveDir)%(Filename)%(Extension)">
+    <None Include="..\..\assets\Templates\**\*" Link="assets\Templates\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="..\..\Config\test_config.json" Link="Config\test_config.json">
+    <None Include="..\..\config\test_config.json" Link="Config\test_config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <Content Include="..\Native\bin\win-x64\Release\simplimixi_native.dll" Link="simplimixi_native.dll" Condition="Exists('..\Native\bin\win-x64\Release\simplimixi_native.dll')">
+    <Content Include="..\native\bin\win-x64\Release\simplimixi_native.dll" Link="simplimixi_native.dll" Condition="Exists('..\native\bin\win-x64\Release\simplimixi_native.dll')">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>

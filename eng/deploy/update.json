@@ -1,0 +1,7 @@
+﻿// {
+//   "version": "0.6.2",
+//   "url": "https://pub-238f6c19b5194dd2a08e7165e9b86570.r2.dev/SimpliMixi-v0.6.2-Setup.exe",
+//   "force_update": true,
+//   "min_supported_version": "0.6.0",
+//   "notes": "- Sửa lỗi nhận nhầm màn hình kết quả trận thành popup mất kết nối, khiến Clash of Clans bị khởi động lại sau battle.\n- Cải thiện luồng chờ kết thúc trận bằng cách ưu tiên xác nhận result screen trước khi chạy fallback reload_dialog_shape."
+// }

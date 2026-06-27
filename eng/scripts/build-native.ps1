@@ -6,11 +6,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$sourcePath = Join-Path $repoRoot "src\Simplimixi\Native\simplimixi_native.c"
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+$sourcePath = Join-Path $repoRoot "src\native\simplimixi_native.c"
 if ([string]::IsNullOrWhiteSpace($OutputDirectory))
 {
-    $OutputDirectory = Join-Path $repoRoot "src\Simplimixi\Native\bin\$Runtime\$Configuration"
+    $OutputDirectory = Join-Path $repoRoot "src\native\bin\$Runtime\$Configuration"
 }
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
