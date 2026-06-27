@@ -21,6 +21,13 @@ namespace CvAut
             return param switch
             {
                 MainWindowViewModel => new MainWindow(),
+                ShellViewModel => new ShellView(),
+                DashboardViewModel => new DashboardView(),
+                SettingsViewModel => new SettingsView(),
+                AccountsViewModel => new AccountsView(),
+                AdvancedViewModel => new AdvancedView(),
+                LogsViewModel => new LogsView(),
+                LicenseViewModel => new LicenseView(),
                 _ => new TextBlock { Text = "Not Found: " + param.GetType().FullName },
             };
         }
