@@ -79,6 +79,18 @@
     <None Include="..\..\assets\Templates\**\*" Link="assets\Templates\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Dev/script/doc artifacts must never ship in the protected package; the
+         Test-ProtectedPackage gate in build-installer.ps1 forbids these extensions. -->
+    <None Remove="..\..\assets\Templates\**\*.py" />
+    <None Remove="..\..\assets\Templates\**\*.md" />
+    <None Remove="..\..\assets\Templates\**\*.cs" />
+    <None Remove="..\..\assets\Templates\**\*.csx" />
+    <None Remove="..\..\assets\Templates\**\*.ps1" />
+    <None Remove="..\..\assets\Templates\**\*.psm1" />
+    <None Remove="..\..\assets\Templates\**\*.psd1" />
+    <None Remove="..\..\assets\Templates\**\*.cmd" />
+    <None Remove="..\..\assets\Templates\**\*.bat" />
+    <None Remove="..\..\assets\Templates\**\*.sh" />
     <None Include="..\..\config\test_config.json" Link="Config\test_config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
