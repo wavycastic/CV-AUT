@@ -55,6 +55,9 @@ obj/
 *.exp
 build-native.cmd
 
+# Windows reserved-name file created by cmd `2>nul` redirects under non-cmd shells
+nul
+
 
 legacy/Simplicity
 

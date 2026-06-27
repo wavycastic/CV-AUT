@@ -109,6 +109,27 @@ function Sanitize-PathForNativeLink
     $env:PATH = $filtered -join ';'
 }
 
+function Clear-ExtendedLengthTempPath
+{
+    # Some terminals (e.g. the editor's integrated agent shell) export TEMP/TMP with
+    # the Win32 extended-length prefix \\?\. MSBuild's Exec task writes a temp batch
+    # file under %TEMP% and runs it via cmd.exe whenever EnvironmentVariables is set
+    # (the Native AOT IlcCompile/LinkNative targets pass DOTNET_gcServer=0). cmd.exe
+    # cannot resolve a \\?\-prefixed path, so the batch launch dies with
+    # "The system cannot find the path specified." and ilc/link never start.
+    # Strip the prefix so cmd.exe gets a normal path.
+    foreach ($var in 'TEMP', 'TMP')
+    {
+        $value = [Environment]::GetEnvironmentVariable($var)
+        if ($value -and $value.StartsWith('\\?\'))
+        {
+            $clean = $value.Substring(4)
+            Set-Item -Path "env:$var" -Value $clean
+            Write-Host "Normalized $var (stripped \\?\ extended-length prefix): $clean"
+        }
+    }
+}
+
 function Test-NoSensitiveTerms
 {
     param(
@@ -358,6 +379,7 @@ Import-vcVars64 -VcVarsPath $vcvars
 # "Platform linker not found" even when vcvars64 has been imported.
 $env:IlcUseEnvironmentalTools = "true"
 Sanitize-PathForNativeLink
+Clear-ExtendedLengthTempPath
 
 if (-not (Get-Command link.exe -ErrorAction SilentlyContinue))
 {
