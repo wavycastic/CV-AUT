@@ -3,7 +3,7 @@
 #define MyAppPublisher "SimpliMixi"
 #define MyAppExeName "SimpliMixi.exe"
 #define MyAppId "9D2F0D65-A778-4F3D-8C08-84DBF9165F57"
-#define SourceDir "..\publish\SimpliMixi-v0.6.2"
+#define SourceDir "..\..\publish\SimpliMixi-v0.6.2"
 
 [Setup]
 AppId={{{#MyAppId}}
@@ -15,9 +15,9 @@ DefaultGroupName={#MyAppName}
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DirExistsWarning=no
-OutputDir=..\publish
+OutputDir=..\..\publish
 OutputBaseFilename=SimpliMixi-v{#MyAppVersion}-Setup
-SetupIconFile=..\Assets\AppIcon\SimpliMixi.ico
+SetupIconFile=..\..\assets\AppIcon\SimpliMixi.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

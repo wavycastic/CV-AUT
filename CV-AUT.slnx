@@ -1,9 +1,8 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/Simplimixi/Simplimixi.csproj" />
+    <Project Path="src/frontend/Simplimixi.csproj" />
   </Folder>
-  <Folder Name="/src/Simplimixi/" />
-  <Folder Name="/src/Simplimixi/Backend/">
-    <Project Path="src/Simplimixi/Backend/Simplimixi.Backend.csproj" />
+  <Folder Name="/src/backend/">
+    <Project Path="src/backend/Simplimixi.Backend.csproj" />
   </Folder>
 </Solution>

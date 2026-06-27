@@ -27,8 +27,8 @@ debug_army_roi.png
 toAttack.png
 screen.png
 Validate_Upgrade/
-Diagnostics/Logs/
-Diagnostics/Screenshots/
+diagnostics/Logs/
+diagnostics/Screenshots/
 Screenshot_*.png
 logs/
 scratch/
@@ -51,7 +51,7 @@ obj/
 *.user
 
 
-Legacy/Simplicity
+legacy/Simplicity
 
 # Cloudflare Wrangler cache
 .wrangler/
