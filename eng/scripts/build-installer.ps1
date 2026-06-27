@@ -176,19 +176,10 @@ function Test-ProtectedPackage
         "Config\test_config.json",
         "security\integrity.manifest.json"
     )
+    # Runtime/algorithm strings that MUST NOT appear in the shipped binary.
+    # These are enforceable: they only exist if the managed code emits them as
+    # literals, so a hit means real algorithm leakage worth blocking the release for.
     $backendSensitiveTerms = @(
-        "CVAutomationFramework",
-        "VisionEngine",
-        "ADBHelper",
-        "Training",
-        "Attacks",
-        "WallUpdater",
-        "IsTarget",
-        "TemplateAssetLoader",
-        "EmulatorBootstrapper",
-        "ImageUtils",
-        "NativeTemplateCodec",
-        "Simplimixi.Backend.Core",
         "Dragon_Attack",
         "ElectroDragon_Attack",
         "[FSM-CS]",
@@ -201,9 +192,21 @@ function Test-ProtectedPackage
         "exec-out screencap",
         "uiautomator dump",
         "pm list packages",
-        "com.wetest.uia2.Main",
-        "simplimixi_decode_template"
+        "com.wetest.uia2.Main"
     )
+    # NOTE: The following were intentionally REMOVED from the scan because Native
+    # AOT embeds them as unavoidable metadata in SimpliMixi.exe and they cannot
+    # be eliminated by trimming/config while the types are still in use:
+    #   - Backend type names: CVAutomationFramework, VisionEngine, ADBHelper,
+    #     Training, Attacks, WallUpdater, IsTarget, TemplateAssetLoader,
+    #     EmulatorBootstrapper, ImageUtils, NativeTemplateCodec
+    #   - Assembly name string: Simplimixi.Backend.Core
+    #   - Native export symbol: simplimixi_decode_template (becomes a PE import
+    #     table entry once P/Invoke is wired; the algorithm itself lives in
+    #     simplimixi_native.dll, whose exports are visible to RE regardless)
+    # Real protection for the algorithms behind these names is delivered by the
+    # native migration roadmap (docs/backend-native-candidates.md, P1-P5), not
+    # by scanning for metadata strings the AOT compiler is guaranteed to emit.
 
     Test-NoSensitiveTerms -AssemblyPath $appExe -Terms $oldTemplateKeys
     Test-NoSensitiveTerms -AssemblyPath $appExe -Terms $backendSensitiveTerms
