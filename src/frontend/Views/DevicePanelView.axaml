@@ -1,0 +1,99 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:models="using:CvAut.Models"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.DevicePanelView"
+    x:DataType="vm:DeviceViewModel"
+>
+    <Design.DataContext>
+        <vm:DeviceViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="12">
+
+        <!-- Header: device name + status badge -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <materialIcons:MaterialIcon Kind="Cellphone" Width="20" Height="20" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding DisplayName}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </StackPanel>
+            <Border Grid.Column="1" Padding="8,4" CornerRadius="10"
+                    Background="{DynamicResource SystemControlBackgroundListLowBrush}">
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" />
+            </Border>
+        </Grid>
+
+        <!-- Lifecycle controls (Start/Pause/Resume/Stop go through DeviceViewModel → IDeviceSession) -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+            <Button Command="{Binding StartCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <materialIcons:MaterialIcon Kind="Play" Width="16" Height="16" />
+                    <TextBlock Text="Start" />
+                </StackPanel>
+            </Button>
+            <Button Command="{Binding PauseCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <materialIcons:MaterialIcon Kind="Pause" Width="16" Height="16" />
+                    <TextBlock Text="Pause" />
+                </StackPanel>
+            </Button>
+            <Button Command="{Binding ResumeCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <materialIcons:MaterialIcon Kind="PlayPause" Width="16" Height="16" />
+                    <TextBlock Text="Resume" />
+                </StackPanel>
+            </Button>
+            <Button Command="{Binding StopCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <materialIcons:MaterialIcon Kind="Stop" Width="16" Height="16" />
+                    <TextBlock Text="Stop" />
+                </StackPanel>
+            </Button>
+            <Button Command="{Binding ClearLogCommand}" ToolTip.Tip="Clear log">
+                <materialIcons:MaterialIcon Kind="Broom" Width="16" Height="16" />
+            </Button>
+        </StackPanel>
+
+        <!-- Stats block -->
+        <Border Grid.Row="2" Padding="12" CornerRadius="6"
+                BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                Margin="0,0,0,12">
+            <Grid ColumnDefinitions="*,*,*,*,*" RowDefinitions="Auto,Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Battles" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Stats.Battles}" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="Stars" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Stats.Stars}" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="Gold" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Stats.Gold}" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Grid.Row="0" Grid.Column="3" Text="Elixir" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding Stats.Elixir}" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Grid.Row="0" Grid.Column="4" Text="Dark" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                <TextBlock Grid.Row="1" Grid.Column="4" Text="{Binding Stats.DarkElixir}" FontSize="18" FontWeight="SemiBold" />
+            </Grid>
+        </Border>
+
+        <!-- Per-device live log -->
+        <Border Grid.Row="3" CornerRadius="6" BorderThickness="1"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+            <ScrollViewer Padding="8" HorizontalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding Logs}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="models:LogEntry">
+                            <TextBlock
+                                Text="{Binding Message}"
+                                FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                FontSize="12"
+                                TextWrapping="NoWrap"
+                            />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

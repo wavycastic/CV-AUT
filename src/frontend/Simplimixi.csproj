@@ -71,11 +71,18 @@
     <Compile Include="ViewModels\MainWindowViewModel.cs" />
     <Compile Include="ViewModels\ShellViewModel.cs" />
     <Compile Include="ViewModels\DashboardViewModel.cs" />
+    <Compile Include="ViewModels\DeviceViewModel.cs" />
+    <Compile Include="ViewModels\SessionStatsViewModel.cs" />
+    <Compile Include="ViewModels\TopBarViewModel.cs" />
+    <Compile Include="ViewModels\SidebarViewModel.cs" />
     <Compile Include="ViewModels\SettingsViewModel.cs" />
     <Compile Include="ViewModels\AccountsViewModel.cs" />
     <Compile Include="ViewModels\AdvancedViewModel.cs" />
     <Compile Include="ViewModels\LogsViewModel.cs" />
     <Compile Include="ViewModels\LicenseViewModel.cs" />
+    <Compile Include="ViewModels\Settings\MainVillageViewModel.cs" />
+    <Compile Include="ViewModels\Settings\NightVillageViewModel.cs" />
+    <Compile Include="ViewModels\Settings\ClanGamesViewModel.cs" />
     <Compile Include="Views\MainWindow.axaml.cs" />
     <Compile Include="Views\ShellView.axaml.cs" />
     <Compile Include="Views\DashboardView.axaml.cs" />
@@ -84,11 +91,23 @@
     <Compile Include="Views\AdvancedView.axaml.cs" />
     <Compile Include="Views\LogsView.axaml.cs" />
     <Compile Include="Views\LicenseView.axaml.cs" />
+    <Compile Include="Views\TopBarView.axaml.cs" />
+    <Compile Include="Views\SidebarView.axaml.cs" />
+    <Compile Include="Views\DevicePanelView.axaml.cs" />
+    <Compile Include="Views\DeviceListItemView.axaml.cs" />
+    <Compile Include="Views\Settings\MainVillageView.axaml.cs" />
+    <Compile Include="Views\Settings\NightVillageView.axaml.cs" />
+    <Compile Include="Views\Settings\ClanGamesView.axaml.cs" />
     <Compile Include="Models\BotStatus.cs" />
     <Compile Include="Models\Device.cs" />
     <Compile Include="Models\LogEntry.cs" />
     <Compile Include="Models\SessionStats.cs" />
     <Compile Include="Services\AppStateService.cs" />
+    <Compile Include="Services\Sessions\IDeviceSession.cs" />
+    <Compile Include="Services\Sessions\IDeviceSessionManager.cs" />
+    <Compile Include="Services\Sessions\AutomationRunnerSession.cs" />
+    <Compile Include="Services\Sessions\MockDeviceSession.cs" />
+    <Compile Include="Services\Sessions\DeviceSessionManager.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,282 +1,184 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.Threading.Tasks;
+using System.Linq;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CvAut.Models;
 using CvAut.Services;
+using CvAut.Services.Sessions;
 
 namespace CvAut.ViewModels
 {
     /// <summary>
-    /// Drives <see cref="AutomationRunner"/> from the UI: device picker (ADB host/port),
-    /// attack template selection, lifecycle control (start/stop/pause/resume), and a live
-    /// log fed by <see cref="AppLog"/>. Config edits are persisted to the config file before
-    /// a run so the backend (which reads the file) picks them up.
+    /// Shell host view model: owns the device collection, the active device (single mode), the
+    /// grid-mode flag, and the TopBar / Sidebar sub-view-models. The shell window binds
+    /// TopBar + Sidebar + a <c>ContentControl</c> driven by <see cref="SidebarViewModel.CurrentPage"/>.
+    ///
+    /// Device runtime state lives in <see cref="DeviceViewModel"/> (one per device); this class
+    /// only holds the collection + the active pointer + app-scoped flags — never per-device
+    /// status/stats/logs directly (roadmap: "Không hardcode state runtime ngoài DeviceViewModel").
     /// </summary>
     public partial class MainWindowViewModel : ViewModelBase
     {
         private const string DefaultConfigPath = "Config/test_config.json";
-        private const int MaxLogLines = 500;
 
         private readonly AppStateService _appState;
+        private readonly IDeviceSessionManager _sessions;
+        private readonly DashboardViewModel _dashboard;
 
-        private AutomationRunner? _runner;
+        /// <summary>Design-time / fallback ctor (no DI).</summary>
+        public MainWindowViewModel()
+            : this(new AppStateService(), new DeviceSessionManager(),
+                   new DashboardViewModel(), new SettingsViewModel(),
+                   new AccountsViewModel(), new AdvancedViewModel(),
+                   new LogsViewModel(), new LicenseViewModel())
+        {
+        }
+
+        public MainWindowViewModel(
+            AppStateService appState,
+            IDeviceSessionManager sessions,
+            DashboardViewModel dashboard,
+            SettingsViewModel settings,
+            AccountsViewModel accounts,
+            AdvancedViewModel advanced,
+            LogsViewModel logs,
+            LicenseViewModel license)
+        {
+            _appState = appState;
+            _sessions = sessions;
+            _dashboard = dashboard;
+
+            TopBar = new TopBarViewModel(appState, sessions);
+            Sidebar = new SidebarViewModel();
+            Sidebar.Seed(new[]
+            {
+                new NavItem("Dashboard", "ViewDashboard", dashboard),
+                new NavItem("Settings", "Cog", settings),
+                new NavItem("Accounts", "AccountMultiple", accounts),
+                new NavItem("Advanced", "Tune", advanced),
+                new NavItem("Logs", "ScriptText", logs),
+                new NavItem("License", "KeyVariant", license),
+            });
+
+            // Keep the TopBar summary fresh when the active device's status changes.
+            ActiveDeviceChanged += OnActiveDeviceStatusChanged;
+        }
+
+        public TopBarViewModel TopBar { get; }
+
+        public SidebarViewModel Sidebar { get; }
+
+        /// <summary>Current page rendered in the shell ContentControl (driven by Sidebar).</summary>
+        public ViewModelBase? CurrentPage => Sidebar.CurrentPage;
+
+        /// <summary>Device-scoped view models — one per connected/configured device.</summary>
+        public ObservableCollection<DeviceViewModel> Devices { get; } = new();
+
+        [ObservableProperty]
+        private DeviceViewModel? _activeDevice;
 
         [ObservableProperty]
         private string _configPath = DefaultConfigPath;
 
         [ObservableProperty]
-        private string _host = "127.0.0.1";
+        private bool _isGridMode;
 
-        [ObservableProperty]
-        private string _port = "5556";
-
-        [ObservableProperty]
-        private string? _selectedAttack;
-
-        [ObservableProperty]
-        private string? _selectedDevice;
-
-        [ObservableProperty]
-        [NotifyCanExecuteChangedFor(nameof(StartCommand))]
-        [NotifyCanExecuteChangedFor(nameof(StopCommand))]
-        [NotifyCanExecuteChangedFor(nameof(PauseCommand))]
-        [NotifyCanExecuteChangedFor(nameof(ResumeCommand))]
-        [NotifyCanExecuteChangedFor(nameof(DetectDevicesCommand))]
-        private bool _isRunning;
-
-        [ObservableProperty]
-        [NotifyCanExecuteChangedFor(nameof(ResumeCommand))]
-        private bool _isPaused;
-
-        [ObservableProperty]
-        private bool _isBusy;
-
-        [ObservableProperty]
-        private string _status = "Idle";
-
-        public string Greeting { get; } = "SimpliMixi — CV Automation";
-
-        public ObservableCollection<string> Attacks { get; } = new();
-
-        public ObservableCollection<string> Devices { get; } = new();
-
-        public ObservableCollection<string> LogLines { get; } = new();
-
-        /// <summary>Design-time / fallback ctor. Avalonia's Design.DataContext needs a parameterless ctor.</summary>
-        public MainWindowViewModel()
-            : this(new AppStateService())
-        {
-        }
-
-        public MainWindowViewModel(AppStateService appState)
-        {
-            _appState = appState;
-
-            // Live log: AppLog raises on the backend's thread, so marshal to the UI thread.
-            AppLog.LineWritten += OnLogLine;
-
-            LoadAttacks();
-            LoadConfigIntoFields();
-        }
-
-        private void OnLogLine(string line)
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                LogLines.Add(line);
-                while (LogLines.Count > MaxLogLines)
-                {
-                    LogLines.RemoveAt(0);
-                }
-            });
-        }
-
-        private void LoadAttacks()
-        {
-            Attacks.Clear();
-            foreach (string name in AttackCatalog.Discover())
-            {
-                Attacks.Add(name);
-            }
-        }
-
-        private void LoadConfigIntoFields()
-        {
-            ConfigStore.DeviceConnection cfg = ConfigStore.Read(ConfigPath);
-            Host = cfg.Host;
-            Port = cfg.Port.ToString(CultureInfo.InvariantCulture);
-            if (!string.IsNullOrWhiteSpace(cfg.Attack))
-            {
-                SelectedAttack = cfg.Attack;
-            }
-        }
-
-        /// <summary>Reload the attack list and config fields when the config path changes.</summary>
+        /// <summary>Config file path used when starting a session on a newly detected device.</summary>
         partial void OnConfigPathChanged(string value)
         {
-            if (!IsRunning)
-            {
-                LoadConfigIntoFields();
-            }
+            // Phase 1: config is still file-driven (roadmap appendix). Phase 2 will use IConfigStore.
         }
 
-        /// <summary>When the user picks a detected device serial like "127.0.0.1:5556", split it into host/port.</summary>
-        partial void OnSelectedDeviceChanged(string? value)
+        partial void OnActiveDeviceChanged(DeviceViewModel? value)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            _appState.ActiveDeviceId = value?.DeviceId;
+            _dashboard.ActiveDevice = value;
+            ActiveDeviceChanged?.Invoke(value);
+        }
+
+        partial void OnIsGridModeChanged(bool value)
+        {
+            _appState.IsGridMode = value;
+        }
+
+        /// <summary>Raised when <see cref="ActiveDevice"/> changes so listeners can re-subscribe.</summary>
+        public event Action<DeviceViewModel?>? ActiveDeviceChanged;
+
+        private void OnActiveDeviceStatusChanged(DeviceViewModel? device)
+        {
+            if (device is null)
             {
                 return;
             }
 
-            int sep = value.LastIndexOf(':');
-            if (sep > 0 && int.TryParse(value.AsSpan(sep + 1), out int parsedPort))
+            device.PropertyChanged += (_, e) =>
             {
-                Host = value[..sep];
-                Port = parsedPort.ToString(CultureInfo.InvariantCulture);
-            }
+                if (e.PropertyName == nameof(DeviceViewModel.Status))
+                {
+                    Dispatcher.UIThread.Post(() => TopBar.RefreshSummary());
+                }
+            };
         }
 
-        [RelayCommand(CanExecute = nameof(CanDetect))]
+        /// <summary>Detect connected ADB devices and build a <see cref="DeviceViewModel"/> for each.</summary>
+        [RelayCommand]
         private async Task DetectDevicesAsync()
         {
-            IsBusy = true;
-            Status = "Detecting devices…";
-            try
+            var found = await Task.Run(() => BackendDiagnostics.ListAdbDevices());
+            Devices.Clear();
+            _appState.Devices.Clear();
+
+            foreach (string serial in found)
             {
-                var found = await Task.Run(() => BackendDiagnostics.ListAdbDevices());
-                Devices.Clear();
-                foreach (string serial in found)
+                if (!AdbEndpoint.TryParse(serial, out string host, out int port))
                 {
-                    Devices.Add(serial);
+                    continue;
                 }
 
-                if (Devices.Count > 0)
-                {
-                    SelectedDevice = Devices[0];
-                    Status = $"Found {Devices.Count} device(s)";
-                }
-                else
-                {
-                    Status = "No devices detected";
-                }
+                var device = new Device(Device.MakeId(host, port), host, port, serial, serial);
+                _appState.Devices.Add(device);
+
+                IDeviceSession session = _sessions.GetOrCreate(device, ConfigPath);
+                var vm = new DeviceViewModel(device, session);
+                Devices.Add(vm);
             }
-            catch (Exception ex)
-            {
-                Status = "Detect failed: " + ex.Message;
-            }
-            finally
-            {
-                IsBusy = false;
-            }
+
+            ActiveDevice = Devices.FirstOrDefault();
+            TopBar.RefreshSummary();
         }
-
-        private bool CanDetect() => !IsRunning && !IsBusy;
-
-        [RelayCommand(CanExecute = nameof(CanStart))]
-        private void Start()
-        {
-            if (_runner is not null)
-            {
-                return;
-            }
-
-            if (!int.TryParse(Port, NumberStyles.Integer, CultureInfo.InvariantCulture, out int port))
-            {
-                Status = "Invalid port";
-                return;
-            }
-
-            try
-            {
-                ConfigStore.Save(ConfigPath, Host.Trim(), port, SelectedAttack ?? string.Empty);
-            }
-            catch (Exception ex)
-            {
-                Status = "Config save failed: " + ex.Message;
-                return;
-            }
-
-            _runner = new AutomationRunner(ConfigPath);
-            _runner.Completion.ContinueWith(OnCompleted, TaskScheduler.FromCurrentSynchronizationContext());
-
-            _runner.Start();
-            IsRunning = true;
-            IsPaused = false;
-            Status = "Running";
-        }
-
-        private bool CanStart() => !IsRunning;
-
-        [RelayCommand(CanExecute = nameof(CanStop))]
-        private void Stop()
-        {
-            if (_runner is null)
-            {
-                return;
-            }
-
-            _runner.Stop();
-            DisposeRunner();
-            IsRunning = false;
-            IsPaused = false;
-            Status = "Stopped";
-        }
-
-        private bool CanStop() => IsRunning;
-
-        [RelayCommand(CanExecute = nameof(CanPause))]
-        private void Pause()
-        {
-            if (_runner is null)
-            {
-                return;
-            }
-
-            _runner.Pause();
-            IsPaused = true;
-            Status = "Paused";
-        }
-
-        private bool CanPause() => IsRunning && !IsPaused;
-
-        [RelayCommand(CanExecute = nameof(CanResume))]
-        private void Resume()
-        {
-            if (_runner is null)
-            {
-                return;
-            }
-
-            _runner.Resume();
-            IsPaused = false;
-            Status = "Running";
-        }
-
-        private bool CanResume() => IsPaused;
 
         [RelayCommand]
-        private void ClearLog()
+        private void ToggleGridMode()
         {
-            LogLines.Clear();
+            IsGridMode = !IsGridMode;
         }
+    }
 
-        private void OnCompleted(Task completion)
+    /// <summary>Parses an ADB serial like "127.0.0.1:5556" or "emulator-5554".</summary>
+    internal static class AdbEndpoint
+    {
+        public static bool TryParse(string serial, out string host, out int port)
         {
-            IsRunning = false;
-            IsPaused = false;
-            Status = completion.IsFaulted
-                ? "Faulted: " + (completion.Exception?.GetBaseException().Message ?? "unknown")
-                : "Completed";
-            DisposeRunner();
-        }
+            host = "127.0.0.1";
+            port = 5556;
+            if (string.IsNullOrWhiteSpace(serial))
+            {
+                return false;
+            }
 
-        private void DisposeRunner()
-        {
-            _runner?.Dispose();
-            _runner = null;
+            int sep = serial.LastIndexOf(':');
+            if (sep > 0 && int.TryParse(serial.AsSpan(sep + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out port))
+            {
+                host = serial[..sep];
+                return true;
+            }
+
+            // "emulator-XXXX" etc. — not a host:port endpoint; treat as localhost default.
+            host = "127.0.0.1";
+            return true;
         }
     }
 }

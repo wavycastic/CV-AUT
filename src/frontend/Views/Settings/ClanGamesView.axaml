@@ -1,0 +1,27 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels.Settings"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.Settings.ClanGamesView"
+    x:DataType="vm:ClanGamesViewModel"
+>
+    <Design.DataContext>
+        <vm:ClanGamesViewModel />
+    </Design.DataContext>
+
+    <StackPanel Margin="16" Spacing="12">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+            <materialIcons:MaterialIcon Kind="SwordCross" Width="28" Height="28" />
+            <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" />
+        </StackPanel>
+        <TextBlock
+            Text="Pick village, filter missions, save filter sets — wired in Phase 2."
+            TextWrapping="Wrap"
+            Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+            MaxWidth="520" />
+    </StackPanel>
+</UserControl>
