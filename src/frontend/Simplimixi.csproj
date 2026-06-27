@@ -49,6 +49,11 @@
     </PackageReference>
     <!-- MVVM source generators (ObservableObject/[RelayCommand]) — AOT-safe, no reflection. -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- DI composition root. Manual registration only — AOT-safe (no assembly scanning). -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <!-- Icon library: strongly-typed MaterialIconKind enum + switch-based path data → AOT/trim safe. -->
+    <PackageReference Include="Material.Icons" Version="3.0.2" />
+    <PackageReference Include="Material.Icons.Avalonia" Version="3.0.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -64,7 +69,26 @@
     <Compile Include="ConfigStore.cs" />
     <Compile Include="ViewModels\ViewModelBase.cs" />
     <Compile Include="ViewModels\MainWindowViewModel.cs" />
+    <Compile Include="ViewModels\ShellViewModel.cs" />
+    <Compile Include="ViewModels\DashboardViewModel.cs" />
+    <Compile Include="ViewModels\SettingsViewModel.cs" />
+    <Compile Include="ViewModels\AccountsViewModel.cs" />
+    <Compile Include="ViewModels\AdvancedViewModel.cs" />
+    <Compile Include="ViewModels\LogsViewModel.cs" />
+    <Compile Include="ViewModels\LicenseViewModel.cs" />
     <Compile Include="Views\MainWindow.axaml.cs" />
+    <Compile Include="Views\ShellView.axaml.cs" />
+    <Compile Include="Views\DashboardView.axaml.cs" />
+    <Compile Include="Views\SettingsView.axaml.cs" />
+    <Compile Include="Views\AccountsView.axaml.cs" />
+    <Compile Include="Views\AdvancedView.axaml.cs" />
+    <Compile Include="Views\LogsView.axaml.cs" />
+    <Compile Include="Views\LicenseView.axaml.cs" />
+    <Compile Include="Models\BotStatus.cs" />
+    <Compile Include="Models\Device.cs" />
+    <Compile Include="Models\LogEntry.cs" />
+    <Compile Include="Models\SessionStats.cs" />
+    <Compile Include="Services\AppStateService.cs" />
   </ItemGroup>
 
   <ItemGroup>

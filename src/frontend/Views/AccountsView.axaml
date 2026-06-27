@@ -1,0 +1,25 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.AccountsView"
+    x:DataType="vm:AccountsViewModel"
+>
+    <Design.DataContext>
+        <vm:AccountsViewModel />
+    </Design.DataContext>
+
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+        <materialIcons:MaterialIcon Kind="AccountMultiple" Width="48" Height="48" />
+        <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" />
+        <TextBlock
+            Text="(Phase 0 skeleton — CoC account roster wired in Phase 2)"
+            Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+            HorizontalAlignment="Center"
+        />
+    </StackPanel>
+</UserControl>

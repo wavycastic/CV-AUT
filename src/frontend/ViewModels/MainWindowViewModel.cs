@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CvAut.Services;
 
 namespace CvAut.ViewModels
 {
@@ -18,6 +19,8 @@ namespace CvAut.ViewModels
     {
         private const string DefaultConfigPath = "Config/test_config.json";
         private const int MaxLogLines = 500;
+
+        private readonly AppStateService _appState;
 
         private AutomationRunner? _runner;
 
@@ -62,8 +65,16 @@ namespace CvAut.ViewModels
 
         public ObservableCollection<string> LogLines { get; } = new();
 
+        /// <summary>Design-time / fallback ctor. Avalonia's Design.DataContext needs a parameterless ctor.</summary>
         public MainWindowViewModel()
+            : this(new AppStateService())
         {
+        }
+
+        public MainWindowViewModel(AppStateService appState)
+        {
+            _appState = appState;
+
             // Live log: AppLog raises on the backend's thread, so marshal to the UI thread.
             AppLog.LineWritten += OnLogLine;
 
