@@ -101,23 +101,29 @@ namespace CvAut
             _templateRoot = Path.Combine(templatesPath, "Smart_Auto_train");
         }
 
+        private static bool InterruptibleSleep(int milliseconds, CancellationToken token)
+        {
+            return token.WaitHandle.WaitOne(milliseconds);
+        }
+
         /// <summary>
         /// Thực hiện luyện quân nhanh (Quick Train) thông qua giao diện Đội hình mẫu đã lưu sẵn của game.
         /// </summary>
         /// <param name="quickSlot">Số thứ tự slot đội hình mẫu cần luyện (1 hoặc 2).</param>
         /// <returns>True nếu thực hiện thành công, ngược lại False.</returns>
-        public bool QuickTrain(int quickSlot = 1)
+        public bool QuickTrain(int quickSlot = 1, CancellationToken token = default)
         {
+            if (token.IsCancellationRequested) return false;
             Console.WriteLine($"[TRAIN] phase=quick_train slot={quickSlot} status=start");
 
-            if (!ValidateArmyWindow())
+            if (!ValidateArmyWindow(token))
             {
                 Console.WriteLine("[TRAIN] phase=quick_train status=fail reason=army_window_not_detected");
                 return false;
             }
 
             _adb.Tap(ArmyRecipePane.X, ArmyRecipePane.Y);
-            Thread.Sleep(200);
+            if (InterruptibleSleep(200, token)) return false;
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -138,9 +144,9 @@ namespace CvAut
 
 
             if (useScore >= 0.90)
-            {
-                _adb.Tap(useButton.X, useButton.Y);
-                Thread.Sleep(250);
+                {
+                    _adb.Tap(useButton.X, useButton.Y);
+                    if (InterruptibleSleep(250, token)) return false;
 
                 // Xác nhận lại việc ghi đè/luyện quân nếu xuất hiện popup yêu cầu
                 using Mat? confirmShot = _adb.TakeScreenshot();
@@ -155,9 +161,9 @@ namespace CvAut
                 }
             }
 
-            Thread.Sleep(150);
+            if (InterruptibleSleep(150, token)) return false;
             CloseArmyWindowIfPossible();
-            Thread.Sleep(150);
+            if (InterruptibleSleep(150, token)) return false;
             return true;
         }
 
@@ -170,12 +176,13 @@ namespace CvAut
         /// </summary>
         /// <param name="cfg">Tài liệu JSON chứa cấu hình chiến thuật đang chạy.</param>
         /// <param name="attackStrategy">Chiến thuật tấn công chỉ định (tùy chọn).</param>
-        public bool SmartTrain(JsonElement cfg, string? attackStrategy = null)
+        public bool SmartTrain(JsonElement cfg, string? attackStrategy = null, CancellationToken token = default)
         {
+            if (token.IsCancellationRequested) return false;
             string selectedAttack = GetAttackKey(cfg, attackStrategy);
             Console.WriteLine($"[TRAIN] phase=smart_train status=start strategy={selectedAttack}");
 
-            if (!ValidateArmyWindow())
+            if (!ValidateArmyWindow(token))
             {
                 Console.WriteLine("[TRAIN] phase=smart_train status=skip reason=army_window_not_detected");
                 return true;
@@ -194,41 +201,41 @@ namespace CvAut
             {
                 Console.WriteLine("[TRAIN] phase=smart_train status=success reason=all_valid");
                 CloseArmyWindowIfPossible();
-                Thread.Sleep(1000);
+                if (InterruptibleSleep(1000, token)) return false;
                 return true;
             }
 
             // Nếu lính chưa đủ, thực hiện luyện lính
             if (!armyOk)
             {
-                armyOk = TrainTroops(cfg, attackStrategy);
+                armyOk = TrainTroops(cfg, attackStrategy, token);
             }
 
             // Nếu phép chưa đủ, thực hiện chế tạo phép
             if (!spellOk)
             {
-                spellOk = TrainSpells();
+                spellOk = TrainSpells(token);
             }
 
             // Nếu thiếu xe công thành, thực hiện chế tạo xe
             if (!siegeOk)
             {
-                siegeOk = TrainSlammer();
+                siegeOk = TrainSlammer(token);
             }
 
             Console.WriteLine("[TRAIN] phase=smart_train status=complete");
             CloseArmyWindowIfPossible();
-            Thread.Sleep(1000);
+            if (InterruptibleSleep(1000, token)) return false;
             return true;
         }
 
         /// <summary>
         /// Mở và xác thực xem cửa sổ Quân đội có hiển thị thành công hay không bằng MatchTemplate.
         /// </summary>
-        private bool ValidateArmyWindow()
+        private bool ValidateArmyWindow(CancellationToken token = default)
         {
             _adb.Tap(OpenArmyWindow.X, OpenArmyWindow.Y);
-            Thread.Sleep(1000);
+            if (InterruptibleSleep(1000, token)) return false;
 
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
@@ -378,8 +385,9 @@ namespace CvAut
         /// 3. Tính toán số lượng Rồng/Rồng điện và Balloon tối ưu nhất cho dung lượng đó (theo tỉ lệ 80% lính chính).
         /// 4. Click liên tục các icon lính tương ứng để xếp hàng huấn luyện.
         /// </summary>
-        private bool TrainTroops(JsonElement cfg, string? attackStrategy = null)
+        private bool TrainTroops(JsonElement cfg, string? attackStrategy = null, CancellationToken token = default)
         {
+            if (token.IsCancellationRequested) return false;
             string selectedAttack = GetAttackKey(cfg, attackStrategy);
             ArmySpec spec = GetArmySpec(cfg, attackStrategy);
             Console.WriteLine($"[TRAIN] phase=train_troops status=start strategy={selectedAttack} main_troop={spec.Main} details=\"rebuilding_queue\"");
@@ -390,10 +398,10 @@ namespace CvAut
                 return true;
             }
 
-            ClearQueue(TrashArmyRoi, TapClearArmy, ConfirmTapArmy);
+            ClearQueue(TrashArmyRoi, TapClearArmy, ConfirmTapArmy, token);
 
             _adb.Tap(OpenArmyTab.X, OpenArmyTab.Y);
-            Thread.Sleep(1000);
+            if (InterruptibleSleep(1000, token)) return false;
 
             using Mat? shot = _adb.TakeScreenshot();
             // Đọc sức chứa tối đa doanh trại, mặc định 260 nếu không quét được
@@ -401,11 +409,11 @@ namespace CvAut
             (int mainCount, int balloonCount) = GetExpectedTroopCounts(spec, limit);
 
             Console.WriteLine($"[TRAIN] phase=train_troops status=pending action=queue count={mainCount} troop={spec.Main} balloon_count={balloonCount}");
-            TapIconInTab(spec.Main, mainCount);
-            TapIconInTab("balloon", balloonCount);
+            TapIconInTab(spec.Main, mainCount, token);
+            TapIconInTab("balloon", balloonCount, token);
 
             _adb.Tap(CloseArmyTab.X, CloseArmyTab.Y);
-            Thread.Sleep(1000);
+            if (InterruptibleSleep(1000, token)) return false;
             return true;
         }
 
@@ -416,8 +424,9 @@ namespace CvAut
         /// 3. Tính toán số lượng phép Cuồng nộ và Đóng băng.
         /// 4. Click chế tạo phép tương ứng.
         /// </summary>
-        private bool TrainSpells()
+        private bool TrainSpells(CancellationToken token = default)
         {
+            if (token.IsCancellationRequested) return false;
             Console.WriteLine("[TRAIN] phase=train_spells status=start details=\"rebuilding_queue\"");
 
             using Mat? currentShot = _adb.TakeScreenshot();
@@ -426,28 +435,29 @@ namespace CvAut
                 return true;
             }
 
-            ClearQueue(TrashSpellRoi, TapClearSpell, ConfirmTapSpell);
+            ClearQueue(TrashSpellRoi, TapClearSpell, ConfirmTapSpell, token);
 
             _adb.Tap(OpenSpellTab.X, OpenSpellTab.Y);
-            Thread.Sleep(1000);
+            if (InterruptibleSleep(1000, token)) return false;
 
             int limit = MeasureSpellSpace() ?? 11;
             (int rageCount, int freezeCount) = GetExpectedSpellCounts(limit);
 
             Console.WriteLine($"[TRAIN] phase=train_spells status=pending action=queue rage_count={rageCount} freeze_count={freezeCount}");
-            TapIconInTab("rage", rageCount);
-            TapIconInTab("freeze", freezeCount);
+            TapIconInTab("rage", rageCount, token);
+            TapIconInTab("freeze", freezeCount, token);
 
             _adb.Tap(CloseSpellTab.X, CloseSpellTab.Y);
-            Thread.Sleep(1000);
+            if (InterruptibleSleep(1000, token)) return false;
             return true;
         }
 
         /// <summary>
         /// Thực hiện chế tạo xe công thành Stone Slammer.
         /// </summary>
-        private bool TrainSlammer()
+        private bool TrainSlammer(CancellationToken token = default)
         {
+            if (token.IsCancellationRequested) return false;
             Console.WriteLine("[TRAIN] phase=train_siege status=start details=\"rebuilding_queue\"");
 
             using Mat? currentShot = _adb.TakeScreenshot();
@@ -456,17 +466,27 @@ namespace CvAut
                 return true;
             }
 
-            ClearQueue(TrashSiegeRoi, TapClearSiege, ConfirmTapSiege);
-
             _adb.Tap(OpenSiegeTab.X, OpenSiegeTab.Y);
-            Thread.Sleep(1000);
+            if (InterruptibleSleep(1000, token)) return false;
+
+            using Mat? siegeTabShot = _adb.TakeScreenshot();
+            if (siegeTabShot == null || siegeTabShot.Empty()
+                || !TryMatch("to_train", "slammer", siegeTabShot, ValidationIconThreshold, out _, out _))
+            {
+                Console.WriteLine("[TRAIN] phase=train_siege status=skip reason=optional_unavailable siege=slammer details=\"not_unlocked_or_icon_not_visible\"");
+                _adb.Tap(CloseSiegeTab.X, CloseSiegeTab.Y);
+                if (InterruptibleSleep(500, token)) return false;
+                return true;
+            }
+
+            ClearQueue(TrashSiegeRoi, TapClearSiege, ConfirmTapSiege, token);
 
             Console.WriteLine("[TRAIN] phase=train_siege status=pending action=queue count=3 siege=slammer");
             // Xếp hàng chế tạo tối đa 3 xe
-            TapIconInTab("slammer", 3);
+            TapIconInTab("slammer", 3, token);
 
             _adb.Tap(CloseSiegeTab.X, CloseSiegeTab.Y);
-            Thread.Sleep(1000);
+            if (InterruptibleSleep(1000, token)) return false;
             return true;
         }
 
@@ -624,8 +644,9 @@ namespace CvAut
             return actual;
         }
 
-        private void ClearQueue(Rect roi, Point tapCoord, Point confirmCoord)
+        private void ClearQueue(Rect roi, Point tapCoord, Point confirmCoord, CancellationToken token = default)
         {
+            if (token.IsCancellationRequested) return;
             using Mat? shot = _adb.TakeScreenshot();
             if (shot == null || shot.Empty())
             {
@@ -640,15 +661,15 @@ namespace CvAut
 
             Console.WriteLine("[TRAIN] phase=clear_queue status=start");
             _adb.Tap(tapCoord.X, tapCoord.Y);
-            Thread.Sleep(1000);
+            if (InterruptibleSleep(1000, token)) return;
             _adb.Tap(confirmCoord.X, confirmCoord.Y);
-            Thread.Sleep(1000);
+            InterruptibleSleep(1000, token);
         }
 
         /// <summary>
         /// Thực hiện nhấp liên tục vào icon lính/phép trong tab huấn luyện.
         /// </summary>
-        private void TapIconInTab(string name, int count)
+        private void TapIconInTab(string name, int count, CancellationToken token = default)
         {
             if (count <= 0)
             {
@@ -669,6 +690,7 @@ namespace CvAut
 
             for (int i = 0; i < count; i++)
             {
+                if (token.IsCancellationRequested) return;
                 _adb.Tap(center.X, center.Y);
             }
         }

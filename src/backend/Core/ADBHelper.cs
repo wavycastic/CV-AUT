@@ -36,6 +36,11 @@ namespace CvAut
         private static readonly HttpClient UiAutomatorHttp = new HttpClient();
         private Process? _uiautomatorProcess;
 
+        private static bool InterruptibleSleep(int milliseconds, CancellationToken token = default)
+        {
+            return token.WaitHandle.WaitOne(milliseconds);
+        }
+
         public Func<bool>? BeforeInputAction { get; set; }
 
         public string DeviceAddress => _deviceAddress;
@@ -74,7 +79,7 @@ namespace CvAut
                     fallbackPorts.Add(dp);
                 }
             }
-            int[] defaultFallbacks = { 5555, 5556, 5557, 5554, 5565 };
+            int[] defaultFallbacks = { 5556, 5555, 5557, 5554, 5565 };
             foreach (int df in defaultFallbacks)
             {
                 if (df != port && !fallbackPorts.Contains(df))
@@ -140,9 +145,9 @@ namespace CvAut
                     return;
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                Console.WriteLine("[ADB WARNING] phase=connect status=pending action=get_devices reason=\"read_failed\"");
+                Console.WriteLine($"[ADB WARNING] phase=connect status=pending action=get_devices reason=\"{ex.Message}\"");
             }
 
             // Mặc định tạo dữ liệu thiết bị trống nếu hoàn toàn không kết nối được (để tránh NullReference)
@@ -163,7 +168,11 @@ namespace CvAut
             _disposed = true;
             if (_uiautomatorProcess != null && !_uiautomatorProcess.HasExited)
             {
-                try { _uiautomatorProcess.Kill(); } catch { }
+                try { _uiautomatorProcess.Kill(); }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ADB WARNING] phase=uia2 status=pending action=kill_process reason=\"{ex.Message}\"");
+                }
                 _uiautomatorProcess.Dispose();
             }
         }
@@ -181,9 +190,9 @@ namespace CvAut
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore and fall back to host/port probing.
+                Console.WriteLine($"[ADB WARNING] phase=connect status=pending action=list_devices reason=\"{ex.Message}\"");
             }
 
             device = new DeviceData { Serial = serial };
@@ -200,9 +209,9 @@ namespace CvAut
             {
                 AdbClient.Instance.Connect(new IPEndPoint(IPAddress.Parse(host), port));
             }
-            catch
+            catch (Exception ex)
             {
-                // Có thể thiết bị đã kết nối sẵn
+                Console.WriteLine($"[ADB WARNING] phase=connect status=pending action=connect reason=\"{ex.Message}\"");
             }
 
             try
@@ -217,9 +226,9 @@ namespace CvAut
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Xử lý lỗi
+                Console.WriteLine($"[ADB WARNING] phase=connect status=pending action=get_devices reason=\"{ex.Message}\"");
             }
 
             device = new DeviceData { Serial = serial };
@@ -244,9 +253,9 @@ namespace CvAut
                         AdbClient.Instance.Connect(new IPEndPoint(ipAddress, _port));
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Thiết bị có thể đã kết nối
+                    Console.WriteLine($"[ADB WARNING] phase=connect status=pending action=ensure_online reason=\"{ex.Message}\"");
                 }
 
                 string state = GetDeviceState();
@@ -255,7 +264,7 @@ namespace CvAut
                     return true;
                 }
 
-                Thread.Sleep(1000);
+                InterruptibleSleep(1000);
             }
 
             return false;
@@ -281,12 +290,24 @@ namespace CvAut
                 using var process = Process.Start(processInfo);
                 if (process == null) return "unknown";
 
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(5000);
+                Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+                if (!process.WaitForExit(5000))
+                {
+                    try { process.Kill(); }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ADB WARNING] phase=state status=pending action=kill_timeout_process reason=\"{ex.Message}\"");
+                    }
+
+                    return "unknown";
+                }
+
+                string output = outputTask.GetAwaiter().GetResult().Trim();
                 return string.IsNullOrWhiteSpace(output) ? "unknown" : output;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"[ADB WARNING] phase=state status=fail reason=\"{ex.Message}\"");
                 return "unknown";
             }
         }
@@ -442,7 +463,7 @@ namespace CvAut
                     anySuccess = true;
                 }
 
-                Thread.Sleep(intervalMs);
+                InterruptibleSleep(intervalMs);
             }
 
             return anySuccess;
@@ -481,7 +502,7 @@ namespace CvAut
                 {
                     // Giải quyết lỗi ném sự kiện INJECT_EVENTS của Android bằng cách tap nhẹ và thử lại
                     ExecuteShell("input tap 5 5");
-                    Thread.Sleep(500);
+                    InterruptibleSleep(500);
                     ok = SendUiAutomatorJsonRpc("pinchIn", new object[]
                     {
                         new Dictionary<string, object>
@@ -498,7 +519,7 @@ namespace CvAut
 
                 if (i < count - 1)
                 {
-                    Thread.Sleep(intervalMs);
+                    InterruptibleSleep(intervalMs);
                 }
             }
 
@@ -527,20 +548,29 @@ namespace CvAut
 
             // Cache file jar ngoài thư mục cài đặt để chạy được khi app nằm trong Program Files.
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string destJar = Path.Combine(appData, "SimpliMixi", "adb", "u2.jar");
+            string destJar = Path.Combine(appData, "AutoClashOfClan20206", "adb", "u2.jar");
+            string pushJar = jarPath;
             if (!File.Exists(destJar))
             {
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(destJar)!);
                     File.Copy(jarPath, destJar, overwrite: true);
+                    pushJar = destJar;
                     Console.WriteLine("[ADB] phase=uia2 status=pending action=cache_package");
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ADB WARNING] phase=uia2 status=pending action=cache_package reason=\"{ex.Message}\"");
+                }
+            }
+            else
+            {
+                pushJar = destJar;
             }
 
             // Đẩy tệp .jar lên thư mục tạm của hệ điều hành Android
-            RunAdb($"-s {_deviceAddress} push \"{jarPath}\" /data/local/tmp/u2.jar", waitForExit: true);
+            RunAdb($"-s {_deviceAddress} push \"{pushJar}\" /data/local/tmp/u2.jar", waitForExit: true);
             RunAdb($"-s {_deviceAddress} forward tcp:9008 tcp:9008", waitForExit: true);
 
             // Khởi động Main class của UIAutomator2 server ngầm trên thiết bị Android
@@ -558,7 +588,7 @@ namespace CvAut
                     return true;
                 }
 
-                Thread.Sleep(500);
+                InterruptibleSleep(500);
             }
 
             return false;
@@ -572,9 +602,9 @@ namespace CvAut
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                string result = UiAutomatorHttp.GetStringAsync("http://127.0.0.1:9008/ping", cts.Token)
-                    .GetAwaiter()
-                    .GetResult();
+                using var request = new HttpRequestMessage(HttpMethod.Get, "http://127.0.0.1:9008/ping");
+                using HttpResponseMessage response = UiAutomatorHttp.Send(request, cts.Token);
+                string result = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
                 return result.Trim().Equals("pong", StringComparison.OrdinalIgnoreCase);
             }
             catch
@@ -603,11 +633,11 @@ namespace CvAut
                 string json = payload.ToJsonString();
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-                using HttpResponseMessage response = UiAutomatorHttp.PostAsync(
-                    "http://127.0.0.1:9008/jsonrpc/0",
-                    content,
-                    cts.Token
-                ).GetAwaiter().GetResult();
+                using var request = new HttpRequestMessage(HttpMethod.Post, "http://127.0.0.1:9008/jsonrpc/0")
+                {
+                    Content = content
+                };
+                using HttpResponseMessage response = UiAutomatorHttp.Send(request, cts.Token);
 
                 string body = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
                 if (!response.IsSuccessStatusCode)
@@ -694,7 +724,7 @@ namespace CvAut
         private string? FindUiAutomatorJar()
         {
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string localJar = Path.Combine(appData, "SimpliMixi", "adb", "u2.jar");
+            string localJar = Path.Combine(appData, "AutoClashOfClan20206", "adb", "u2.jar");
             if (File.Exists(localJar)) return localJar;
 
             localJar = Path.Combine(AppContext.BaseDirectory, "adb", "u2.jar");
@@ -724,9 +754,9 @@ namespace CvAut
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Bỏ qua thư mục lỗi quyền truy cập
+                    Console.WriteLine($"[ADB WARNING] phase=uia2 status=pending action=scan_downloads path=\"{downloadRoot}\" reason=\"{ex.Message}\"");
                 }
             }
 
@@ -755,7 +785,29 @@ namespace CvAut
 
                 if (waitForExit)
                 {
-                    process.WaitForExit(15000);
+                    Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+                    Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+                    if (!process.WaitForExit(15000))
+                    {
+                        try { process.Kill(); }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[ADB WARNING] phase=command status=pending action=kill_timeout_process reason=\"{ex.Message}\"");
+                        }
+
+                        Console.WriteLine($"[ADB WARNING] phase=command status=fail reason=\"timeout\" arguments=\"{arguments}\"");
+                        process.Dispose();
+                        return null;
+                    }
+
+                    string stdout = stdoutTask.GetAwaiter().GetResult().Trim();
+                    string stderr = stderrTask.GetAwaiter().GetResult().Trim();
+                    if (process.ExitCode != 0)
+                    {
+                        string details = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+                        Console.WriteLine($"[ADB WARNING] phase=command status=fail exit_code={process.ExitCode} details=\"{details}\"");
+                    }
+
                     process.Dispose();
                     return null;
                 }
@@ -800,13 +852,24 @@ namespace CvAut
                     string stderr = "";
                     process.ErrorDataReceived += (_, e) => { if (e.Data != null) stderr += e.Data; };
                     process.BeginErrorReadLine();
-                    process.StandardOutput.BaseStream.CopyTo(ms);
-                    process.WaitForExit();
+                    Task copyTask = process.StandardOutput.BaseStream.CopyToAsync(ms);
+                    if (!copyTask.Wait(10000) || !process.WaitForExit(5000))
+                    {
+                        try { process.Kill(); }
+                        catch (Exception killEx)
+                        {
+                            Console.WriteLine($"[ADB WARNING] phase=screenshot status=pending action=kill_timeout_process reason=\"{killEx.Message}\"");
+                        }
+
+                        Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry reason=\"timeout\" attempt={attempt}");
+                        InterruptibleSleep(1000);
+                        continue;
+                    }
 
                     if (process.ExitCode != 0)
                     {
                         Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry attempt={attempt}");
-                        Thread.Sleep(1000);
+                        InterruptibleSleep(1000);
                         continue;
                     }
 
@@ -814,7 +877,7 @@ namespace CvAut
                     if (imageBytes.Length == 0)
                     {
                         Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry reason=\"empty\" attempt={attempt}");
-                        Thread.Sleep(1000);
+                        InterruptibleSleep(1000);
                         continue;
                     }
 
@@ -823,7 +886,7 @@ namespace CvAut
                     if (decoded.Empty())
                     {
                         Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry reason=\"decode_fail\" attempt={attempt}");
-                        Thread.Sleep(1000);
+                        InterruptibleSleep(1000);
                         continue;
                     }
 
@@ -835,7 +898,7 @@ namespace CvAut
                     if (stddev.Val0 < 3.0)
                     {
                         Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry reason=\"blank\" attempt={attempt}");
-                        Thread.Sleep(1000);
+                        InterruptibleSleep(1000);
                         continue;
                     }
 
@@ -844,7 +907,7 @@ namespace CvAut
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[ADB ERROR] phase=screenshot status=fail reason=\"{ex.Message}\" attempt={attempt}");
-                    Thread.Sleep(1000);
+                    InterruptibleSleep(1000);
                 }
             }
 

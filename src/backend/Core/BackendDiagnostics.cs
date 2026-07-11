@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
-using System.Threading;
+using System.Text.RegularExpressions;
 using OpenCvSharp;
 using SharpAdbClient;
 
@@ -30,9 +31,9 @@ namespace CvAut
                 {
                     server.StartServer(Path.Combine(AppContext.BaseDirectory, "adb", "adb.exe"), restartServerIfNewer: false);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Server may already be running; continue to enumerate.
+                    Console.WriteLine($"[UI] phase=list_devices status=pending action=start_adb_server reason=\"{ex.Message}\"");
                 }
 
                 IEnumerable<DeviceData>? devices = AdbClient.Instance.GetDevices();
@@ -53,6 +54,113 @@ namespace CvAut
             }
 
             return serials;
+        }
+
+        /// <summary>
+        /// Returns ADB devices with their ADB state string (e.g. "Device", "Offline",
+        /// "Unauthorized"). Maps <see cref="DeviceData.State"/>. Used by scanners so the
+        /// orchestrator can show unauthorized/offline devices distinctly from ready ones.
+        /// Starts the bundled ADB server first. Never throws.
+        /// </summary>
+        public static IReadOnlyList<(string Serial, string State)> ListAdbDevicesWithStatus()
+        {
+            var result = new List<(string, string)>();
+            try
+            {
+                var server = new AdbServer();
+                try
+                {
+                    server.StartServer(Path.Combine(AppContext.BaseDirectory, "adb", "adb.exe"), restartServerIfNewer: false);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[UI] phase=list_devices status=pending action=start_adb_server reason=\"{ex.Message}\"");
+                }
+
+                IEnumerable<DeviceData>? devices = AdbClient.Instance.GetDevices();
+                if (devices != null)
+                {
+                    foreach (DeviceData device in devices)
+                    {
+                        if (!string.IsNullOrWhiteSpace(device.Serial))
+                        {
+                            result.Add((device.Serial, device.State.ToString()));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UI] phase=list_devices_status status=fail reason=\"{ex.Message}\"");
+            }
+
+            return result;
+        }
+
+        public static (int Width, int Height, int DensityDpi, string Raw) GetEmulatorDisplayInfo(string host, int port, string? serial = null)
+        {
+            try
+            {
+                using var adb = new ADBHelper(host, port, serial);
+                string size = adb.ExecuteShell("wm size");
+                string density = adb.ExecuteShell("wm density");
+                int width = 0;
+                int height = 0;
+                int dpi = 0;
+
+                Match sizeMatch = MatchPreferredDisplayValue(size ?? string.Empty, @"(\d+)x(\d+)");
+                if (sizeMatch.Success)
+                {
+                    int.TryParse(sizeMatch.Groups[1].Value, out width);
+                    int.TryParse(sizeMatch.Groups[2].Value, out height);
+                }
+
+                Match densityMatch = MatchPreferredDisplayValue(density ?? string.Empty, @"(\d+)");
+                if (densityMatch.Success)
+                {
+                    int.TryParse(densityMatch.Groups[1].Value, out dpi);
+                }
+
+                string raw = $"{size?.Trim()} | {density?.Trim()}";
+                return (width, height, dpi, raw);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UI] phase=display_probe status=fail reason=\"{ex.Message}\"");
+                return (0, 0, 0, ex.Message);
+            }
+        }
+
+        private static Match MatchPreferredDisplayValue(string raw, string pattern)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return Match.Empty;
+            }
+
+            foreach (string line in raw.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Reverse())
+            {
+                if (line.Contains("Override", StringComparison.OrdinalIgnoreCase))
+                {
+                    Match overrideMatch = Regex.Match(line, pattern);
+                    if (overrideMatch.Success)
+                    {
+                        return overrideMatch;
+                    }
+                }
+            }
+
+            MatchCollection matches = Regex.Matches(raw, pattern);
+            for (int i = matches.Count - 1; i >= 0; i--)
+            {
+                Match match = matches[i];
+                if (match.Success && !string.Equals(match.Value, "0x0", StringComparison.OrdinalIgnoreCase))
+                {
+                    return match;
+                }
+            }
+
+            return Match.Empty;
         }
 
         public static void DiagnoseSavedArmyWindow(string outputPath, string templatesPath)
@@ -196,9 +304,22 @@ namespace CvAut
         {
             using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(configPath));
             JsonElement cfg = doc.RootElement.Clone();
-            JsonElement devConfig = cfg.GetProperty("device_connection");
-            string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
-            int port = devConfig.GetProperty("port").GetInt32();
+            JsonElement devConfig = cfg.ValueKind == JsonValueKind.Object
+                && cfg.TryGetProperty("device_connection", out JsonElement configuredDevice)
+                && configuredDevice.ValueKind == JsonValueKind.Object
+                ? configuredDevice
+                : default;
+            string host = devConfig.ValueKind == JsonValueKind.Object
+                && devConfig.TryGetProperty("host", out JsonElement hostValue)
+                && hostValue.ValueKind == JsonValueKind.String
+                ? (hostValue.GetString() ?? "127.0.0.1")
+                : "127.0.0.1";
+            int port = devConfig.ValueKind == JsonValueKind.Object
+                && devConfig.TryGetProperty("port", out JsonElement portValue)
+                && portValue.ValueKind == JsonValueKind.Number
+                && portValue.TryGetInt32(out int parsedPort)
+                ? parsedPort
+                : 5556;
 
             ADBHelper adb = new ADBHelper(host, port);
             VisionEngine vision = new VisionEngine(templatesPath);

@@ -37,6 +37,7 @@ namespace CvAut
         private int _cycleCount;
         private int _currentVillageIdx = 1;
         private volatile bool _fastAttackQueued; // Kích hoạt bỏ qua bước chuẩn bị nếu vừa đánh xong về thẳng Làng chính
+        private volatile bool _disableDialogShapeFallback;
         private bool _disposed;
         private bool _handlingConnectionPopup;
         private DateTime _sessionStartedAt;
@@ -44,10 +45,9 @@ namespace CvAut
         private TimeSpan _pausedDuration = TimeSpan.Zero;
         private int _sessionBattlesCompleted;
         private string _activeAccountName = "unknown";
+        private static bool s_loggedLegacyWallConfigMigration;
 
         private static readonly string WritableLogsDirectory = ResolveWritableLogsDirectory();
-        private const int MinSupportedWallLevel = 8;
-        private const int MaxSupportedWallLevel = 17;
 
         // Các vùng ROI giao diện chuẩn 1600x900px phục vụ xác thực
         private static readonly Rect GameSettingHomeRoi = Rect.FromLTRB(1445, 499, 1599, 708);
@@ -87,10 +87,10 @@ namespace CvAut
         // Tên các template popup lỗi mạng thường thấy cần giải tỏa
         private static readonly string[] ConnectionPopupTemplates =
         {
-            "Another_device.png",
-            "Connection_lost.png",
-            "Client_error!.png",
-            "rate_coc.png",
+            @"ui\Another_device.png",
+            @"ui\Connection_lost.png",
+            @"ui\Client_error!.png",
+            @"ui\rate_coc.png",
             @"ui\conn.png"
         };
 
@@ -149,6 +149,8 @@ namespace CvAut
                 ""wall_level"": 14,
                 ""wall_gold_threshold"": 5000000,
                 ""wall_elixir_threshold"": 5000000,
+                ""wall_gold_reserve"": 100000,
+                ""wall_elixir_reserve"": 0,
                 ""enable_stats"": true,
                 ""run_session"": {""play_mode"": ""main_village"", ""stop_after_battles_enabled"": false, ""stop_after_battles"": 0, ""stop_after_minutes_enabled"": false, ""stop_after_minutes"": 0},
                 ""multi_account"": {""enable_multi_account"": false, ""multi_interval_mins"": 60, ""switch_after_battles_enabled"": false, ""switch_after_battles"": 0, ""switch_after_minutes_enabled"": true, ""switch_after_clan_points_enabled"": false, ""switch_after_clan_points"": 0, ""selected_villages"": [1], ""accounts"": [{""id"": ""acc_1"", ""name"": ""Account 1"", ""profileVillage"": 1, ""targetVillage"": ""main_village"", ""templatePath"": """", ""enabled"": true}]}
@@ -189,9 +191,10 @@ namespace CvAut
                 int port = devConfig.GetProperty("port").GetInt32();
                 string emulatorType = devConfig.TryGetProperty("emulator_type", out var typeProp) ? (typeProp.GetString() ?? "BlueStacks") : "BlueStacks";
                 string emulatorPath = devConfig.TryGetProperty("emulator_path", out var pathProp) ? (pathProp.GetString() ?? string.Empty) : string.Empty;
+                string emulatorInstance = devConfig.TryGetProperty("emulator_instance", out var instProp) ? (instProp.GetString() ?? string.Empty) : string.Empty;
 
                 // Đảm bảo giả lập đã được bật và mở CoC
-                if (!EmulatorBootstrapper.EnsureReady(_adb, host, port, emulatorType, emulatorPath, token))
+                if (!EmulatorBootstrapper.EnsureReady(_adb, host, port, emulatorType, emulatorPath, token, emulatorInstance))
                 {
                     _isRunning = false;
                     return;
@@ -392,7 +395,8 @@ namespace CvAut
 
             MainVillageConfig mainConfig = GetMainVillageConfig(cfg, _currentVillageIdx);
 
-            // 1. Xác thực màn hình Làng chính (Home Base)
+            // 1. Xác thực màn hình Làng chính (Home Base) TRƯỚC. Khi mới vào game màn hình
+            // còn đang tải (screenshot trắng) nên zoom sẽ vô tác dụng — phải chờ render xong.
             WaitIfPaused(token);
             if (CheckStop(token)) return;
 
@@ -403,6 +407,13 @@ namespace CvAut
                 Console.WriteLine("[FSM-CS ERROR] phase=cycle status=skip reason=home_not_detected");
                 return;
             }
+
+            // 2. Kéo camera rộng sau khi Home Base đã render để thấy toàn bộ mỏ tài nguyên.
+            WaitIfPaused(token);
+            if (CheckStop(token)) return;
+
+            Console.WriteLine("[FSM-CS] phase=cycle status=pending step=1 details=\"initial_zoomout\"");
+            ZoomOut();
 
             if (mainConfig.AttackMode == AttackMode.DonateOnly)
             {
@@ -422,12 +433,6 @@ namespace CvAut
                 {
                     return;
                 }
-
-                // 3. Kéo camera giãn góc nhìn rộng (Multi-Zoom Out)
-                WaitIfPaused(token);
-                if (CheckStop(token)) return;
-                Console.WriteLine("[FSM-CS] phase=cycle status=pending step=3 details=\"adjusting_camera\"");
-                ZoomOut();
 
                 // 4. Huấn luyện lính theo cấu hình
                 WaitIfPaused(token);
@@ -471,6 +476,8 @@ namespace CvAut
 
                 TryUseCakeIfConfigured(mainConfig, token);
                 TryRequestTroopsIfConfigured(mainConfig, token);
+
+                TryUpgradeWallsFromHome(cfg, token, "after_collect");
             }
 
             // 6. Tìm kiếm tài nguyên (Scouting loop)
@@ -561,56 +568,41 @@ namespace CvAut
                         return;
                     }
 
-                    // Quét số sao đạt được và lượng tài nguyên thực tế nhận về
-                    int starsGot = GetStarsFromScreen();
-                    var gained = GainResources(starsGot);
-                    Console.WriteLine($"[FSM-CS] phase=battle_stats stars={starsGot} gold={gained.Gold} elixir={gained.Elixir} dark_elixir={gained.DarkElixir} status=success");
-
-                    // Cập nhật số liệu thống kê phiên chơi
-                    if (GetBoolOrDefault(cfg, "enable_stats", false))
+                    bool returnedHome = false;
+                    _disableDialogShapeFallback = true;
+                    try
                     {
-                        UpdateStats(_currentVillageIdx, starsGot, gained);
-                    }
-                    else
-                    {
-                        Console.WriteLine("[FSM-CS] phase=battle_stats status=skip reason=stats_disabled");
-                    }
-                    _sessionBattlesCompleted++;
+                        // Quét số sao đạt được và lượng tài nguyên thực tế nhận về
+                        int starsGot = GetStarsFromScreen();
+                        var gained = GainResources(starsGot);
+                        Console.WriteLine($"[FSM-CS] phase=battle_stats stars={starsGot} gold={gained.Gold} elixir={gained.Elixir} dark_elixir={gained.DarkElixir} status=success");
 
-                    // Bấm nút quay trở về Làng chính
-                    bool returnedHome = ReturnHome();
-                    _fastAttackQueued = returnedHome;
+                        // Cập nhật số liệu thống kê phiên chơi
+                        if (GetBoolOrDefault(cfg, "enable_stats", false))
+                        {
+                            UpdateStats(_currentVillageIdx, starsGot, gained);
+                        }
+                        else
+                        {
+                            Console.WriteLine("[FSM-CS] phase=battle_stats status=skip reason=stats_disabled");
+                        }
+                        _sessionBattlesCompleted++;
+
+                        // Bấm nút quay trở về Làng chính
+                        returnedHome = ReturnHome();
+                        _fastAttackQueued = returnedHome;
+                    }
+                    finally
+                    {
+                        _disableDialogShapeFallback = false;
+                    }
 
                     WaitIfPaused(token);
                     if (CheckStop(token)) break;
 
                     if (returnedHome)
                     {
-                        var wallConfig = GetWallUpgradeConfig(cfg, _currentVillageIdx);
-                        Console.WriteLine($"[WALL DECISION] phase=post_battle enabled={wallConfig.Enabled} home={returnedHome} level={wallConfig.WallLevel} gold={wallConfig.GoldThreshold:N0} elixir={wallConfig.ElixirThreshold:N0} status=check");
-
-                        if (wallConfig.Enabled)
-                        {
-                            if (EnsureHomeBase(maxWaitSeconds: 20))
-                            {
-                                int upgradedWalls = _wallUpdater.HandleHomeResources(
-                                    wallConfig.WallLevel,
-                                    wallConfig.GoldThreshold,
-                                    wallConfig.ElixirThreshold);
-                                if (upgradedWalls > 0 && GetBoolOrDefault(cfg, "enable_stats", false))
-                                {
-                                    UpdateWallStats(_currentVillageIdx, upgradedWalls);
-                                }
-                            }
-                            else
-                            {
-                                Console.WriteLine("[WALL RESULT] phase=post_battle status=skip reason=home_not_confirmed");
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("[WALL RESULT] phase=post_battle status=skip reason=disabled");
-                        }
+                        TryUpgradeWallsFromHome(cfg, token, "post_battle");
                     }
 
                     CheckAutoStop();
@@ -639,6 +631,39 @@ namespace CvAut
 
             _cycleCount++;
             Console.WriteLine($"[FSM-CS] phase=cycle status=success village={_currentVillageIdx}");
+        }
+
+        private void TryUpgradeWallsFromHome(JsonElement cfg, CancellationToken token, string phase)
+        {
+            var wallConfig = GetWallUpgradeConfig(cfg, _currentVillageIdx);
+            Console.WriteLine($"[WALL DECISION] phase={phase} cycle={_cycleCount} enabled={wallConfig.Enabled} home=true level={wallConfig.WallLevel} gold_start={wallConfig.GoldThreshold:N0} elixir_start={wallConfig.ElixirThreshold:N0} gold_reserve={wallConfig.GoldReserve:N0} elixir_reserve={wallConfig.ElixirReserve:N0} wall_batch_limit={wallConfig.BatchLimit} wall_debug_screenshots={wallConfig.DebugScreenshots} status=check");
+
+            if (!wallConfig.Enabled)
+            {
+                Console.WriteLine($"[WALL RESULT] phase={phase} status=skip reason=disabled");
+                return;
+            }
+
+            if (!EnsureHomeBase(maxWaitSeconds: 20))
+            {
+                Console.WriteLine($"[WALL RESULT] phase={phase} status=skip reason=home_not_confirmed");
+                return;
+            }
+
+            int upgradedWalls = _wallUpdater.HandleHomeResources(
+                wallConfig.WallLevel,
+                wallConfig.GoldThreshold,
+                wallConfig.ElixirThreshold,
+                wallConfig.GoldReserve,
+                wallConfig.ElixirReserve,
+                wallConfig.BatchLimit,
+                wallConfig.DebugScreenshots,
+                _cycleCount,
+                token);
+            if (upgradedWalls > 0 && GetBoolOrDefault(cfg, "enable_stats", false))
+            {
+                UpdateWallStats(_currentVillageIdx, upgradedWalls);
+            }
         }
 
         /// <summary>
@@ -783,14 +808,14 @@ namespace CvAut
             }
 
             // Thử dò tìm bánh răng cài đặt
-            if (TryMatchTemplate(screenshot, "game_setting.png", GameSettingHomeRoi, HomeTemplateThreshold, out _, out double settingScore))
+            if (TryMatchTemplate(screenshot, @"ui\game_setting.png", GameSettingHomeRoi, HomeTemplateThreshold, out _, out double settingScore))
             {
                 reason = $"game_setting score={settingScore:F3}";
                 return true;
             }
 
             // Thử dò tìm biểu tượng nút Cửa hàng (Shop) ở góc dưới phải
-            if (TryMatchTemplate(screenshot, "shop.png", null, HomeTemplateThreshold, out Point shopCenter, out double shopScore))
+            if (TryMatchTemplate(screenshot, @"ui\shop.png", null, HomeTemplateThreshold, out Point shopCenter, out double shopScore))
             {
                 reason = $"shop template at ({shopCenter.X},{shopCenter.Y}) score={shopScore:F3}";
                 return true;
@@ -927,8 +952,8 @@ namespace CvAut
         /// </summary>
         private bool TryFindTreasureHuntPopup(Mat screenshot, out Point center, out double score)
         {
-            if (TryMatchTemplate(screenshot, "treasure_hunt.png", TreasureHuntRoi, TreasureHuntThreshold, out center, out score)
-                || TryMatchTemplate(screenshot, @"ui\treasure_hunt.png", TreasureHuntRoi, TreasureHuntThreshold, out center, out score))
+            if (TryMatchTemplate(screenshot, @"ui\treasure_hunt.png", TreasureHuntRoi, TreasureHuntThreshold, out center, out score)
+                || TryMatchTemplate(screenshot, @"event\treasure_hunt.png", TreasureHuntRoi, TreasureHuntThreshold, out center, out score))
             {
                 return true;
             }
@@ -938,7 +963,7 @@ namespace CvAut
 
             if (TryMatchTemplateRegionMultiScale(
                     screenshot,
-                    "treasure_hunt.png",
+                    @"ui\treasure_hunt.png",
                     TreasureHuntRoi,
                     TreasureHuntChestTemplateRoi,
                     TreasureHuntMarkerThreshold,
@@ -958,7 +983,7 @@ namespace CvAut
 
             if (TryMatchTemplateRegionMultiScale(
                     screenshot,
-                    "treasure_hunt.png",
+                    @"ui\treasure_hunt.png",
                     TreasureHuntRoi,
                     TreasureHuntTextTemplateRoi,
                     TreasureHuntMarkerThreshold,
@@ -1001,7 +1026,7 @@ namespace CvAut
                 return false;
             }
 
-            bool found = TryMatchTemplate(screenshot, "next_button.png", NextButtonRoi, NextButtonThreshold, out _, out double score);
+            bool found = TryMatchTemplate(screenshot, @"ui\next_button.png", NextButtonRoi, NextButtonThreshold, out _, out double score);
 
             return found;
         }
@@ -1027,7 +1052,7 @@ namespace CvAut
                 }
 
                 // Dò biểu tượng thanh thả lính chiến trận
-                if (TryMatchTemplate(screenshot, "end_battle.png", ScoutUiRoi, ScoutUiThreshold, out _, out _))
+                if (TryMatchTemplate(screenshot, @"ui\end_battle.png", ScoutUiRoi, ScoutUiThreshold, out _, out _))
                 {
                     Console.WriteLine("[SCOUT-CS] phase=scout_wait status=success details=\"ready\"");
                     return true;
@@ -1081,6 +1106,10 @@ namespace CvAut
         private bool ConnectionPopupVisible(out string matchInfo, bool allowDialogShapeFallback = true)
         {
             matchInfo = "none";
+            if (_disableDialogShapeFallback)
+            {
+                allowDialogShapeFallback = false;
+            }
 
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty())
@@ -1090,10 +1119,10 @@ namespace CvAut
 
             foreach (string templateName in ConnectionPopupTemplates)
             {
-                bool isLegacyConnectionTemplate = templateName.Equals("Client_error!.png", StringComparison.OrdinalIgnoreCase)
-                    || templateName.Equals("Connection_lost.png", StringComparison.OrdinalIgnoreCase)
-                    || templateName.Equals("Another_device.png", StringComparison.OrdinalIgnoreCase)
-                    || templateName.Equals("rate_coc.png", StringComparison.OrdinalIgnoreCase);
+                bool isLegacyConnectionTemplate = templateName.EndsWith("Client_error!.png", StringComparison.OrdinalIgnoreCase)
+                    || templateName.EndsWith("Connection_lost.png", StringComparison.OrdinalIgnoreCase)
+                    || templateName.EndsWith("Another_device.png", StringComparison.OrdinalIgnoreCase)
+                    || templateName.EndsWith("rate_coc.png", StringComparison.OrdinalIgnoreCase);
                 double threshold = templateName.EndsWith("conn.png", StringComparison.OrdinalIgnoreCase)
                     ? ConnIconPopupThreshold
                     : isLegacyConnectionTemplate ? LegacyConnectionPopupThreshold : ConnectionPopupThreshold;
@@ -1525,6 +1554,20 @@ namespace CvAut
         /// <param name="villageIdx">Chỉ số tài khoản/làng cần nạp cấu hình.</param>
         private static WallUpgradeConfig GetWallUpgradeConfig(JsonElement cfg, int villageIdx)
         {
+            if (cfg.ValueKind == JsonValueKind.Object && cfg.TryGetProperty("upgrade_wall", out _))
+            {
+                bool enabled = GetBoolOrDefault(cfg, "upgrade_wall", false);
+                return CreateWallUpgradeConfig(
+                    enabled,
+                    GetIntOrDefault(cfg, "wall_level", 14),
+                    GetWallThreshold(cfg, cfg, "wall_gold_threshold"),
+                    GetWallThreshold(cfg, cfg, "wall_elixir_threshold"),
+                    GetWallReserve(cfg, cfg, "wall_gold_reserve", 100_000),
+                    GetWallReserve(cfg, cfg, "wall_elixir_reserve", 0),
+                    GetWallBatchLimit(cfg, cfg),
+                    GetBoolOrDefault(cfg, "wall_debug_screenshots", false));
+            }
+
             JsonElement profile = LoadVillageProfile(villageIdx);
 
             if (profile.ValueKind == JsonValueKind.Object)
@@ -1534,43 +1577,99 @@ namespace CvAut
                 return CreateWallUpgradeConfig(
                     enabled,
                     wallLevel,
-                    GetIntOrDefault(profile, "wall_gold_threshold", GetIntOrDefault(cfg, "wall_gold_threshold", 5_000_000)),
-                    GetIntOrDefault(profile, "wall_elixir_threshold", GetIntOrDefault(cfg, "wall_elixir_threshold", 5_000_000)));
-            }
-
-            if (cfg.ValueKind == JsonValueKind.Object && cfg.TryGetProperty("upgrade_wall", out _))
-            {
-                bool enabled = GetBoolOrDefault(cfg, "upgrade_wall", false);
-                return CreateWallUpgradeConfig(
-                    enabled,
-                    GetIntOrDefault(cfg, "wall_level", 14),
-                    GetIntOrDefault(cfg, "wall_gold_threshold", 5_000_000),
-                    GetIntOrDefault(cfg, "wall_elixir_threshold", 5_000_000));
+                    GetWallThreshold(profile, cfg, "wall_gold_threshold"),
+                    GetWallThreshold(profile, cfg, "wall_elixir_threshold"),
+                    GetWallReserve(profile, cfg, "wall_gold_reserve", 100_000),
+                    GetWallReserve(profile, cfg, "wall_elixir_reserve", 0),
+                    GetWallBatchLimit(profile, cfg),
+                    GetBoolOrDefault(profile, "wall_debug_screenshots", GetBoolOrDefault(cfg, "wall_debug_screenshots", false)));
             }
 
             // Dự phòng legacy chỉ dùng khi config mới chưa có khóa upgrade_wall.
             JsonElement wall = GetObjectOrDefault(cfg, "element_state_automation");
             if (wall.ValueKind != JsonValueKind.Object || !GetBoolOrDefault(wall, "upgrade_enabled", false))
             {
-                return new WallUpgradeConfig(false, 14, 5_000_000, 5_000_000);
+                return new WallUpgradeConfig(false, 14, 5_000_000, 5_000_000, 100_000, 0, 1, false);
             }
 
             return CreateWallUpgradeConfig(
                 true,
                 GetIntOrDefault(wall, "wall_level", GetIntOrDefault(wall, "target_level", 14)),
                 GetIntOrDefault(wall, "wall_gold_threshold", GetIntOrDefault(wall, "min_retained_gold", 5_000_000)),
-                GetIntOrDefault(wall, "wall_elixir_threshold", GetIntOrDefault(wall, "min_retained_elixir", 5_000_000)));
+                GetIntOrDefault(wall, "wall_elixir_threshold", GetIntOrDefault(wall, "min_retained_elixir", 5_000_000)),
+                GetIntOrDefault(wall, "wall_gold_reserve", 100_000),
+                GetIntOrDefault(wall, "wall_elixir_reserve", 0),
+                GetWallBatchLimit(wall, cfg),
+                GetBoolOrDefault(wall, "wall_debug_screenshots", GetBoolOrDefault(cfg, "wall_debug_screenshots", false)));
         }
 
-        private static WallUpgradeConfig CreateWallUpgradeConfig(bool enabled, int wallLevel, int goldThreshold, int elixirThreshold)
+        private static int GetWallBatchLimit(JsonElement primary, JsonElement root)
         {
-            if (wallLevel < MinSupportedWallLevel || wallLevel > MaxSupportedWallLevel)
+            int raw = GetIntOrDefault(primary, "wall_batch_limit", GetIntOrDefault(root, "wall_batch_limit", 1));
+            return Math.Clamp(raw, 0, 10);
+        }
+
+        private static int GetWallThreshold(JsonElement primary, JsonElement root, string key)
+        {
+            if (TryReadInt(primary, key, out int value) || TryReadInt(root, key, out value))
             {
-                Console.WriteLine($"[WALL WARN] phase=config status=disabled level={wallLevel} reason=unsupported_wall_level supported={MinSupportedWallLevel}-{MaxSupportedWallLevel}");
-                return new WallUpgradeConfig(false, wallLevel, goldThreshold, elixirThreshold);
+                return value;
             }
 
-            return new WallUpgradeConfig(enabled, wallLevel, goldThreshold, elixirThreshold);
+            if (TryReadInt(primary, "wall_upgrade_threshold", out value) || TryReadInt(root, "wall_upgrade_threshold", out value))
+            {
+                LogLegacyWallConfigMigrated();
+                return value;
+            }
+
+            return 5_000_000;
+        }
+
+        private static int GetWallReserve(JsonElement primary, JsonElement root, string key, int fallback)
+        {
+            if (TryReadInt(primary, key, out int value) || TryReadInt(root, key, out value))
+            {
+                return value;
+            }
+
+            if (TryReadInt(primary, "wall_reserve_threshold", out value) || TryReadInt(root, "wall_reserve_threshold", out value))
+            {
+                LogLegacyWallConfigMigrated();
+                return value;
+            }
+
+            return fallback;
+        }
+
+        private static bool TryReadInt(JsonElement element, string key, out int value)
+        {
+            value = 0;
+            return element.ValueKind == JsonValueKind.Object
+                && element.TryGetProperty(key, out JsonElement property)
+                && property.TryGetInt32(out value);
+        }
+
+        private static void LogLegacyWallConfigMigrated()
+        {
+            if (s_loggedLegacyWallConfigMigration)
+            {
+                return;
+            }
+
+            Console.WriteLine("[CONFIG] event=legacy_config_migrated scope=wall");
+            s_loggedLegacyWallConfigMigration = true;
+        }
+
+        private static WallUpgradeConfig CreateWallUpgradeConfig(bool enabled, int wallLevel, int goldThreshold, int elixirThreshold, int goldReserve, int elixirReserve, int batchLimit, bool debugScreenshots)
+        {
+            int safeBatchLimit = Math.Clamp(batchLimit, 0, 10);
+            if (wallLevel < WallUpgradeDecider.MinSupportedWallLevel || wallLevel > WallUpgradeDecider.MaxSupportedWallLevel)
+            {
+                Console.WriteLine($"[WALL WARN] phase=config status=disabled level={wallLevel} wall_batch_limit={safeBatchLimit} reason=unsupported_wall_level supported={WallUpgradeDecider.MinSupportedWallLevel}-{WallUpgradeDecider.MaxSupportedWallLevel}");
+                return new WallUpgradeConfig(false, wallLevel, goldThreshold, elixirThreshold, goldReserve, elixirReserve, safeBatchLimit, debugScreenshots);
+            }
+
+            return new WallUpgradeConfig(enabled, wallLevel, goldThreshold, elixirThreshold, goldReserve, elixirReserve, safeBatchLimit, debugScreenshots);
         }
 
         private static JsonElement LoadVillageProfile(int villageIdx)
@@ -1715,7 +1814,7 @@ namespace CvAut
         }
 
         // --- Liên kết thư viện ngoài (DLL Import) của hệ điều hành Windows ---
-        // Phục vụ gửi phím ngầm (PostMessage) và gắn kết tiến trình (AttachThreadInput)
+        // Phục vụ gửi phím/chuột ngầm (PostMessage) và gắn kết tiến trình (AttachThreadInput)
         [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
         private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
@@ -1731,6 +1830,25 @@ namespace CvAut
 
         [System.Runtime.InteropServices.DllImport("kernel32.dll")]
         private static extern uint GetCurrentThreadId();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool GetWindowRect(IntPtr hWnd, out WinRect lpRect);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct WinRect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
 
         /// <summary>
         /// Tìm Handle cửa sổ chính (MainWindowHandle) của Windows dựa trên danh sách các tên tiến trình (Process) ứng viên.
@@ -1989,9 +2107,9 @@ namespace CvAut
                     }
                 }
 
-                if (ConnectionPopupVisible(out string matchInfo, allowDialogShapeFallback: !resultDetectedLogged))
+                if (ConnectionPopupVisible(out string matchInfo, allowDialogShapeFallback: false))
                 {
-                    Console.WriteLine("[FSM-CS WARNING] phase=battle_wait status=fail reason=connection_lost");
+                    Console.WriteLine($"[FSM-CS WARNING] phase=battle_wait status=fail reason=connection_lost details=\"{matchInfo}\"");
                     BootRecovery();
                     return false;
                 }
@@ -2051,8 +2169,8 @@ namespace CvAut
 
         private bool TryFindContinueButton(Mat screenshot, out Point center, out double score)
         {
-            return TryMatchTemplate(screenshot, @"ui\continue.png", ResultContinueRoi, ResultContinueThreshold, out center, out score)
-                || TryMatchTemplate(screenshot, "continue.png", ResultContinueRoi, ResultContinueThreshold, out center, out score);
+            return TryMatchTemplate(screenshot, @"ui\return_home.png", ResultContinueRoi, ResultContinueThreshold, out center, out score)
+                || TryMatchTemplate(screenshot, "return_home.png", ResultContinueRoi, ResultContinueThreshold, out center, out score);
         }
 
         private bool DismissStarBonusIfPresent()
@@ -2241,17 +2359,17 @@ namespace CvAut
                 return 0;
             }
 
-            if (!TryMatchTemplate(screenshot, "one_star.png", Rect.FromLTRB(518, 90, 747, 316), 0.40, out _, out _))
+            if (!TryMatchTemplate(screenshot, @"ui\one_star.png", Rect.FromLTRB(518, 90, 747, 316), 0.40, out _, out _))
             {
                 return 0;
             }
 
-            if (!TryMatchTemplate(screenshot, "two_star.png", Rect.FromLTRB(670, 106, 926, 285), 0.40, out _, out _))
+            if (!TryMatchTemplate(screenshot, @"ui\two_star.png", Rect.FromLTRB(670, 106, 926, 285), 0.40, out _, out _))
             {
                 return 1;
             }
 
-            return TryMatchTemplate(screenshot, "three_star.png", Rect.FromLTRB(840, 96, 1064, 317), 0.40, out _, out _)
+            return TryMatchTemplate(screenshot, @"ui\three_star.png", Rect.FromLTRB(840, 96, 1064, 317), 0.40, out _, out _)
                 ? 3
                 : 2;
         }
@@ -2523,7 +2641,11 @@ namespace CvAut
             bool Enabled,
             int WallLevel,
             int GoldThreshold,
-            int ElixirThreshold);
+            int ElixirThreshold,
+            int GoldReserve,
+            int ElixirReserve,
+            int BatchLimit,
+            bool DebugScreenshots);
 
         private sealed record TrainingConfig(
             string Mode,
@@ -2627,11 +2749,13 @@ namespace CvAut
             {
                 Console.WriteLine("[FSM-CS] phase=camera_zoom status=pending details=\"bluestacks_detected\"");
 
-                // Gửi JSON-RPC pinchIn zoom out đa điểm qua ADB
-                bool ok = _adb.PinchInZoomOut(count: 5, durationMs: 450, intervalMs: 350);
+                // CoC render bằng OpenGL/SurfaceView nên PostMessage(WM_MOUSEWHEEL) không tới được
+                // game (nhưng vẫn trả true → success giả). Dùng thẳng UIAutomator2 pinch-in như
+                // Simplicity (zoom_out.py): count=3, interval=0.5s.
+                bool ok = _adb.PinchInZoomOut(count: 3, durationMs: 450, intervalMs: 500);
                 if (ok)
                 {
-                    Console.WriteLine("[FSM-CS] phase=camera_zoom status=success details=\"bluestacks\"");
+                    Console.WriteLine("[FSM-CS] phase=camera_zoom status=success details=\"bluestacks_adb_pinch\"");
                 }
                 else
                 {
@@ -2657,9 +2781,9 @@ namespace CvAut
 
             string[] collectorTemplates =
             {
-                "elixir_collector.png",
-                "DE_collector.png",
-                "gold_collector.png"
+                @"resources\elixir_collector.png",
+                @"resources\DE_collector.png",
+                @"resources\gold_collector.png"
             };
 
             using Mat? screenshot = _adb.TakeScreenshot();
