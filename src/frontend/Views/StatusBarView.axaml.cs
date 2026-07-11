@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace CvAut.Views
 {
-    public partial class ShellView : UserControl
+    public partial class StatusBarView : UserControl
     {
-        public ShellView()
+        public StatusBarView()
         {
             InitializeComponent();
         }

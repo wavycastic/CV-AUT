@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using CvAut.Models;
 using CvAut.Services;
 using CvAut.Services.Sessions;
+using CvAut.Services.Emulators;
 
 namespace CvAut.ViewModels
 {
@@ -27,52 +28,104 @@ namespace CvAut.ViewModels
         private readonly AppStateService _appState;
         private readonly IDeviceSessionManager _sessions;
         private readonly DashboardViewModel _dashboard;
+        private readonly LogsViewModel _logs;
+        private readonly LicenseViewModel _license;
+        private readonly SettingsViewModel _settings;
+        private readonly AdvancedViewModel _advanced;
+        private readonly SetupWizardViewModel _wizard;
+        private readonly IConfigStore _configStore;
+        private readonly IEmulatorDiscovery _discovery;
+        private readonly CvAut.Services.Notifications.INotificationService? _notifications;
 
         /// <summary>Design-time / fallback ctor (no DI).</summary>
         public MainWindowViewModel()
-            : this(new AppStateService(), new DeviceSessionManager(),
-                   new DashboardViewModel(), new SettingsViewModel(),
-                   new AccountsViewModel(), new AdvancedViewModel(),
-                   new LogsViewModel(), new LicenseViewModel())
+            : this(new AppStateService(), new DeviceSessionManager(), new ConfigStore(), new AdbEmulatorDiscovery(),
+                   new DashboardViewModel(), new LogsViewModel(), new LicenseViewModel(),
+                   new SettingsViewModel(), new AdvancedViewModel(), new SetupWizardViewModel(), null)
         {
         }
 
         public MainWindowViewModel(
             AppStateService appState,
             IDeviceSessionManager sessions,
+            IConfigStore configStore,
+            IEmulatorDiscovery discovery,
             DashboardViewModel dashboard,
-            SettingsViewModel settings,
-            AccountsViewModel accounts,
-            AdvancedViewModel advanced,
             LogsViewModel logs,
-            LicenseViewModel license)
+            LicenseViewModel license,
+            SettingsViewModel settings,
+            AdvancedViewModel advanced,
+            SetupWizardViewModel wizard,
+            CvAut.Services.Notifications.INotificationService? notifications = null)
         {
             _appState = appState;
             _sessions = sessions;
+            _configStore = configStore;
+            _discovery = discovery;
+            _notifications = notifications;
             _dashboard = dashboard;
+            _logs = logs;
+            _license = license;
+            _settings = settings;
+            _advanced = advanced;
+            _wizard = wizard;
+            ConfigPath = _configStore.ResolveActiveConfigPath();
 
-            TopBar = new TopBarViewModel(appState, sessions);
+            TopBar = new TopBarViewModel(appState, sessions, configStore);
             Sidebar = new SidebarViewModel();
             Sidebar.Seed(new[]
             {
-                new NavItem("Dashboard", "ViewDashboard", dashboard),
-                new NavItem("Settings", "Cog", settings),
-                new NavItem("Accounts", "AccountMultiple", accounts),
-                new NavItem("Advanced", "Tune", advanced),
-                new NavItem("Logs", "ScriptText", logs),
-                new NavItem("License", "KeyVariant", license),
+                new NavItem("Bảng điều khiển", "ViewDashboard", dashboard),
+                new NavItem("Thiết lập", "AutoFix", wizard),
+                new NavItem("Nâng cao", "Tune", advanced),
+                new NavItem("Nhật ký", "ScriptText", logs),
             });
+
+            // Inject commands into Dashboard
+            dashboard.DetectDevicesCommand = DetectDevicesCommand;
+            dashboard.SelectDeviceCommand = SelectDeviceCommand;
+            dashboard.ShowDeviceLogsCommand = ShowDeviceLogsCommand;
+            dashboard.AttachDevices(Devices);
 
             // Keep the TopBar summary fresh when the active device's status changes.
             ActiveDeviceChanged += OnActiveDeviceStatusChanged;
+
+            // Reset dialog mode and restore device fleet when navigating to the full logs page.
+            Sidebar.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(Sidebar.CurrentPage) && Sidebar.CurrentPage == _logs)
+                {
+                    _logs.IsDialogMode = false;
+                    _logs.SetDevices(Devices);
+                    _logs.Refresh();
+                }
+            };
         }
 
         public TopBarViewModel TopBar { get; }
 
         public SidebarViewModel Sidebar { get; }
 
-        /// <summary>Current page rendered in the shell ContentControl (driven by Sidebar).</summary>
-        public ViewModelBase? CurrentPage => Sidebar.CurrentPage;
+        public DashboardViewModel Dashboard => _dashboard;
+
+        public LogsViewModel Logs => _logs;
+
+        /// <summary>Settings page (also used as the per-device config panel host).</summary>
+        public SettingsViewModel Settings => _settings;
+
+        /// <summary>Advanced tuning page (delays + coordinate editor).</summary>
+        public AdvancedViewModel Advanced => _advanced;
+
+        /// <summary>Setup wizard page (emulator detect + display verify + trial run).</summary>
+        public SetupWizardViewModel Wizard => _wizard;
+
+        [ObservableProperty] private bool _isLicenseOpen;
+
+        [RelayCommand]
+        private void OpenLicense() => IsLicenseOpen = true;
+
+        [RelayCommand]
+        private void CloseLicense() => IsLicenseOpen = false;
 
         /// <summary>Device-scoped view models — one per connected/configured device.</summary>
         public ObservableCollection<DeviceViewModel> Devices { get; } = new();
@@ -97,15 +150,61 @@ namespace CvAut.ViewModels
             _appState.ActiveDeviceId = value?.DeviceId;
             _dashboard.ActiveDevice = value;
             ActiveDeviceChanged?.Invoke(value);
+
+            if (value is not null)
+            {
+                SyncDashboardState(value.Status);
+            }
+            else
+            {
+                _dashboard.State = Devices.Count > 0 ? DashboardDeviceState.DeviceSelected : DashboardDeviceState.NoDevices;
+            }
         }
 
         partial void OnIsGridModeChanged(bool value)
         {
             _appState.IsGridMode = value;
+            _dashboard.IsGridMode = value;
         }
 
         /// <summary>Raised when <see cref="ActiveDevice"/> changes so listeners can re-subscribe.</summary>
         public event Action<DeviceViewModel?>? ActiveDeviceChanged;
+
+        private void SyncDashboardState(BotStatus status)
+        {
+            _dashboard.State = status switch
+            {
+                BotStatus.Running => DashboardDeviceState.Running,
+                BotStatus.Paused => DashboardDeviceState.Paused,
+                BotStatus.Error => DashboardDeviceState.Error,
+                _ => DashboardDeviceState.DeviceSelected
+            };
+        }
+
+        /// <summary>Any device's bot-status change refreshes the TopBar running summary so grid mode
+        /// (multiple concurrent sessions) reports accurate running/paused counts, not just the active one.</summary>
+        private void OnDeviceStatusChangedForSummary(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(DeviceViewModel.Status))
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    TopBar.RefreshSummary();
+                    TopBar.RefreshAggregate(Devices);
+                    NotifyFleetCommands();
+                });
+
+                if (_notifications is not null && sender is DeviceViewModel vm)
+                {
+                    _ = _notifications.NotifyStatusAsync(vm.DisplayName, vm.Status);
+                }
+            }
+        }
+
+        private void OnDeviceStatsChangedForAggregate(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            Dispatcher.UIThread.Post(() => TopBar.RefreshAggregate(Devices));
+        }
 
         private void OnActiveDeviceStatusChanged(DeviceViewModel? device)
         {
@@ -114,11 +213,20 @@ namespace CvAut.ViewModels
                 return;
             }
 
+            SyncDashboardState(device.Status);
+
             device.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName == nameof(DeviceViewModel.Status))
                 {
-                    Dispatcher.UIThread.Post(() => TopBar.RefreshSummary());
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        TopBar.RefreshSummary();
+                        if (ActiveDevice == device)
+                        {
+                            SyncDashboardState(device.Status);
+                        }
+                    });
                 }
             };
         }
@@ -127,33 +235,130 @@ namespace CvAut.ViewModels
         [RelayCommand]
         private async Task DetectDevicesAsync()
         {
-            var found = await Task.Run(() => BackendDiagnostics.ListAdbDevices());
-            Devices.Clear();
-            _appState.Devices.Clear();
-
-            foreach (string serial in found)
+            _dashboard.State = DashboardDeviceState.Detecting;
+            _dashboard.DetectDetail = string.Empty;
+            try
             {
-                if (!AdbEndpoint.TryParse(serial, out string host, out int port))
+                var found = await _discovery.DiscoverAsync(_dashboard.SelectedEmulatorFilter);
+                foreach (DeviceViewModel existing in Devices)
                 {
-                    continue;
+                    existing.PropertyChanged -= OnDeviceStatusChangedForSummary;
+                    existing.Stats.PropertyChanged -= OnDeviceStatsChangedForAggregate;
                 }
 
-                var device = new Device(Device.MakeId(host, port), host, port, serial, serial);
-                _appState.Devices.Add(device);
+                Devices.Clear();
+                _appState.Devices.Clear();
 
-                IDeviceSession session = _sessions.GetOrCreate(device, ConfigPath);
-                var vm = new DeviceViewModel(device, session);
-                Devices.Add(vm);
+                foreach (Device device in found)
+                {
+                    _appState.Devices.Add(device);
+                    var vm = new DeviceViewModel(device, (dev, cfgPath) => _sessions.GetOrCreate(dev, cfgPath), _configStore, _discovery);
+                    vm.PropertyChanged += OnDeviceStatusChangedForSummary;
+                    vm.Stats.PropertyChanged += OnDeviceStatsChangedForAggregate;
+                    Devices.Add(vm);
+                }
+
+                _logs.SetDevices(Devices);
+                _dashboard.NotifyDevicesChanged();
+                TopBar.RefreshAggregate(Devices);
+                NotifyFleetCommands();
+                _dashboard.DeviceCount = Devices.Count;
+                _dashboard.ReadyCount = Devices.Count(d => d.Device.Status == DeviceStatus.Ready);
+
+                ActiveDevice = null;
+                TopBar.RefreshSummary();
+
+                if (Devices.Count > 0)
+                {
+                    _dashboard.State = DashboardDeviceState.DeviceSelected;
+                }
+                else
+                {
+                    _dashboard.State = DashboardDeviceState.NoDevices;
+                }
+            }
+            catch (Exception ex)
+            {
+                _dashboard.DetectDetail = ex.Message;
+                _dashboard.State = DashboardDeviceState.NoDevices;
+            }
+        }
+
+        private bool CanStartAll() => Devices.Any(vm => vm.StartCommand.CanExecute(null));
+        private bool CanPauseAll() => Devices.Any(vm => vm.PauseCommand.CanExecute(null));
+        private bool CanStopAll() => Devices.Any(vm => vm.StopCommand.CanExecute(null));
+
+        private void NotifyFleetCommands()
+        {
+            StartAllCommand.NotifyCanExecuteChanged();
+            PauseAllCommand.NotifyCanExecuteChanged();
+            StopAllCommand.NotifyCanExecuteChanged();
+        }
+
+        /// <summary>Start every device that can start. Sessions are created lazily inside each
+        /// DeviceViewModel.Start, so All-commands must iterate Devices — not the session manager,
+        /// which is empty until a device has started at least once.</summary>
+        [RelayCommand(CanExecute = nameof(CanStartAll))]
+        private async Task StartAll()
+        {
+            foreach (DeviceViewModel vm in Devices)
+            {
+                if (vm.StartCommand.CanExecute(null))
+                {
+                    await vm.StartCommand.ExecuteAsync(null);
+                }
             }
 
-            ActiveDevice = Devices.FirstOrDefault();
             TopBar.RefreshSummary();
+            NotifyFleetCommands();
+        }
+
+        [RelayCommand(CanExecute = nameof(CanPauseAll))]
+        private async Task PauseAll()
+        {
+            foreach (DeviceViewModel vm in Devices)
+            {
+                if (vm.PauseCommand.CanExecute(null))
+                {
+                    await vm.PauseCommand.ExecuteAsync(null);
+                }
+            }
+
+            TopBar.RefreshSummary();
+            NotifyFleetCommands();
+        }
+
+        [RelayCommand(CanExecute = nameof(CanStopAll))]
+        private async Task StopAll()
+        {
+            foreach (DeviceViewModel vm in Devices)
+            {
+                if (vm.StopCommand.CanExecute(null))
+                {
+                    await vm.StopCommand.ExecuteAsync(null);
+                }
+            }
+
+            TopBar.RefreshSummary();
+            NotifyFleetCommands();
         }
 
         [RelayCommand]
         private void ToggleGridMode()
         {
             IsGridMode = !IsGridMode;
+        }
+
+        [RelayCommand]
+        private void SelectDevice(DeviceViewModel vm)
+        {
+            ActiveDevice = vm;
+        }
+
+        [RelayCommand]
+        private void ShowDeviceLogs(DeviceViewModel vm)
+        {
+            Logs.ShowDevice(vm);
         }
     }
 

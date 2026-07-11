@@ -1,0 +1,17 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:models="using:CvAut.Models"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.SetupWizardView"
+    x:DataType="vm:SetupWizardViewModel">
+    <Design.DataContext><vm:SetupWizardViewModel /></Design.DataContext>
+
+    <Grid Background="{DynamicResource AppBackgroundBrush}">
+        <!-- Blank View -->
+    </Grid>
+</UserControl>

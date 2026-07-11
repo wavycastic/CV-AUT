@@ -1,0 +1,60 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    x:Class="CvAut.Views.HeaderView"
+    x:DataType="vm:TopBarViewModel"
+>
+    <Design.DataContext>
+        <vm:TopBarViewModel />
+    </Design.DataContext>
+
+    <Grid>
+    <Border Padding="12,0" Height="48"
+            Background="{DynamicResource AppSurfaceBrush}"
+            BorderBrush="{DynamicResource AppBorderBrush}"
+            BorderThickness="0,0,0,1">
+        <!-- Accent underline -->
+        <Grid ColumnDefinitions="*,Auto">
+            <!-- Left side: App Logo and Title -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Border Width="24" Height="24" CornerRadius="{DynamicResource RadiusSm}" Background="{DynamicResource AppAccentBrush}">
+                    <materialIcons:MaterialIcon Kind="Robot" Width="14" Height="14"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                Foreground="{DynamicResource AppAccentTextBrush}" />
+                </Border>
+                <TextBlock Text="SimpliMixi" Classes="statNum" VerticalAlignment="Center" />
+                <TextBlock Text="Bảng điều khiển" Classes="caption" VerticalAlignment="Center" Margin="0,2,0,0" />
+            </StackPanel>
+
+            <!-- Right side: Actions (License) -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Button Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).OpenLicenseCommand}"
+                        ToolTip.Tip="Bản quyền" Classes="ghost" Width="32" Height="32" Padding="0">
+                    <materialIcons:MaterialIcon Kind="KeyVariant" Width="14" Height="14"
+                                                Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                </Button>
+                <Button Click="MinimizeButton_OnClick"
+                        ToolTip.Tip="Thu nhỏ" Classes="ghost" Width="32" Height="32" Padding="0">
+                    <materialIcons:MaterialIcon Kind="WindowMinimize" Width="14" Height="14"
+                                                Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+
+    <!-- Accent gradient line -->
+    <Border Height="2" VerticalAlignment="Bottom" CornerRadius="0">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+                <GradientStop Color="#00d4af37" Offset="0" />
+                <GradientStop Color="#d4af37" Offset="0.3" />
+                <GradientStop Color="#e6c44a" Offset="0.5" />
+                <GradientStop Color="#d4af37" Offset="0.7" />
+                <GradientStop Color="#00d4af37" Offset="1" />
+            </LinearGradientBrush>
+        </Border.Background>
+    </Border>
+    </Grid>
+</UserControl>

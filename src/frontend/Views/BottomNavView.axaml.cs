@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace CvAut.Views
 {
-    public partial class AccountsView : UserControl
+    public partial class BottomNavView : UserControl
     {
-        public AccountsView()
+        public BottomNavView()
         {
             InitializeComponent();
         }

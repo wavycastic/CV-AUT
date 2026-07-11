@@ -17,6 +17,15 @@ namespace CvAut
         /// <summary>Raised on whatever thread the backend logged from. Subscribers must marshal to the UI thread.</summary>
         public static event Action<string>? LineWritten;
 
+        /// <summary>Ambient device scope for the current execution context. A session sets this on the
+        /// thread that starts the backend worker; because ExecutionContext flows across Task.Run, every
+        /// line the worker logs carries the owning device id — enabling per-device log attribution even
+        /// though the backend only writes to the shared Console (Phase 3 multi-device).</summary>
+        public static readonly System.Threading.AsyncLocal<string?> DeviceContext = new();
+
+        /// <summary>Like <see cref="LineWritten"/> but also carries the ambient device id (null when none).</summary>
+        public static event Action<string, string?>? LineWrittenWithContext;
+
         /// <summary>
         /// Redirects <see cref="Console.Out"/> (and Error) through a tee writer once.
         /// Safe to call multiple times; only the first call takes effect.
@@ -41,6 +50,7 @@ namespace CvAut
         internal static void Raise(string line)
         {
             LineWritten?.Invoke(line);
+            LineWrittenWithContext?.Invoke(line, DeviceContext.Value);
         }
 
         /// <summary>

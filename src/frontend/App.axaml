@@ -6,13 +6,428 @@
     xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     RequestedThemeVariant="Dark"
 >
-
     <Application.DataTemplates>
         <local:ViewLocator />
     </Application.DataTemplates>
 
+    <Application.Resources>
+        <ResourceDictionary>
+            <!--
+                Design system tokens (Phase 1). Views reference these via DynamicResource so a
+                future theme switch only needs to swap the values here, never every view.
+            -->
+
+            <!-- Dark Gaming Console colors (Clash of Clans inspired) -->
+            <Color x:Key="AppBackgroundColor">#0a0a0c</Color>
+            <Color x:Key="AppSurfaceColor">#14141a</Color>
+            <Color x:Key="AppSurfaceAltColor">#1e1e26</Color>
+            <Color x:Key="AppSurfaceHoverColor">#2a2a31</Color>
+            <Color x:Key="AppBorderColor">#242430</Color>
+            <Color x:Key="AppBorderStrongColor">#363642</Color>
+            <!-- Console surface (near-black) + modal scrim overlay -->
+            <Color x:Key="AppConsoleColor">#050508</Color>
+            <Color x:Key="AppScrimColor">#B3050509</Color>
+
+            <!-- Text (CoC warm primary / muted console text) -->
+            <Color x:Key="AppTextPrimaryColor">#f0f0f2</Color>
+            <Color x:Key="AppTextSecondaryColor">#b8b8c4</Color>
+            <Color x:Key="AppTextMutedColor">#78788a</Color>
+
+            <!-- Gold Accent (Clash of Clans Gold) -->
+            <Color x:Key="AppAccentColor">#d4af37</Color>
+            <Color x:Key="AppAccentHoverColor">#e6c44a</Color>
+            <Color x:Key="AppAccentSoftColor">#1a1608</Color>
+            <Color x:Key="AppAccentTextColor">#0a0a0c</Color>
+            <Color x:Key="AppAccentBorderColor">#d4af37</Color>
+
+            <!-- Elixir (Pink) & Dark Elixir (Purple) -->
+            <Color x:Key="AppElixirColor">#d946ef</Color>
+            <Color x:Key="AppElixirSoftColor">#1a0a1e</Color>
+            <Color x:Key="AppDarkElixirColor">#8b5cf6</Color>
+            <Color x:Key="AppDarkElixirSoftColor">#0f0a1e</Color>
+
+            <!-- Semantic (Gaming Neon) -->
+            <Color x:Key="AppSuccessColor">#22c55e</Color>
+            <Color x:Key="AppWarningColor">#f59e0b</Color>
+            <Color x:Key="AppDangerColor">#ef4444</Color>
+            <Color x:Key="AppDangerSoftColor">#450a0a</Color>
+            <Color x:Key="AppDangerHoverColor">#5B1414</Color>
+            <Color x:Key="AppDangerTextColor">#fca5a5</Color>
+            <Color x:Key="AppDangerBorderColor">#991b1b</Color>
+            <Color x:Key="AppInfoColor">#06b6d4</Color>
+
+            <!-- Brushes (what views actually bind) -->
+            <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource AppBackgroundColor}" />
+            <SolidColorBrush x:Key="AppSurfaceBrush" Color="{StaticResource AppSurfaceColor}" />
+            <SolidColorBrush x:Key="AppSurfaceAltBrush" Color="{StaticResource AppSurfaceAltColor}" />
+            <SolidColorBrush x:Key="AppSurfaceHoverBrush" Color="{StaticResource AppSurfaceHoverColor}" />
+            <SolidColorBrush x:Key="AppBorderBrush" Color="{StaticResource AppBorderColor}" />
+            <SolidColorBrush x:Key="AppBorderStrongBrush" Color="{StaticResource AppBorderStrongColor}" />
+            <SolidColorBrush x:Key="AppConsoleBrush" Color="{StaticResource AppConsoleColor}" />
+            <SolidColorBrush x:Key="AppConsoleBgBrush" Color="{StaticResource AppConsoleColor}" />
+            <SolidColorBrush x:Key="AppScrimBrush" Color="{StaticResource AppScrimColor}" />
+            <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="{StaticResource AppTextPrimaryColor}" />
+            <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="{StaticResource AppTextSecondaryColor}" />
+            <SolidColorBrush x:Key="AppTextMutedBrush" Color="{StaticResource AppTextMutedColor}" />
+            <SolidColorBrush x:Key="AppLogTimeBrush" Color="{StaticResource AppTextMutedColor}" />
+            <SolidColorBrush x:Key="AppLogDeviceBrush" Color="{StaticResource AppAccentHoverColor}" />
+            <SolidColorBrush x:Key="AppLogTextBrush" Color="{StaticResource AppTextSecondaryColor}" />
+            <SolidColorBrush x:Key="AppAccentBrush" Color="{StaticResource AppAccentColor}" />
+            <SolidColorBrush x:Key="AppAccentHoverBrush" Color="{StaticResource AppAccentHoverColor}" />
+            <SolidColorBrush x:Key="AppAccentSoftBrush" Color="{StaticResource AppAccentSoftColor}" />
+            <SolidColorBrush x:Key="AppAccentTextBrush" Color="{StaticResource AppAccentTextColor}" />
+            <SolidColorBrush x:Key="AppAccentBorderBrush" Color="{StaticResource AppAccentBorderColor}" />
+            <SolidColorBrush x:Key="AppSuccessBrush" Color="{StaticResource AppSuccessColor}" />
+            <SolidColorBrush x:Key="AppWarningBrush" Color="{StaticResource AppWarningColor}" />
+            <SolidColorBrush x:Key="AppDangerBrush" Color="{StaticResource AppDangerColor}" />
+            <SolidColorBrush x:Key="AppDangerSoftBrush" Color="{StaticResource AppDangerSoftColor}" />
+            <SolidColorBrush x:Key="AppDangerHoverBrush" Color="{StaticResource AppDangerHoverColor}" />
+            <SolidColorBrush x:Key="AppDangerTextBrush" Color="{StaticResource AppDangerTextColor}" />
+            <SolidColorBrush x:Key="AppDangerBorderBrush" Color="{StaticResource AppDangerBorderColor}" />
+            <SolidColorBrush x:Key="AppElixirBrush" Color="{StaticResource AppElixirColor}" />
+            <SolidColorBrush x:Key="AppElixirSoftBrush" Color="{StaticResource AppElixirSoftColor}" />
+            <SolidColorBrush x:Key="AppDarkElixirBrush" Color="{StaticResource AppDarkElixirColor}" />
+            <SolidColorBrush x:Key="AppDarkElixirSoftBrush" Color="{StaticResource AppDarkElixirSoftColor}" />
+            <SolidColorBrush x:Key="AppInfoBrush" Color="{StaticResource AppInfoColor}" />
+
+            <!-- Spacing scale (4 / 8 / 12 / 16 / 24) -->
+            <x:Double x:Key="SpaceXs">4</x:Double>
+            <x:Double x:Key="SpaceSm">8</x:Double>
+            <x:Double x:Key="SpaceMd">12</x:Double>
+            <x:Double x:Key="SpaceLg">16</x:Double>
+            <x:Double x:Key="SpaceXl">24</x:Double>
+
+            <!-- Corner radii (Modern gaming rounded values) -->
+            <CornerRadius x:Key="RadiusSm">4</CornerRadius>
+            <CornerRadius x:Key="RadiusMd">10</CornerRadius>
+            <CornerRadius x:Key="RadiusLg">14</CornerRadius>
+            <CornerRadius x:Key="RadiusNone">0</CornerRadius>
+
+            <BoxShadows x:Key="ShadowCard">0 1 3 0 #40000000</BoxShadows>
+            <BoxShadows x:Key="ShadowTile">0 1 2 0 #30000000</BoxShadows>
+        </ResourceDictionary>
+    </Application.Resources>
+
     <Application.Styles>
-        <FluentTheme />
+        <SimpleTheme />
         <materialIcons:MaterialIconStyles />
+
+        <!-- ===================== Typography ===================== -->
+        <Style Selector="TextBlock">
+            <Setter Property="FontFamily" Value="Outfit, Inter, Segoe UI, sans-serif" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <!-- Heading / label / muted helper classes -->
+        <Style Selector="TextBlock.h1">
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <Style Selector="TextBlock.h2">
+            <Setter Property="FontSize" Value="19" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.h3">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.h3.tight">
+            <Setter Property="LetterSpacing" Value="-0.2" />
+        </Style>
+        <Style Selector="TextBlock.body">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBlock.section">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
+        </Style>
+        <!-- Sub-section header: bold, primary text (group titles inside cards). -->
+        <Style Selector="TextBlock.subhead">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+        </Style>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
+        </Style>
+        <Style Selector="TextBlock.labelStrong">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
+        </Style>
+        <Style Selector="TextBlock.chip">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <!-- Tile caption: tiny uppercase-ish stat label. -->
+        <Style Selector="TextBlock.caption">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+        </Style>
+        <!-- Stat value: bold metric shown in tiles. -->
+        <Style Selector="TextBlock.stat">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <!-- Compact stat value (longer numbers). -->
+        <Style Selector="TextBlock.statNum">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.mono">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+
+        <!-- ===================== Buttons ===================== -->
+        <!-- Base (secondary / ghost-ish): subtle surface, clear hover. -->
+        <Style Selector="Button">
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+        </Style>
+
+        <!-- Primary / accent button -->
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentTextBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentHoverBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.accent /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource AppAccentTextBrush}" />
+        </Style>
+        <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppAccentHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentTextBrush}" />
+        </Style>
+        <Style Selector="Button.accent:pressed">
+            <Setter Property="RenderTransform" Value="scale(0.97)" />
+        </Style>
+
+        <!-- Danger button -->
+        <Style Selector="Button.danger">
+            <Setter Property="Background" Value="{DynamicResource AppDangerSoftBrush}" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.15" />
+                </Transitions>
+            </Setter>
+            <Setter Property="Foreground" Value="{DynamicResource AppDangerTextBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppDangerBorderBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource AppDangerTextBrush}" />
+        </Style>
+        <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppDangerHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppDangerBrush}" />
+        </Style>
+
+        <!-- Ghost button: transparent, used for nav / icon-only actions -->
+        <Style Selector="Button.ghost">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.ghost /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+        </Style>
+
+        <!-- Sidebar active nav state -->
+        <Style Selector="Button.nav">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+        </Style>
+        <Style Selector="Button.nav /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+        </Style>
+        <Style Selector="Button.nav.active">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.nav.active /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+            <Setter Property="TextElement.Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.nav.active materialIcons|MaterialIcon">
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+
+        <!-- ===================== Inputs ===================== -->
+        <Style Selector="TextBox">
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+                </Transitions>
+            </Setter>
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+        </Style>
+        <Style Selector="NumericUpDown">
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+        </Style>
+        <Style Selector="TextBox:focus">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+        <Style Selector="NumericUpDown:focus-within">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+        <Style Selector="CheckBox">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
+        </Style>
+        <Style Selector="CheckBox:checked">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+        </Style>
+        <Style Selector="CheckBox:checked /template/ Border#NormalRectangle">
+            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+
+        
+        <!-- ToggleSwitch accent when on -->
+        <Style Selector="ToggleSwitch:checked /template/ Border#SwitchKnobBounds">
+            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+
+        <!-- ===================== Surfaces ===================== -->
+        <!-- Card: the standard raised container. -->
+        <Style Selector="Border.Card">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
+            <Setter Property="BoxShadow" Value="{DynamicResource ShadowCard}" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.2" />
+                    <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.2" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.Card:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+            <Setter Property="BoxShadow" Value="0 0 12 0 #40d4af37" />
+        </Style>
+        <!-- Tile: compact stat container with subtle hover. -->
+        <Style Selector="Border.Tile">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="BoxShadow" Value="{DynamicResource ShadowTile}" />
+        </Style>
+        <Style Selector="Border.Tile:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+        </Style>
+
+        
+        <!-- Tooltip dark gaming style -->
+        <Style Selector="ToolTip">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+
+        <!-- Sleek Custom ScrollBar -->
+        <Style Selector="ScrollBar">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#3a3a42" />
+        </Style>
+        <Style Selector="ScrollBar:vertical">
+            <Setter Property="Width" Value="8" />
+            <Setter Property="MinWidth" Value="8" />
+        </Style>
+        <Style Selector="ScrollBar:horizontal">
+            <Setter Property="Height" Value="8" />
+            <Setter Property="MinHeight" Value="8" />
+        </Style>
+        <Style Selector="ScrollBar /template/ RepeatButton">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+
+                <Style Selector="ComboBox:focus">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+        <Style Selector="ComboBox:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+        </Style>
+
+        <!-- Custom Dropdown Popup & ComboBoxItem -->
+        <Style Selector="ComboBox /template/ Popup Border">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
+            <Setter Property="BoxShadow" Value="0 6 16 0 #7f000000" />
+            <Setter Property="Padding" Value="4" />
+        </Style>
+        <Style Selector="ComboBoxItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,1" />
+        </Style>
+        <Style Selector="ComboBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+        </Style>
+        <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#3d320f" />
+            <Setter Property="Foreground" Value="#ffd859" />
+        </Style>
+        <Style Selector="ComboBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#4d3f13" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
     </Application.Styles>
 </Application>

@@ -1,91 +1,134 @@
 using System.Collections.ObjectModel;
-using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CvAut.Models;
 using CvAut.Services;
 using CvAut.Services.Sessions;
 
 namespace CvAut.ViewModels
 {
-    /// <summary>
-    /// TopBar state: global lifecycle (Start/Pause/Stop All), running summary, theme/lang,
-    /// license badge. Always visible across every page (roadmap: "TopBar luôn hiển thị").
-    /// Reads the live device list + sessions from <see cref="AppStateService"/> /
-    /// <see cref="IDeviceSessionManager"/>; it does not own device runtime state itself.
-    /// </summary>
     public partial class TopBarViewModel : ViewModelBase
     {
         private readonly AppStateService _appState;
         private readonly IDeviceSessionManager _sessions;
+        private readonly IConfigStore _configStore;
 
         [ObservableProperty] private int _runningCount;
         [ObservableProperty] private int _pausedCount;
         [ObservableProperty] private bool _isAnyRunning;
+        [ObservableProperty] private string _activeProfileName = "Default";
+        [ObservableProperty] private BotProfile? _selectedProfile;
 
-        public TopBarViewModel(AppStateService appState, IDeviceSessionManager sessions)
+        // Fleet aggregate (grid mode / multi-device summary).
+        [NotifyPropertyChangedFor(nameof(HasErrors))]
+        [ObservableProperty] private int _errorCount;
+        [ObservableProperty] private int _totalBattles;
+        [ObservableProperty] private int _totalStars;
+        [ObservableProperty] private long _totalGold;
+        [ObservableProperty] private long _totalElixir;
+        [ObservableProperty] private long _totalDarkElixir;
+
+        public ObservableCollection<BotProfile> Profiles { get; } = new();
+
+        public TopBarViewModel(AppStateService appState, IDeviceSessionManager sessions, IConfigStore configStore)
         {
             _appState = appState;
             _sessions = sessions;
+            _configStore = configStore;
+            RefreshProfiles();
             RefreshSummary();
         }
 
-        /// <summary>Design-time ctor.</summary>
-        public TopBarViewModel() : this(new AppStateService(), new DeviceSessionManager())
+        public TopBarViewModel() : this(new AppStateService(), new DeviceSessionManager(), new ConfigStore())
         {
         }
 
-        /// <summary>Start every live session.</summary>
         [RelayCommand]
-        private void StartAll()
+        private void LoadProfile()
         {
-            foreach (IDeviceSession s in _sessions.Sessions)
+            if (SelectedProfile is null)
             {
-                _ = s.StartAsync();
+                return;
             }
 
-            RefreshSummary();
+            _configStore.LoadProfile(SelectedProfile.Name);
+            ActiveProfileName = _configStore.ActiveProfileName;
+            RefreshProfiles();
         }
 
-        /// <summary>Pause every running session.</summary>
-        [RelayCommand]
-        private void PauseAll()
+        private bool _syncingProfiles;
+
+        partial void OnSelectedProfileChanged(BotProfile? value)
         {
-            foreach (IDeviceSession s in _sessions.Sessions)
+            if (_syncingProfiles || value is null || value.Name == _configStore.ActiveProfileName)
             {
-                if (s.Status is CvAut.Models.BotStatus.Running)
+                return;
+            }
+
+            _configStore.LoadProfile(value.Name);
+            ActiveProfileName = _configStore.ActiveProfileName;
+        }
+
+        public void RefreshProfiles()
+        {
+            _syncingProfiles = true;
+            try
+            {
+            Profiles.Clear();
+            foreach (BotProfile profile in _configStore.Profiles)
+            {
+                Profiles.Add(profile);
+                if (profile.Name == _configStore.ActiveProfileName)
                 {
-                    _ = s.PauseAsync();
+                    SelectedProfile = profile;
+                    ActiveProfileName = profile.Name;
                 }
             }
-
-            RefreshSummary();
-        }
-
-        /// <summary>Stop every live session.</summary>
-        [RelayCommand]
-        private void StopAll()
-        {
-            foreach (IDeviceSession s in _sessions.Sessions)
-            {
-                _ = s.StopAsync();
             }
-
-            RefreshSummary();
+            finally
+            {
+                _syncingProfiles = false;
+            }
         }
 
-        /// <summary>Recompute the running/paused counts. Call after device list changes.</summary>
+        /// <summary>True when any device is in the Error state (drives the fleet error badge).</summary>
+        public bool HasErrors => ErrorCount > 0;
+
         public void RefreshSummary()
         {
             int running = 0, paused = 0;
             foreach (IDeviceSession s in _sessions.Sessions)
             {
-                if (s.Status is CvAut.Models.BotStatus.Running) running++;
-                else if (s.Status is CvAut.Models.BotStatus.Paused) paused++;
+                if (s.Status is BotStatus.Running) running++;
+                else if (s.Status is BotStatus.Paused) paused++;
             }
 
             RunningCount = running;
             PausedCount = paused;
             IsAnyRunning = running > 0 || paused > 0;
+        }
+
+        /// <summary>Rolls up loot + error counts across all device panels for the fleet summary.</summary>
+        public void RefreshAggregate(System.Collections.Generic.IEnumerable<DeviceViewModel> devices)
+        {
+            int errors = 0, battles = 0, stars = 0;
+            long gold = 0, elixir = 0, dark = 0;
+            foreach (DeviceViewModel d in devices)
+            {
+                if (d.Status is BotStatus.Error) errors++;
+                battles += d.Stats.Battles;
+                stars += d.Stats.Stars;
+                gold += d.Stats.Gold;
+                elixir += d.Stats.Elixir;
+                dark += d.Stats.DarkElixir;
+            }
+
+            ErrorCount = errors;
+            TotalBattles = battles;
+            TotalStars = stars;
+            TotalGold = gold;
+            TotalElixir = elixir;
+            TotalDarkElixir = dark;
         }
     }
 }

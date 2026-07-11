@@ -9,19 +9,165 @@
     x:Class="CvAut.Views.Settings.MainVillageView"
     x:DataType="vm:MainVillageViewModel"
 >
-    <Design.DataContext>
-        <vm:MainVillageViewModel />
-    </Design.DataContext>
+    <Design.DataContext><vm:MainVillageViewModel /></Design.DataContext>
 
-    <StackPanel Margin="16" Spacing="12">
-        <StackPanel Orientation="Horizontal" Spacing="10">
-            <materialIcons:MaterialIcon Kind="Home" Width="28" Height="28" />
-            <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" />
+    <ScrollViewer Background="Transparent" Padding="10">
+        <StackPanel Spacing="8">
+
+            <!-- Attack config -->
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <materialIcons:MaterialIcon Kind="Sword" Width="16" Height="16" Foreground="{DynamicResource AppDangerBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Cấu hình tấn công" Classes="subhead" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="Tên cấu hình" Classes="label" />
+                            <ComboBox ItemsSource="{Binding AttackCatalog}" SelectedItem="{Binding AttackName}" HorizontalAlignment="Stretch" Height="32" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="Logic mục tiêu" Classes="label" />
+                            <ComboBox ItemsSource="{Binding TargetLogics}" SelectedItem="{Binding TargetLogic}" HorizontalAlignment="Stretch" Height="32" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Classes="Tile" Padding="8,6">
+                        <StackPanel Spacing="6">
+                            <CheckBox Height="24" Content="Tự động xin quân" IsChecked="{Binding AutoDonateEnabled}" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="Lời nhắn yêu cầu quân" Classes="label" />
+                        <TextBox Text="{Binding RequestTroopsMessage}" Height="32" VerticalContentAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Resource thresholds -->
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <materialIcons:MaterialIcon Kind="MagnifyExpand" Width="16" Height="16" Foreground="{DynamicResource AppInfoBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Ngưỡng tài nguyên tìm kiếm" Classes="subhead" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="Coins" Width="14" Height="14" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Vàng" Classes="label" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding GoldThreshold}" Minimum="0" Maximum="10000000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="Water" Width="14" Height="14" Foreground="{DynamicResource AppElixirBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Dầu hồng" Classes="label" Foreground="{DynamicResource AppElixirBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding ElixirThreshold}" Minimum="0" Maximum="10000000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="SkullOutline" Width="14" Height="14" Foreground="{DynamicResource AppDarkElixirBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Dầu đen" Classes="label" Foreground="{DynamicResource AppDarkElixirBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding DarkElixirThreshold}" Minimum="0" Maximum="10000000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="Sigma" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Tổng tài nguyên" Classes="label" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding TotalResourceThreshold}" Minimum="0" Maximum="20000000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Wall upgrade -->
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="Cấu hình nâng tường" Classes="subhead" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <Border Classes="Tile" Padding="8,6">
+                        <CheckBox Height="24" Content="Bật tự động nâng tường" IsChecked="{Binding UpgradeWall}" />
+                    </Border>
+
+                    <StackPanel Spacing="6" IsEnabled="{Binding UpgradeWall}">
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="Wall" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Cấp tường hiện tại cần nâng" Classes="label" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding WallLevel}" Minimum="1" Maximum="18" Height="32" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="Coins" Width="14" Height="14" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Bắt đầu dùng Vàng khi trên" Classes="label" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding WallGoldThreshold}" Minimum="0" Maximum="20000000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="Water" Width="14" Height="14" Foreground="{DynamicResource AppElixirBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Bắt đầu dùng Dầu hồng khi trên" Classes="label" Foreground="{DynamicResource AppElixirBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding WallElixirThreshold}" Minimum="0" Maximum="20000000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="ShieldLock" Width="14" Height="14" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Vàng giữ lại" Classes="label" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding WallGoldReserve}" Minimum="0" Maximum="20000000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="ShieldLock" Width="14" Height="14" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Dầu hồng giữ lại" Classes="label" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding WallElixirReserve}" Minimum="0" Maximum="20000000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Smart surrender -->
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Đầu hàng thông minh" Classes="subhead" />
+                        <TextBlock Text="Tự thoát trận nếu lượng tài nguyên cướp được quá thấp." Classes="muted" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Border Classes="Tile" Padding="8,6">
+                        <CheckBox Height="24" Content="Bật đầu hàng thông minh" IsChecked="{Binding SmartSurrenderEnabled}" />
+                    </Border>
+                    
+                    <StackPanel Spacing="6" IsEnabled="{Binding SmartSurrenderEnabled}">
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="ClockOutline" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Sau số giây" Classes="label" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding SmartSurrenderSeconds}" Minimum="0" Maximum="180" Height="32" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="ShieldAlertOutline" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Ngưỡng tài nguyên thấp" Classes="label" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding SmartSurrenderLowResourceThreshold}" Minimum="0" Maximum="1000000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
         </StackPanel>
-        <TextBlock
-            Text="Attack / Auto Donate / Dragons / resource thresholds / request troops / upgrade walls / smart surrender — wired in Phase 2."
-            TextWrapping="Wrap"
-            Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
-            MaxWidth="520" />
-    </StackPanel>
+    </ScrollViewer>
 </UserControl>
