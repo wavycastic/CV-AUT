@@ -3,37 +3,113 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:CvAut.ViewModels"
     xmlns:views="using:CvAut.Views"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    d:DesignWidth="1080"
-    d:DesignHeight="700"
+    d:DesignWidth="1280"
+    d:DesignHeight="720"
     x:Class="CvAut.Views.MainWindow"
     x:DataType="vm:MainWindowViewModel"
-    Title="SimpliMixi"
-    Width="1080"
-    Height="700"
-    MinWidth="860"
-    MinHeight="560"
+    Title="SimpliMixi Console"
+    Width="1280"
+    Height="720"
+    MinWidth="800"
+    MinHeight="500"
+    CanResize="True"
     WindowStartupLocation="CenterScreen"
->
+    FontFamily="Inter, Segoe UI, sans-serif"
+    Background="{DynamicResource AppBackgroundBrush}">
+
     <Design.DataContext>
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*">
-        <!-- TopBar: always visible across pages -->
-        <views:TopBarView Grid.Row="0" DataContext="{Binding TopBar}" />
+    <Grid Background="{DynamicResource AppBackgroundBrush}">
+        <Grid RowDefinitions="Auto,Auto,*,Auto" Background="{DynamicResource AppBackgroundBrush}">
+            <!-- Row 0: Header -->
+            <views:HeaderView Grid.Row="0" DataContext="{Binding TopBar}" />
+            
+            <!-- Row 1: Mini Status Bar -->
+            <views:StatusBarView Grid.Row="1" DataContext="{Binding TopBar}" />
 
-        <!-- Body: sidebar + page content -->
-        <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
-            <views:SidebarView Grid.Column="0" DataContext="{Binding Sidebar}" />
+            <!-- Row 2: Content Area -->
             <ContentControl
-                Grid.Column="1"
-                Content="{Binding CurrentPage}"
+                Grid.Row="2"
+                Content="{Binding Sidebar.CurrentPage}"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
             />
+
+            <!-- Row 3: Bottom Nav -->
+            <views:BottomNavView Grid.Row="3" DataContext="{Binding Sidebar}" />
+        </Grid>
+
+        <!-- Per-device log overlay -->
+        <Grid Background="{DynamicResource AppScrimBrush}"
+              IsVisible="{Binding Logs.IsOpen}"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Border Background="{DynamicResource AppSurfaceBrush}" CornerRadius="{DynamicResource RadiusLg}"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="16,32"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource AppBorderStrongBrush}" Padding="16">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="ScriptText" Width="18" Height="18"
+                                                     VerticalAlignment="Center" Margin="0,0,8,0"
+                                                     Foreground="{DynamicResource AppAccentBrush}" />
+                        <TextBlock Grid.Column="1" Classes="h3" Text="Nhật ký thiết bị" VerticalAlignment="Center" />
+                        <Button Grid.Column="2" Classes="ghost" Command="{Binding Logs.CloseCommand}"
+                                Width="32" Height="32" Padding="0">
+                            <materialIcons:MaterialIcon Kind="Close" Width="16" Height="16"
+                                                        Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                        </Button>
+                    </Grid>
+
+                    <views:LogsView Grid.Row="1" DataContext="{Binding Logs}" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- License overlay -->
+        <Grid Background="{DynamicResource AppScrimBrush}"
+              IsVisible="{Binding IsLicenseOpen}"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Border Background="{DynamicResource AppSurfaceBrush}" CornerRadius="{DynamicResource RadiusLg}"
+                    Width="320" Height="320"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource AppBorderStrongBrush}" Padding="20">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+                        <materialIcons:MaterialIcon Grid.Column="0" Kind="KeyVariant" Width="18" Height="18"
+                                                     VerticalAlignment="Center" Margin="0,0,8,0"
+                                                     Foreground="{DynamicResource AppAccentBrush}" />
+                        <TextBlock Grid.Column="1" Classes="h3" Text="Bản quyền" VerticalAlignment="Center" />
+                        <Button Grid.Column="2" Classes="ghost" Command="{Binding CloseLicenseCommand}"
+                                Width="32" Height="32" Padding="0">
+                            <materialIcons:MaterialIcon Kind="Close" Width="16" Height="16"
+                                                        Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                        </Button>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="10">
+                        <Border Width="48" Height="48" CornerRadius="{DynamicResource RadiusMd}"
+                                Background="{DynamicResource AppSurfaceAltBrush}"
+                                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                                HorizontalAlignment="Center">
+                            <materialIcons:MaterialIcon Kind="KeyVariant" Width="22" Height="22"
+                                                        Foreground="{DynamicResource AppAccentBrush}"
+                                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Cấu hình Bản quyền" Classes="h3" HorizontalAlignment="Center" />
+                        <TextBlock Text="(Khung giao diện Phase 0 — tính năng bản quyền sẽ được kết nối ở Phase 4)"
+                                   Classes="muted" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
+                    </StackPanel>
+
+                    <Button Grid.Row="2" Content="Đóng" Command="{Binding CloseLicenseCommand}" HorizontalAlignment="Right" />
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </Window>

@@ -13,18 +13,23 @@
         <vm:DeviceViewModel />
     </Design.DataContext>
 
-    <Border Padding="10,8" CornerRadius="6"
-            BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-            Margin="0,0,0,8">
+    <Border Classes="Card" Padding="12,10" Margin="0,0,0,8">
         <Grid ColumnDefinitions="Auto,*,Auto">
-            <materialIcons:MaterialIcon Grid.Column="0" Kind="Cellphone" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,10,0" />
-            <StackPanel Grid.Column="1" Orientation="Vertical">
-                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding Status}" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" FontSize="12" />
+            <Border Grid.Column="0" Width="34" Height="34" CornerRadius="{DynamicResource RadiusSm}"
+                    Background="{DynamicResource AppAccentSoftBrush}" VerticalAlignment="Center" Margin="0,0,10,0">
+                <materialIcons:MaterialIcon Kind="Cellphone" Width="18" Height="18"
+                                            Foreground="{DynamicResource AppAccentBrush}"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="{Binding DisplayName}" Classes="chip" />
+                <TextBlock Text="{Binding DeviceStatusText}" Classes="muted" />
             </StackPanel>
-            <Border Grid.Column="2" Padding="6,2" CornerRadius="10"
-                    Background="{DynamicResource SystemControlBackgroundListLowBrush}" VerticalAlignment="Center">
-                <TextBlock Text="{Binding Stats.Battles}" FontSize="12" />
+            <Border Grid.Column="2" Padding="8,3" CornerRadius="{DynamicResource RadiusSm}"
+                    Background="{DynamicResource AppSurfaceAltBrush}"
+                    BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                    VerticalAlignment="Center">
+                <TextBlock Text="{Binding Stats.Battles}" Classes="body" />
             </Border>
         </Grid>
     </Border>

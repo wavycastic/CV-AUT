@@ -15,6 +15,7 @@ namespace CvAut.ViewModels
         [ObservableProperty] private long _darkElixir;
         [ObservableProperty] private int _wallsUpgraded;
         [ObservableProperty] private int _clanGamesPoints;
+        [ObservableProperty] private int _clanGamesTasks;
 
         /// <summary>Replaces all totals from a backend <see cref="CvAut.Models.SessionStats"/> snapshot.</summary>
         public void Apply(CvAut.Models.SessionStats stats)
@@ -26,6 +27,7 @@ namespace CvAut.ViewModels
             DarkElixir = stats.DarkElixir;
             WallsUpgraded = stats.WallsUpgraded;
             ClanGamesPoints = stats.ClanGamesPoints;
+            ClanGamesTasks = stats.ClanGamesTasks;
         }
     }
 }

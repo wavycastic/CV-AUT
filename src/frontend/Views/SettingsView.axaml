@@ -7,32 +7,151 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     x:Class="CvAut.Views.SettingsView"
-    x:DataType="vm:SettingsViewModel"
->
-    <Design.DataContext>
-        <vm:SettingsViewModel />
-    </Design.DataContext>
+    x:DataType="vm:SettingsViewModel">
+    <Design.DataContext><vm:SettingsViewModel /></Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*" Margin="12">
-        <TextBlock Grid.Row="0" Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+    
+    <UserControl.Styles>
+        <Style Selector="ListBox#SidebarList ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="ListBox#SidebarList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+        </Style>
+        <Style Selector="ListBox#SidebarList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#1ad4af37" />
+        </Style>
+        <Style Selector="ListBox#SidebarList ListBoxItem:selected Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,0" />
+        </Style>
+    </UserControl.Styles>
 
-        <!-- Sub-view tabs (Main Village / Night Village / Clan Games) -->
-        <Grid Grid.Row="1" ColumnDefinitions="200,*">
-            <ListBox Grid.Column="0"
-                     ItemsSource="{Binding Tabs}"
-                     SelectedItem="{Binding SelectedTab}"
-                     Margin="0,0,12,0">
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:SettingsTab">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <materialIcons:MaterialIcon Kind="{Binding IconKind}" Width="18" Height="18" VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="8" Background="{DynamicResource AppBackgroundBrush}">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,14" IsVisible="{Binding !IsInstanceMode}">
+            <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <materialIcons:MaterialIcon Kind="Tune" Width="22" Height="22"
+                                                Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="Cài đặt" Classes="h2" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Text="Quản lý cấu hình và quy tắc tự động."
+                           Classes="muted" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Global Profile Management (Hidden in Instance Mode) -->
+        <Border Grid.Row="1" Classes="Card" Padding="16" Margin="0,0,0,14" IsVisible="{Binding !IsInstanceMode}">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="18" RowSpacing="12">
+                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                    <TextBlock Text="HỒ SƠ" Classes="section" />
+                    <TextBlock Text="Tải, lưu, cập nhật hồ sơ tự động." Classes="muted" />
+                </StackPanel>
+
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Status}" Classes="muted"
+                           VerticalAlignment="Center" HorizontalAlignment="Right" />
+
+                <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Spacing="10">
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <StackPanel Grid.Column="0" Spacing="6">
+                            <TextBlock Text="Đang dùng" Classes="label" />
+                            <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile}"
+                                      DisplayMemberBinding="{Binding Name}" HorizontalAlignment="Stretch" />
                         </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Text="Hồ sơ mới" Classes="label" />
+                            <TextBox Text="{Binding ProfileName}" PlaceholderText="Profile name" />
+                        </StackPanel>
+                    </Grid>
+                    <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Button Content="Tải" Command="{Binding LoadProfileCommand}" Margin="0,0,6,0" />
+                        <Button Classes="accent" Content="Lưu" Command="{Binding SaveNewProfileCommand}" Margin="0,0,6,0" />
+                        <Button Content="Cập nhật" Command="{Binding UpdateProfileCommand}" Margin="0,0,6,0" />
+                        <Button Classes="danger" Content="Xóa" Command="{Binding DeleteProfileCommand}" />
+                    </WrapPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+
+        <!-- Opt-in notifications (Discord webhook). Sends device status events out to a user-supplied URL. -->
+        <Border Grid.Row="2" Classes="Card" Padding="16" Margin="0,0,0,14" IsVisible="{Binding !IsInstanceMode}">
+            <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Text="THÔNG BÁO (DISCORD)" Classes="section" />
+                        <TextBlock Text="Tùy chọn: dán webhook Discord của bạn để nhận sự kiện thiết bị. Mặc định tắt." Classes="muted" />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding NotifyEnabled}" VerticalAlignment="Center" />
+                </Grid>
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Webhook URL" Classes="label" />
+                    <TextBox Text="{Binding WebhookUrl}" PlaceholderText="https://discord.com/api/webhooks/..." />
+                </StackPanel>
+                <WrapPanel Orientation="Horizontal">
+                    <CheckBox Content="Khi lỗi" IsChecked="{Binding NotifyOnError}" Margin="0,0,16,0" />
+                    <CheckBox Content="Khi dừng" IsChecked="{Binding NotifyOnStopped}" Margin="0,0,16,0" />
+                    <CheckBox Content="Khi chạy" IsChecked="{Binding NotifyOnStarted}" />
+                </WrapPanel>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Classes="accent" Content="Lưu thông báo" Command="{Binding SaveNotificationsCommand}" />
+                    <TextBlock Text="{Binding NotifyStatus}" Classes="muted" VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Layout 1: Normal mode (two columns with sidebar) -->
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*" IsVisible="{Binding !IsInstanceMode}">
+            <Border Grid.Column="0" Width="170" Margin="0,0,10,0" Classes="Card" Padding="8">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="DANH MỤC" Classes="section" Margin="6,4,0,0" />
+                    <TextBlock Text="Chưa có section" Classes="muted" Margin="6" IsVisible="{Binding !HasTabs}" />
+                    <ListBox Name="SidebarList" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
+                             Background="Transparent" BorderThickness="0" IsVisible="{Binding HasTabs}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SettingsTab">
+                                <Border Padding="9" CornerRadius="{DynamicResource RadiusSm}" Margin="0,2">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Border Width="30" Height="30" CornerRadius="{DynamicResource RadiusSm}" Background="{DynamicResource AppSurfaceAltBrush}"
+                                                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+                                            <materialIcons:MaterialIcon Kind="{Binding IconKind}" Width="18" Height="18"
+                                                                        Foreground="{DynamicResource AppAccentBrush}"
+                                                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Title}" Classes="chip" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+            </Border>
 
             <ContentControl Grid.Column="1" Content="{Binding SelectedTab.Page}" />
         </Grid>
+
+        <!-- Layout 2: Instance mode (direct vertical stacked sub-pages with section titles) -->
+        <ScrollViewer Grid.Row="3" IsVisible="{Binding IsInstanceMode}">
+            <ItemsControl ItemsSource="{Binding Tabs}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SettingsTab">
+                        <StackPanel Spacing="6" Margin="0,0,0,16">
+                            <!-- Section Title Header -->
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="4,0,0,4">
+                                <materialIcons:MaterialIcon Kind="{Binding IconKind}" Width="16" Height="16"
+                                                            Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Title}" Classes="section" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource AppAccentBrush}" />
+                            </StackPanel>
+                            
+                            <!-- Page Content -->
+                            <ContentControl Content="{Binding Page}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
     </Grid>
 </UserControl>

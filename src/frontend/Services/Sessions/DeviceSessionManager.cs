@@ -18,19 +18,9 @@ namespace CvAut.Services.Sessions
 
         public IDeviceSession? Active => _active;
 
-        public IReadOnlyList<IDeviceSession> Sessions
-        {
-            get
-            {
-                var list = new List<IDeviceSession>(_sessions.Values.Count + 1);
-                if (_active is not null)
-                {
-                    list.Add(_active);
-                }
-
-                return list;
-            }
-        }
+        /// <summary>All live sessions (one per device). Phase 3: covers every created session,
+        /// so Start/Pause/Stop All and the running summary act on all devices, not just the active one.</summary>
+        public IReadOnlyList<IDeviceSession> Sessions => new List<IDeviceSession>(_sessions.Values);
 
         public IDeviceSession GetOrCreate(Device device, string configPath)
         {

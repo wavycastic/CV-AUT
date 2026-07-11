@@ -2,7 +2,9 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:CvAut.ViewModels"
+    xmlns:views="using:CvAut.Views"
     xmlns:models="using:CvAut.Models"
+    xmlns:conv="using:CvAut.Converters"
     xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -14,86 +16,200 @@
         <vm:DeviceViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="12">
+    <UserControl.Resources>
+        <conv:LogLevelToBrushConverter x:Key="LevelToBrush" />
+    </UserControl.Resources>
 
-        <!-- Header: device name + status badge -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                <materialIcons:MaterialIcon Kind="Cellphone" Width="20" Height="20" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding DisplayName}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="10" Background="{DynamicResource AppBackgroundBrush}">
+
+        <!-- Header: back button + device name + status badge -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+            <Button Grid.Column="0" Classes="ghost"
+                    IsVisible="{Binding $parent[views:DashboardView].((vm:DashboardViewModel)DataContext).ShowActivePanel}"
+                    Command="{Binding $parent[views:DashboardView].((vm:DashboardViewModel)DataContext).DeselectDeviceCommand}"
+                    Margin="0,0,8,0" Height="32" Padding="12,0" VerticalContentAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <materialIcons:MaterialIcon Kind="ArrowLeft" Width="14" Height="14" VerticalAlignment="Center" />
+                    <TextBlock Text="Quay lại" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Border Width="32" Height="32" CornerRadius="{DynamicResource RadiusSm}"
+                        Background="{DynamicResource AppSurfaceAltBrush}"
+                        BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                        VerticalAlignment="Center">
+                    <materialIcons:MaterialIcon Kind="Cellphone" Width="16" Height="16"
+                                                Foreground="{DynamicResource AppAccentBrush}"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="{Binding DisplayName}" Classes="h3" VerticalAlignment="Center" />
             </StackPanel>
-            <Border Grid.Column="1" Padding="8,4" CornerRadius="10"
-                    Background="{DynamicResource SystemControlBackgroundListLowBrush}">
-                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" />
+            <Border Grid.Column="2" Padding="8,3" CornerRadius="{DynamicResource RadiusSm}"
+                    Background="{DynamicResource AppSurfaceAltBrush}"
+                    BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                    VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <materialIcons:MaterialIcon Kind="Circle" Width="8" Height="8" VerticalAlignment="Center"
+                                                Foreground="{Binding DisplayStatusColor}" />
+                    <TextBlock Text="{Binding DisplayStatus}" Classes="chip" VerticalAlignment="Center" />
+                </StackPanel>
             </Border>
         </Grid>
 
-        <!-- Lifecycle controls (Start/Pause/Resume/Stop go through DeviceViewModel → IDeviceSession) -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
-            <Button Command="{Binding StartCommand}">
+        <!-- Lifecycle controls -->
+        <Border Grid.Row="1" Classes="Card" Padding="8,6" Margin="0,0,0,8">
+          <StackPanel Spacing="6">
+            <WrapPanel Orientation="Horizontal" ItemWidth="72" HorizontalAlignment="Center">
+                <Button Classes="accent" Command="{Binding StartCommand}" Height="30" Padding="6,0" VerticalContentAlignment="Center" Margin="2">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <materialIcons:MaterialIcon Kind="Play" Width="14" Height="14" VerticalAlignment="Center" />
+                        <TextBlock Text="Chạy" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding PauseCommand}" Height="30" Padding="6,0" VerticalContentAlignment="Center" Margin="2">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <materialIcons:MaterialIcon Kind="Pause" Width="14" Height="14" VerticalAlignment="Center" />
+                        <TextBlock Text="Tạm dừng" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding ResumeCommand}" Height="30" Padding="6,0" VerticalContentAlignment="Center" Margin="2">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <materialIcons:MaterialIcon Kind="PlayPause" Width="14" Height="14" VerticalAlignment="Center" />
+                        <TextBlock Text="Tiếp" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="danger" Command="{Binding StopCommand}" Height="30" Padding="6,0" VerticalContentAlignment="Center" Margin="2">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <materialIcons:MaterialIcon Kind="Stop" Width="14" Height="14" VerticalAlignment="Center" />
+                        <TextBlock Text="Dừng" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="ghost" Command="{Binding ClearLogCommand}" ToolTip.Tip="Clear log" Height="30" Width="30" Padding="0" VerticalAlignment="Center" Margin="2">
+                    <materialIcons:MaterialIcon Kind="Broom" Width="14" Height="14" />
+                </Button>
+            </WrapPanel>
+            <Border IsVisible="{Binding DisplayWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Background="{DynamicResource AppDangerSoftBrush}" BorderBrush="{DynamicResource AppDangerBorderBrush}"
+                    BorderThickness="1" CornerRadius="{DynamicResource RadiusSm}" Padding="8,5">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                    <materialIcons:MaterialIcon Kind="Play" Width="16" Height="16" />
-                    <TextBlock Text="Start" />
+                    <materialIcons:MaterialIcon Kind="AlertOutline" Width="14" Height="14" VerticalAlignment="Center"
+                                                Foreground="{DynamicResource AppDangerTextBrush}" />
+                    <TextBlock Text="{Binding DisplayWarning}" TextWrapping="Wrap" Classes="label"
+                               Foreground="{DynamicResource AppDangerTextBrush}" VerticalAlignment="Center" />
                 </StackPanel>
-            </Button>
-            <Button Command="{Binding PauseCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <materialIcons:MaterialIcon Kind="Pause" Width="16" Height="16" />
-                    <TextBlock Text="Pause" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding ResumeCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <materialIcons:MaterialIcon Kind="PlayPause" Width="16" Height="16" />
-                    <TextBlock Text="Resume" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding StopCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <materialIcons:MaterialIcon Kind="Stop" Width="16" Height="16" />
-                    <TextBlock Text="Stop" />
-                </StackPanel>
-            </Button>
-            <Button Command="{Binding ClearLogCommand}" ToolTip.Tip="Clear log">
-                <materialIcons:MaterialIcon Kind="Broom" Width="16" Height="16" />
-            </Button>
-        </StackPanel>
-
-        <!-- Stats block -->
-        <Border Grid.Row="2" Padding="12" CornerRadius="6"
-                BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-                Margin="0,0,0,12">
-            <Grid ColumnDefinitions="*,*,*,*,*" RowDefinitions="Auto,Auto">
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="Battles" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding Stats.Battles}" FontSize="18" FontWeight="SemiBold" />
-                <TextBlock Grid.Row="0" Grid.Column="1" Text="Stars" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Stats.Stars}" FontSize="18" FontWeight="SemiBold" />
-                <TextBlock Grid.Row="0" Grid.Column="2" Text="Gold" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Stats.Gold}" FontSize="18" FontWeight="SemiBold" />
-                <TextBlock Grid.Row="0" Grid.Column="3" Text="Elixir" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding Stats.Elixir}" FontSize="18" FontWeight="SemiBold" />
-                <TextBlock Grid.Row="0" Grid.Column="4" Text="Dark" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                <TextBlock Grid.Row="1" Grid.Column="4" Text="{Binding Stats.DarkElixir}" FontSize="18" FontWeight="SemiBold" />
-            </Grid>
+            </Border>
+          </StackPanel>
         </Border>
 
-        <!-- Per-device live log -->
-        <Border Grid.Row="3" CornerRadius="6" BorderThickness="1"
-                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
-            <ScrollViewer Padding="8" HorizontalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding Logs}">
-                    <ItemsControl.ItemTemplate>
+        <!-- Stats tiles (Divided into 2 rows for vertical layout) -->
+        <StackPanel Grid.Row="2" Spacing="6" Margin="0,0,0,8">
+            <!-- Row 1: General stats (4 columns) -->
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="6">
+                <!-- Battles -->
+                <Border Grid.Column="0" Classes="Tile" Padding="4,6">
+                    <StackPanel HorizontalAlignment="Center" Spacing="2">
+                        <TextBlock Text="BATTLES" Classes="caption" HorizontalAlignment="Center" FontSize="10" />
+                        <TextBlock Text="{Binding Stats.Battles}" Classes="stat" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <!-- Stars -->
+                <Border Grid.Column="1" Classes="Tile" Padding="4,6">
+                    <StackPanel HorizontalAlignment="Center" Spacing="2">
+                        <TextBlock Text="STARS" Classes="caption" HorizontalAlignment="Center" FontSize="10" />
+                        <TextBlock Text="{Binding Stats.Stars}" Classes="stat" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <!-- Walls -->
+                <Border Grid.Column="2" Classes="Tile" Padding="4,6">
+                    <StackPanel HorizontalAlignment="Center" Spacing="2">
+                        <TextBlock Text="WALLS" Classes="caption" HorizontalAlignment="Center" FontSize="10" />
+                        <TextBlock Text="{Binding Stats.WallsUpgraded}" Classes="stat" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <!-- Clan -->
+                <Border Grid.Column="3" Classes="Tile" Padding="4,4">
+                    <StackPanel HorizontalAlignment="Center" Spacing="1">
+                        <TextBlock Text="HỘI" Classes="caption" HorizontalAlignment="Center" FontSize="10" />
+                        <TextBlock Text="{Binding Stats.ClanGamesPoints}" Classes="statNum" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding Stats.ClanGamesTasks, StringFormat='N.vụ {0}'}" Classes="caption" HorizontalAlignment="Center" FontSize="9" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Row 2: Resources looted (3 columns, colorized) -->
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                <!-- Gold -->
+                <Border Grid.Column="0" Classes="Tile" Padding="4,6">
+                    <StackPanel HorizontalAlignment="Center" Spacing="2">
+                        <TextBlock Text="VÀNG" Classes="caption" HorizontalAlignment="Center" Foreground="{DynamicResource AppAccentBrush}" FontSize="10" />
+                        <TextBlock Text="{Binding Stats.Gold, StringFormat='{}{0:#,##0}'}" Classes="statNum" HorizontalAlignment="Center" Foreground="{DynamicResource AppAccentBrush}" />
+                    </StackPanel>
+                </Border>
+                <!-- Elixir -->
+                <Border Grid.Column="1" Classes="Tile" Padding="4,6">
+                    <StackPanel HorizontalAlignment="Center" Spacing="2">
+                        <TextBlock Text="DẦU HỒNG" Classes="caption" HorizontalAlignment="Center" Foreground="{DynamicResource AppElixirBrush}" FontSize="10" />
+                        <TextBlock Text="{Binding Stats.Elixir, StringFormat='{}{0:#,##0}'}" Classes="statNum" HorizontalAlignment="Center" Foreground="{DynamicResource AppElixirBrush}" />
+                    </StackPanel>
+                </Border>
+                <!-- Dark Elixir -->
+                <Border Grid.Column="2" Classes="Tile" Padding="4,6">
+                    <StackPanel HorizontalAlignment="Center" Spacing="2">
+                        <TextBlock Text="DẦU ĐEN" Classes="caption" HorizontalAlignment="Center" Foreground="{DynamicResource AppDarkElixirBrush}" FontSize="10" />
+                        <TextBlock Text="{Binding Stats.DarkElixir, StringFormat='{}{0:#,##0}'}" Classes="statNum" HorizontalAlignment="Center" Foreground="{DynamicResource AppDarkElixirBrush}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+
+        <!-- Per-device live log (console style, virtualized via ListBox) -->
+        <Border Grid.Row="3" CornerRadius="{DynamicResource RadiusMd}" ClipToBounds="True" BorderThickness="1" Background="{DynamicResource AppConsoleBgBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}">
+            <Grid RowDefinitions="Auto,*">
+                <Border Grid.Row="0" Padding="12,8" Background="{DynamicResource AppSurfaceAltBrush}"
+                        BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,0,0,1"
+                        CornerRadius="{DynamicResource RadiusNone}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <materialIcons:MaterialIcon Kind="Console" Width="15" Height="15"
+                                                    Foreground="{DynamicResource AppLogTextBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="NH᫊T KÝ" Classes="section" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <TextBlock Grid.Row="1" Text="Chưa có log" Classes="muted"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           IsVisible="{Binding !HasLogs}" />
+                <ListBox Grid.Row="1" ItemsSource="{Binding Logs}" Background="Transparent"
+                          BorderThickness="0" Padding="6"
+                          IsVisible="{Binding HasLogs}"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="4,1" />
+                            <Setter Property="MinHeight" Value="0" />
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="models:LogEntry">
-                            <TextBlock
-                                Text="{Binding Message}"
-                                FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
-                                FontSize="12"
-                                TextWrapping="NoWrap"
-                            />
+                            <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="{Binding TimeText}"
+                                           FontFamily="Cascadia Mono, Consolas, monospace"
+                                           FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" />
+                                <TextBlock Grid.Column="1" Text="{Binding LevelText}"
+                                           FontFamily="Cascadia Mono, Consolas, monospace"
+                                           FontSize="11" Foreground="{Binding Level, Converter={StaticResource LevelToBrush}}" />
+                                <TextBlock Grid.Column="2" Text="{Binding Module}"
+                                           FontFamily="Cascadia Mono, Consolas, monospace"
+                                           FontSize="11" Foreground="{DynamicResource AppAccentBrush}" />
+                                <TextBlock Grid.Column="3" Text="{Binding Summary}"
+                                           FontFamily="Cascadia Mono, Consolas, monospace"
+                                           FontSize="11" Foreground="{DynamicResource AppInfoBrush}"
+                                           TextWrapping="NoWrap"
+                                           ToolTip.Tip="{Binding Message}" />
+                            </Grid>
                         </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

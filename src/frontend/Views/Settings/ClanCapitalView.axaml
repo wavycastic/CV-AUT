@@ -1,0 +1,33 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels.Settings"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.Settings.ClanCapitalView"
+    x:DataType="vm:ClanCapitalViewModel"
+>
+    <Design.DataContext><vm:ClanCapitalViewModel /></Design.DataContext>
+
+    <ScrollViewer Background="Transparent" Padding="10">
+        <StackPanel Spacing="8">
+
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Cấu hình Kinh đô hội" Classes="subhead" />
+
+                    <Border Classes="Tile" Padding="8,6">
+                        <CheckBox Content="Tự động đánh Kinh đô hội" IsChecked="{Binding Enabled}" Height="24" />
+                    </Border>
+
+                    <StackPanel Spacing="3" HorizontalAlignment="Stretch">
+                        <TextBlock Text="Chế độ đánh" Classes="label" />
+                        <ComboBox ItemsSource="{Binding AttackModes}" SelectedItem="{Binding SelectedAttackMode}" HorizontalAlignment="Stretch" Height="32" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

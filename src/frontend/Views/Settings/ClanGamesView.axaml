@@ -9,19 +9,42 @@
     x:Class="CvAut.Views.Settings.ClanGamesView"
     x:DataType="vm:ClanGamesViewModel"
 >
-    <Design.DataContext>
-        <vm:ClanGamesViewModel />
-    </Design.DataContext>
+    <Design.DataContext><vm:ClanGamesViewModel /></Design.DataContext>
 
-    <StackPanel Margin="16" Spacing="12">
-        <StackPanel Orientation="Horizontal" Spacing="10">
-            <materialIcons:MaterialIcon Kind="SwordCross" Width="28" Height="28" />
-            <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" />
+    <ScrollViewer Background="Transparent" Padding="10">
+        <StackPanel Spacing="8">
+
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Bộ lọc nhiệm vụ Trò Chơi Hội" Classes="subhead" />
+
+                    <StackPanel Spacing="6">
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="Bản đồ" Classes="label" />
+                            <ComboBox ItemsSource="{Binding Villages}" SelectedItem="{Binding SelectedVillage}" HorizontalAlignment="Stretch" Height="32" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="Bộ lọc đã lưu" Classes="label" />
+                            <ComboBox ItemsSource="{Binding SavedFilterSets}" SelectedItem="{Binding FilterSetName}" HorizontalAlignment="Stretch" Height="32" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="Từ khóa lọc nhiệm vụ (phân tách bằng dấu phẩy)" Classes="label" />
+                        <TextBox Text="{Binding MissionFilter}" PlaceholderText="resources,walls,stars" Height="32" VerticalContentAlignment="Center" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="Tên bộ lọc để lưu" Classes="label" />
+                            <TextBox Text="{Binding FilterSetName}" Height="32" VerticalContentAlignment="Center" />
+                        </StackPanel>
+                        <Button Classes="accent" Content="Lưu bộ lọc" Command="{Binding SaveFilterSetCommand}" Height="32" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding SaveStatus}" Classes="muted" />
+                </StackPanel>
+            </Border>
         </StackPanel>
-        <TextBlock
-            Text="Pick village, filter missions, save filter sets — wired in Phase 2."
-            TextWrapping="Wrap"
-            Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
-            MaxWidth="520" />
-    </StackPanel>
+    </ScrollViewer>
 </UserControl>

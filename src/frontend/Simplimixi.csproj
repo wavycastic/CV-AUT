@@ -6,8 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>CvAut</RootNamespace>
-    <AssemblyName>SimpliMixi</AssemblyName>
-    <Product>SimpliMixi</Product>
+    <AssemblyName>AutoClashOfClan20206</AssemblyName>
+    <Product>AutoClashOfClan20206</Product>
     <Version>0.6.2</Version>
     <AssemblyVersion>0.6.2.0</AssemblyVersion>
     <FileVersion>0.6.2.0</FileVersion>
@@ -38,9 +38,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Simplimixi.Frontend.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.5" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.5" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="12.0.5" />
+
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.5" />
     <!-- Dev tools: debug only, excluded from Release/AOT output. -->
     <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
@@ -66,39 +71,44 @@
     <Compile Include="App.axaml.cs" />
     <Compile Include="ViewLocator.cs" />
     <Compile Include="AppLog.cs" />
+    <Compile Include="Converters\LogLevelToBrushConverter.cs" />
     <Compile Include="ConfigStore.cs" />
     <Compile Include="ViewModels\ViewModelBase.cs" />
     <Compile Include="ViewModels\MainWindowViewModel.cs" />
-    <Compile Include="ViewModels\ShellViewModel.cs" />
     <Compile Include="ViewModels\DashboardViewModel.cs" />
     <Compile Include="ViewModels\DeviceViewModel.cs" />
     <Compile Include="ViewModels\SessionStatsViewModel.cs" />
     <Compile Include="ViewModels\TopBarViewModel.cs" />
     <Compile Include="ViewModels\SidebarViewModel.cs" />
     <Compile Include="ViewModels\SettingsViewModel.cs" />
-    <Compile Include="ViewModels\AccountsViewModel.cs" />
     <Compile Include="ViewModels\AdvancedViewModel.cs" />
     <Compile Include="ViewModels\LogsViewModel.cs" />
     <Compile Include="ViewModels\LicenseViewModel.cs" />
+    <Compile Include="ViewModels\SetupWizardViewModel.cs" />
     <Compile Include="ViewModels\Settings\MainVillageViewModel.cs" />
     <Compile Include="ViewModels\Settings\NightVillageViewModel.cs" />
     <Compile Include="ViewModels\Settings\ClanGamesViewModel.cs" />
+    <Compile Include="ViewModels\Settings\ClanCapitalViewModel.cs" />
     <Compile Include="Views\MainWindow.axaml.cs" />
-    <Compile Include="Views\ShellView.axaml.cs" />
     <Compile Include="Views\DashboardView.axaml.cs" />
     <Compile Include="Views\SettingsView.axaml.cs" />
-    <Compile Include="Views\AccountsView.axaml.cs" />
     <Compile Include="Views\AdvancedView.axaml.cs" />
     <Compile Include="Views\LogsView.axaml.cs" />
     <Compile Include="Views\LicenseView.axaml.cs" />
-    <Compile Include="Views\TopBarView.axaml.cs" />
-    <Compile Include="Views\SidebarView.axaml.cs" />
+    <Compile Include="Views\HeaderView.axaml.cs" />
+    <Compile Include="Views\StatusBarView.axaml.cs" />
+    <Compile Include="Views\BottomNavView.axaml.cs" />
     <Compile Include="Views\DevicePanelView.axaml.cs" />
     <Compile Include="Views\DeviceListItemView.axaml.cs" />
     <Compile Include="Views\Settings\MainVillageView.axaml.cs" />
     <Compile Include="Views\Settings\NightVillageView.axaml.cs" />
     <Compile Include="Views\Settings\ClanGamesView.axaml.cs" />
+    <Compile Include="Views\Settings\ClanCapitalView.axaml.cs" />
+    <Compile Include="Views\SetupWizardView.axaml.cs" />
     <Compile Include="Models\BotStatus.cs" />
+    <Compile Include="Models\PlayMode.cs" />
+    <Compile Include="Models\NotificationSettings.cs" />
+    <Compile Include="Models\DashboardDeviceState.cs" />
     <Compile Include="Models\Device.cs" />
     <Compile Include="Models\LogEntry.cs" />
     <Compile Include="Models\SessionStats.cs" />
@@ -107,7 +117,16 @@
     <Compile Include="Services\Sessions\IDeviceSessionManager.cs" />
     <Compile Include="Services\Sessions\AutomationRunnerSession.cs" />
     <Compile Include="Services\Sessions\MockDeviceSession.cs" />
+    <Compile Include="Services\Notifications\INotificationService.cs" />
     <Compile Include="Services\Sessions\DeviceSessionManager.cs" />
+    <Compile Include="Services\Emulators\IEmulatorDiscovery.cs" />
+    <Compile Include="Services\Emulators\IDeviceScanner.cs" />
+    <Compile Include="Services\Emulators\CommonPorts.cs" />
+    <Compile Include="Services\Emulators\AdbConnector.cs" />
+    <Compile Include="Services\Emulators\AdbEndpoint.cs" />
+    <Compile Include="Services\Emulators\Scanners\AdbConnectedDeviceScanner.cs" />
+    <Compile Include="Services\Emulators\Scanners\BlueStacksScanner.cs" />
+    <Compile Include="Services\Emulators\Scanners\VendorScanners.cs" />
   </ItemGroup>
 
   <ItemGroup>

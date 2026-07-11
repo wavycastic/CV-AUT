@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace CvAut.Views
 {
-    public partial class SidebarView : UserControl
+    public partial class SetupWizardView : UserControl
     {
-        public SidebarView()
+        public SetupWizardView()
         {
             InitializeComponent();
         }

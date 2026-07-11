@@ -9,19 +9,44 @@
     x:Class="CvAut.Views.Settings.NightVillageView"
     x:DataType="vm:NightVillageViewModel"
 >
-    <Design.DataContext>
-        <vm:NightVillageViewModel />
-    </Design.DataContext>
+    <Design.DataContext><vm:NightVillageViewModel /></Design.DataContext>
 
-    <StackPanel Margin="16" Spacing="12">
-        <StackPanel Orientation="Horizontal" Spacing="10">
-            <materialIcons:MaterialIcon Kind="MoonWaningCrescent" Width="28" Height="28" />
-            <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" />
+    <ScrollViewer Background="Transparent" Padding="10">
+        <StackPanel Spacing="8">
+
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Cấu hình đi chợ Làng Đêm" Classes="subhead" />
+
+                    <StackPanel Spacing="6">
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="GamepadVariant" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Chế độ Farm" Classes="label" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <ComboBox ItemsSource="{Binding FarmModes}" SelectedItem="{Binding FarmMode}" HorizontalAlignment="Stretch" Height="32" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="Trophy" Width="14" Height="14" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Cúp tối thiểu" Classes="label" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding MinCups}" Minimum="0" Maximum="10000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <materialIcons:MaterialIcon Kind="Trophy" Width="14" Height="14" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Cúp tối đa" Classes="label" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <NumericUpDown Value="{Binding MaxCups}" Minimum="0" Maximum="10000" Height="32" FormatString="N0" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Classes="Tile" Padding="8,6">
+                        <CheckBox Content="Tự động nâng tường làng đêm" IsChecked="{Binding UpgradeWall}" Height="24" />
+                    </Border>
+                </StackPanel>
+            </Border>
         </StackPanel>
-        <TextBlock
-            Text="Farm dark/both modes, cup min/max, wall upgrade — wired in Phase 2."
-            TextWrapping="Wrap"
-            Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
-            MaxWidth="520" />
-    </StackPanel>
+    </ScrollViewer>
 </UserControl>

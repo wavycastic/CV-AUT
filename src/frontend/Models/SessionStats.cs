@@ -19,5 +19,7 @@ namespace CvAut.Models
         public int WallsUpgraded { get; set; }
 
         public int ClanGamesPoints { get; set; }
+
+        public int ClanGamesTasks { get; set; }
     }
 }

@@ -35,6 +35,8 @@ namespace CvAut.ViewModels
     {
         public ObservableCollection<NavItem> Items { get; } = new();
 
+        public bool HasItems => Items.Count > 0;
+
         [ObservableProperty]
         private ViewModelBase? _currentPage;
 
@@ -58,10 +60,12 @@ namespace CvAut.ViewModels
         public void Seed(System.Collections.Generic.IEnumerable<NavItem> items)
         {
             Items.Clear();
+            OnPropertyChanged(nameof(HasItems));
             bool first = true;
             foreach (NavItem item in items)
             {
                 Items.Add(item);
+                OnPropertyChanged(nameof(HasItems));
                 if (first)
                 {
                     item.IsActive = true;

@@ -13,12 +13,19 @@
         <vm:LicenseViewModel />
     </Design.DataContext>
 
-    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-        <materialIcons:MaterialIcon Kind="KeyVariant" Width="48" Height="48" />
-        <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" />
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14">
+        <Border Width="84" Height="84" CornerRadius="{DynamicResource RadiusMd}"
+                Background="{DynamicResource AppSurfaceAltBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                HorizontalAlignment="Center">
+            <materialIcons:MaterialIcon Kind="KeyVariant" Width="40" Height="40"
+                                        Foreground="{DynamicResource AppAccentBrush}"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+        <TextBlock Text="{Binding Title}" Classes="h2" HorizontalAlignment="Center" />
         <TextBlock
-            Text="(Phase 0 skeleton — license gate wired in Phase 4)"
-            Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+            Text="(Khung giao diện Phase 0 — tính năng bản quyền sẽ được kết nối ở Phase 4)"
+            Classes="muted"
             HorizontalAlignment="Center"
         />
     </StackPanel>

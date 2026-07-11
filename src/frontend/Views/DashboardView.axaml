@@ -14,34 +14,337 @@
         <vm:DashboardViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*" Margin="0">
+    <Grid RowDefinitions="*" Background="{DynamicResource AppBackgroundBrush}">
 
-        <!-- Toolbar: detect devices + grid toggle (Phase 1 single mode) -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="12,8,12,0">
-            <Button Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).DetectDevicesCommand}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <materialIcons:MaterialIcon Kind="Refresh" Width="16" Height="16" />
-                    <TextBlock Text="Detect devices" />
+        <!--
+            Single mode: render the active device panel (Màn hình C).
+        -->
+        <ContentControl Grid.Row="0" Content="{Binding ActiveDevice}"
+                        IsVisible="{Binding ShowActivePanel}" />
+
+        <!--
+            Grid mode (Phase 3): render every detected device as a compact DevicePanelView tile,
+            reusing the exact same view as single mode — only the container differs.
+        -->
+        <ScrollViewer Grid.Row="0" IsVisible="{Binding ShowGridPane}">
+            <ItemsControl Name="GridDeviceList" ItemsSource="{Binding Devices}" Margin="16,4,16,16">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="6" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:DeviceViewModel">
+                        <Border Classes="Card" Margin="0,0,0,6" Padding="14,12">
+                            <StackPanel Spacing="10">
+                                <!-- Row 1: Name + Status LED -->
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <Border Width="24" Height="24" CornerRadius="{DynamicResource RadiusSm}"
+                                                Background="{DynamicResource AppSurfaceAltBrush}"
+                                                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+                                            <materialIcons:MaterialIcon Kind="Cellphone" Width="14" Height="14"
+                                                                        Foreground="{DynamicResource AppAccentBrush}"
+                                                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="{Binding DisplayName}" Classes="h3" VerticalAlignment="Center" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="10,0">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <materialIcons:MaterialIcon Kind="Circle" Width="8" Height="8"
+                                                                        Foreground="{Binding DisplayStatusColor}" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding DisplayStatus}" Classes="label" Foreground="{Binding DisplayStatusColor}" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding DeviceStatusText}" Classes="caption" Foreground="{DynamicResource AppDangerBrush}" VerticalAlignment="Center" Margin="8,0,0,0" IsVisible="{Binding !DeviceCanStart}" />
+                                    </StackPanel>
+                                    
+                                    <Button Grid.Column="2" Classes="ghost"
+                                            Command="{Binding #GridDeviceList.DataContext.SelectDeviceCommand}"
+                                            CommandParameter="{Binding}" ToolTip.Tip="Xem chi tiết"
+                                            Width="28" Height="28" Padding="0" VerticalAlignment="Center">
+                                        <materialIcons:MaterialIcon Kind="ChevronRight" Width="16" Height="16"
+                                                                    Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                                    </Button>
+                                </Grid>
+
+                                <!-- Row 2: Play Mode ComboBox + Source -->
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock Text="Chế độ:" Classes="label" VerticalAlignment="Center" />
+                                        <ComboBox ItemsSource="{Binding PlayModes}" SelectedItem="{Binding SelectedPlayMode}"
+                                                  Width="110" Height="30" FontSize="12" Padding="6,2" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding Device.Source}" Classes="muted" VerticalAlignment="Center" FontSize="12" />
+                                </Grid>
+
+                                <!-- Row 3: Stats -->
+                                <Border Classes="Tile" Padding="6,4" Margin="0,2">
+                                    <Grid ColumnDefinitions="*,*,*,*" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                            <materialIcons:MaterialIcon Kind="Sword" Width="12" Height="12" Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                                            <TextBlock Text="{Binding Stats.Battles}" Classes="statNum" FontSize="12" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                            <materialIcons:MaterialIcon Kind="Coins" Width="12" Height="12" Foreground="{DynamicResource AppAccentBrush}" />
+                                            <TextBlock Text="{Binding Stats.Gold, StringFormat='{}{0:#,##0}'}" Classes="statNum" FontSize="11" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                            <materialIcons:MaterialIcon Kind="Water" Width="12" Height="12" Foreground="{DynamicResource AppElixirBrush}" />
+                                            <TextBlock Text="{Binding Stats.Elixir, StringFormat='{}{0:#,##0}'}" Classes="statNum" FontSize="11" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                            <materialIcons:MaterialIcon Kind="SkullOutline" Width="12" Height="12" Foreground="{DynamicResource AppDarkElixirBrush}" />
+                                            <TextBlock Text="{Binding Stats.DarkElixir, StringFormat='{}{0:#,##0}'}" Classes="statNum" FontSize="11" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Row 4: Action Buttons -->
+                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                                    <Grid Grid.Column="0">
+                                        <Button Classes="accent" Command="{Binding StartCommand}" IsVisible="{Binding ShowStartButton}" Height="32" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <materialIcons:MaterialIcon Kind="Play" Width="14" Height="14" />
+                                                <TextBlock Text="Chạy" FontSize="12" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Classes="danger" Command="{Binding StopCommand}" IsVisible="{Binding ShowStopButton}" Height="32" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <materialIcons:MaterialIcon Kind="Stop" Width="14" Height="14" />
+                                                <TextBlock Text="Dừng" FontSize="12" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+
+                                    <Button Grid.Column="1" Command="{Binding #GridDeviceList.DataContext.ConfigureDeviceCommand}" CommandParameter="{Binding}" Height="32" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <materialIcons:MaterialIcon Kind="Cog" Width="14" Height="14" />
+                                            <TextBlock Text="Cấu hình" FontSize="12" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="2" Command="{Binding #GridDeviceList.DataContext.ShowDeviceLogsCommand}" CommandParameter="{Binding}" Height="32" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <materialIcons:MaterialIcon Kind="ScriptText" Width="14" Height="14" />
+                                            <TextBlock Text="Nhật ký" FontSize="12" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!--
+            Configuring mode: render the device settings panel directly inside the dashboard workspace,
+            WITHOUT the popup/modal overlay frame.
+        -->
+        <Grid Grid.Row="0" RowDefinitions="Auto,*" Margin="10" IsVisible="{Binding ShowConfiguringPanel}">
+            <!-- Header: Title and Save/Cancel buttons -->
+            <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <materialIcons:MaterialIcon Kind="Tune" Width="16" Height="16"
+                                                 Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="Cấu hình thiết bị" Classes="h3" VerticalAlignment="Center" />
                 </StackPanel>
-            </Button>
-        </StackPanel>
 
-        <!-- Single mode: render the active device panel. Grid mode (Phase 3) swaps this for an ItemsControl. -->
-        <ContentControl Grid.Row="1" Content="{Binding ActiveDevice}" IsVisible="{Binding ActiveDevice, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <ContentControl.Styles>
-                <Style Selector="ContentControl:not(:null)">
-                    <!-- placeholder style so the inner view fills -->
-                </Style>
-            </ContentControl.Styles>
-        </ContentControl>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Classes="accent" Content="Lưu" Command="{Binding SettingsViewModel.InstanceSaveCommand}" Height="32" Padding="14,0" VerticalContentAlignment="Center" />
+                    <Button Content="Hủy" Command="{Binding SettingsViewModel.InstanceCancelCommand}" Height="32" Padding="14,0" VerticalContentAlignment="Center" />
+                </StackPanel>
+            </Grid>
 
-        <!-- Empty state when no active device -->
-        <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
-                    IsVisible="{Binding ActiveDevice, Converter={x:Static ObjectConverters.IsNull}}">
-            <materialIcons:MaterialIcon Kind="Devices" Width="48" Height="48" />
-            <TextBlock Text="No device yet" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" />
-            <TextBlock Text="Click 'Detect devices' to list connected emulators."
-                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" HorizontalAlignment="Center" />
-        </StackPanel>
+            <!-- Settings Content -->
+            <ContentControl Grid.Row="1" Content="{Binding SettingsViewModel}" />
+        </Grid>
+
+        <!--
+            Selection / empty pane. Shown whenever the active panel is not (item 10). Contains
+            the device list (multiple/zero ready) and the empty-state panels (Idle / NoDevices).
+        -->
+        <ScrollViewer Grid.Row="0" IsVisible="{Binding ShowSelectionPane}">
+            <Grid RowDefinitions="Auto,Auto,*" Margin="16,4,16,16" RowSpacing="10">
+
+                <!-- Top Toolbar (replaces the bulky Control Center card) -->
+                <Border Grid.Row="0" Classes="Card" Padding="10,6" Margin="0,0,0,2">
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <materialIcons:MaterialIcon Kind="Filter" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="Bộ lọc giả lập:" Classes="label" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding EmulatorFilters}"
+                                  SelectedItem="{Binding SelectedEmulatorFilter}"
+                                  Width="120" Height="32" VerticalAlignment="Center" Margin="8,0,0,0" />
+
+                        <Button Grid.Column="2" Classes="accent" Command="{Binding StartAllCommand}"
+                                Height="30" Padding="8,0" VerticalContentAlignment="Center" Margin="12,0,0,0">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <materialIcons:MaterialIcon Kind="PlayCircleOutline" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="Chạy tất cả" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="3" Classes="danger" Command="{Binding StopAllCommand}"
+                                Height="30" Padding="8,0" VerticalContentAlignment="Center" Margin="6,0,0,0">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <materialIcons:MaterialIcon Kind="StopCircleOutline" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="Dừng tất cả" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsDetecting}">
+                    <materialIcons:MaterialIcon Kind="ProgressClock" Width="14" Height="14"
+                                                Foreground="{DynamicResource AppAccentBrush}" />
+                    <TextBlock Text="Đang tìm kiếm giả lập đã kết nối..." Classes="label" />
+                </StackPanel>
+
+                <!-- Selection prompt + summary (hidden in the Idle / NoDevices empty states) -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="2,0,0,2"
+                             IsVisible="{Binding ShowDeviceList}">
+                    <TextBlock Text="THIẾT BỊ" Classes="section" VerticalAlignment="Center" />
+                    <TextBlock Text="•" Classes="muted" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding DeviceSummaryText}" Classes="muted" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!--
+                    Device list. Visible when devices exist but none is selected yet.
+                -->
+                <ItemsControl Name="DeviceList" Grid.Row="2"
+                               ItemsSource="{Binding Devices}"
+                               IsVisible="{Binding ShowDeviceList}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:DeviceViewModel">
+                            <Border Classes="Card" Margin="0,0,0,8" Padding="10">
+                                <StackPanel Spacing="8">
+                                    <!-- Row 1: Name + Status LED + Chevron select -->
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <Border Width="24" Height="24" CornerRadius="{DynamicResource RadiusSm}"
+                                                    Background="{DynamicResource AppSurfaceAltBrush}"
+                                                    BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+                                                <materialIcons:MaterialIcon Kind="Cellphone" Width="14" Height="14"
+                                                                            Foreground="{DynamicResource AppAccentBrush}"
+                                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <TextBlock Text="{Binding DisplayName}" Classes="h3" VerticalAlignment="Center" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="10,0">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <materialIcons:MaterialIcon Kind="Circle" Width="8" Height="8"
+                                                                            Foreground="{Binding DisplayStatusColor}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding DisplayStatus}" Classes="label" Foreground="{Binding DisplayStatusColor}" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding DeviceStatusText}" Classes="caption" Foreground="{DynamicResource AppDangerBrush}" VerticalAlignment="Center" Margin="8,0,0,0" IsVisible="{Binding !DeviceCanStart}" />
+                                        </StackPanel>
+
+                                        <Button Grid.Column="2" Classes="ghost"
+                                                Command="{Binding #DeviceList.DataContext.SelectDeviceCommand}"
+                                                CommandParameter="{Binding}" ToolTip.Tip="Xem chi tiết"
+                                                Width="28" Height="28" Padding="0" VerticalAlignment="Center">
+                                            <materialIcons:MaterialIcon Kind="ChevronRight" Width="16" Height="16"
+                                                                        Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                                        </Button>
+                                    </Grid>
+
+                                    <!-- Row 2: Play Mode ComboBox + Source -->
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="Chế độ:" Classes="label" VerticalAlignment="Center" />
+                                            <ComboBox ItemsSource="{Binding PlayModes}" SelectedItem="{Binding SelectedPlayMode}"
+                                                      Width="110" Height="30" FontSize="12" Padding="6,2" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" Text="{Binding Device.Source}" Classes="muted" VerticalAlignment="Center" FontSize="12" />
+                                    </Grid>
+
+                                    <!-- Row 3: Stats -->
+                                    <Border Classes="Tile" Padding="6,4" Margin="0,2">
+                                        <Grid ColumnDefinitions="*,*,*,*" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                                <materialIcons:MaterialIcon Kind="Sword" Width="12" Height="12" Foreground="{DynamicResource AppTextSecondaryBrush}" />
+                                                <TextBlock Text="{Binding Stats.Battles}" Classes="statNum" FontSize="12" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                                <materialIcons:MaterialIcon Kind="Coins" Width="12" Height="12" Foreground="{DynamicResource AppAccentBrush}" />
+                                                <TextBlock Text="{Binding Stats.Gold, StringFormat='{}{0:#,##0}'}" Classes="statNum" FontSize="11" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                                <materialIcons:MaterialIcon Kind="Water" Width="12" Height="12" Foreground="{DynamicResource AppElixirBrush}" />
+                                                <TextBlock Text="{Binding Stats.Elixir, StringFormat='{}{0:#,##0}'}" Classes="statNum" FontSize="11" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                                <materialIcons:MaterialIcon Kind="SkullOutline" Width="12" Height="12" Foreground="{DynamicResource AppDarkElixirBrush}" />
+                                                <TextBlock Text="{Binding Stats.DarkElixir, StringFormat='{}{0:#,##0}'}" Classes="statNum" FontSize="11" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Row 4: Action Buttons -->
+                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                                        <Grid Grid.Column="0">
+                                            <Button Classes="accent" Command="{Binding StartCommand}" IsVisible="{Binding ShowStartButton}" Height="32" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <materialIcons:MaterialIcon Kind="Play" Width="14" Height="14" />
+                                                    <TextBlock Text="Chạy" FontSize="12" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Classes="danger" Command="{Binding StopCommand}" IsVisible="{Binding ShowStopButton}" Height="32" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <materialIcons:MaterialIcon Kind="Stop" Width="14" Height="14" />
+                                                    <TextBlock Text="Dừng" FontSize="12" />
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+
+                                        <Button Grid.Column="1" Command="{Binding #DeviceList.DataContext.ConfigureDeviceCommand}" CommandParameter="{Binding}" Height="32" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <materialIcons:MaterialIcon Kind="Cog" Width="14" Height="14" />
+                                                <TextBlock Text="Cấu hình" FontSize="12" />
+                                            </StackPanel>
+                                        </Button>
+
+                                        <Button Grid.Column="2" Command="{Binding #DeviceList.DataContext.ShowDeviceLogsCommand}" CommandParameter="{Binding}" Height="32" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <materialIcons:MaterialIcon Kind="ScriptText" Width="14" Height="14" />
+                                                <TextBlock Text="Nhật ký" FontSize="12" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!--
+                    Empty state (item 10).
+                -->
+                <StackPanel Grid.Row="2"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14"
+                            IsVisible="{Binding ShowEmptyState}">
+                    <Border Width="84" Height="84" CornerRadius="{DynamicResource RadiusMd}"
+                            Background="{DynamicResource AppSurfaceAltBrush}"
+                            BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+                            HorizontalAlignment="Center">
+                        <materialIcons:MaterialIcon Kind="CellphoneLink" Width="40" Height="40"
+                                                    Foreground="{DynamicResource AppTextMutedBrush}"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Đang quét thiết bị..." Classes="h2" HorizontalAlignment="Center" Opacity="0.7"
+                               IsVisible="{Binding ShowEmptyNotDetected}" />
+                    <TextBlock Text="Không tìm thấy thiết bị" Classes="h2" HorizontalAlignment="Center"
+                               IsVisible="{Binding ShowEmptyNoDevices}" />
+                    <TextBlock HorizontalAlignment="Center" Classes="muted"
+                               Text="Vui lòng mở giả lập để ứng dụng tự động nhận diện." />
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
     </Grid>
 </UserControl>
