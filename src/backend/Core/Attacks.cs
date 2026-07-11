@@ -119,6 +119,55 @@ namespace CvAut
             new(1091, 152), new(1109, 172), new(1207, 209), new(1296, 273), new(1311, 256)
         };
 
+        // Tọa độ rải quân từ góc DƯỚI-TRÁI. Không mirror theo Y vì bản đồ isometric và thanh UI che cạnh dưới.
+        private static readonly List<Point> DragonBottomL = new()
+        {
+            new(176, 500), new(205, 520), new(242, 548), new(281, 576), new(326, 607), new(372, 637),
+            new(418, 670), new(460, 650), new(505, 620), new(550, 590), new(595, 560), new(640, 530),
+            new(685, 500), new(730, 470)
+        };
+
+        private static readonly List<Point> BalloonBottomL = new()
+        {
+            new(176, 500), new(205, 520), new(242, 548), new(281, 576), new(326, 607), new(372, 637),
+            new(418, 670), new(460, 650), new(505, 620), new(550, 590), new(595, 560), new(640, 530),
+            new(685, 500), new(730, 470), new(326, 607), new(418, 670), new(505, 620)
+        };
+
+        private static readonly List<Point> DragonFallbackBottomL = new()
+        {
+            new(176, 500), new(205, 520), new(242, 548), new(281, 576), new(326, 607), new(372, 637),
+            new(418, 670), new(460, 650), new(505, 620), new(550, 590), new(595, 560), new(640, 530),
+            new(685, 500), new(730, 470), new(300, 690), new(380, 675)
+        };
+
+        private static readonly List<Point> BalloonFallbackBottomL = new()
+        {
+            new(176, 500), new(205, 520), new(242, 548), new(281, 576), new(326, 607), new(372, 637),
+            new(418, 670), new(460, 650), new(505, 620), new(550, 590), new(595, 560), new(640, 530),
+            new(685, 500), new(326, 607), new(418, 670), new(505, 620), new(380, 675)
+        };
+
+        private static readonly List<Point> RageBottomL = new()
+        {
+            new(568, 548), new(688, 645), new(812, 584), new(716, 480), new(800, 510)
+        };
+
+        private static readonly List<Point> FreezeBottomL = new()
+        {
+            new(620, 538), new(768, 624), new(774, 540), new(706, 430), new(800, 506), new(874, 506)
+        };
+
+        private static readonly List<HeroInfo> HeroBottomL = new()
+        {
+            new() { Name = "siege_machine", Coord = new Point(418, 670) },
+            new() { Name = "queen",         Coord = new Point(418, 670) },
+            new() { Name = "bk",            Coord = new Point(300, 690) },
+            new() { Name = "warden",        Coord = new Point(372, 637) },
+            new() { Name = "prince",        Coord = new Point(372, 637) },
+            new() { Name = "rc",            Coord = new Point(460, 650) }
+        };
+
         // Tọa độ thả phép Cuồng nộ (Rage Spell) cánh TRÁI
         private static readonly List<Point> RageL = new()
         {
@@ -150,6 +199,7 @@ namespace CvAut
         private string _side = "left"; // Cánh tấn công ("left" hoặc "right")
         private string _attackDirection = "top_left";
         private readonly HashSet<string> _requiredTabs = new(StringComparer.OrdinalIgnoreCase);
+        private bool _scanElectroDragonTab = true;
 
         private static bool IsStopRequested(CancellationToken token) => token.IsCancellationRequested;
 
@@ -206,61 +256,35 @@ namespace CvAut
             _fallbackDeployCoords.Clear();
             _heroCoords = new List<HeroInfo>();
 
-            SpellDeploymentGroups defaultSpellGroups = new()
-            {
-                RageInitial = RageL.Take(2).ToList(),
-                Freeze = FreezeL.ToList(),
-                RageRemaining = RageL.Skip(2).ToList()
-            };
+            Converter<Point, Point> mirror = pt => new Point(ScreenWidth - 1 - pt.X, pt.Y);
+            bool bottom = _attackDirection.StartsWith("bottom", StringComparison.OrdinalIgnoreCase);
+            bool right = _attackDirection.EndsWith("right", StringComparison.OrdinalIgnoreCase);
+            Converter<Point, Point> transform = right ? mirror : pt => pt;
 
-            if (_side == "left")
-            {
-                _deployCoords["dragon"] = DragonL;
-                _deployCoords["e_drag"] = DragonL.GetRange(2, 10);
-                _deployCoords["balloon"] = BalloonL;
-                _deployCoords["rage"] = RageL;
-                _deployCoords["rage_initial"] = defaultSpellGroups.RageInitial;
-                _deployCoords["freeze"] = FreezeL;
-                _deployCoords["rage_remaining"] = defaultSpellGroups.RageRemaining;
-                _deployCoords["siege_machine"] = new List<Point> { HeroL[0].Coord };
-                _deployCoords["azure_dragon"] = new List<Point> { HeroL[2].Coord };
-                _deployCoords["ice_minion"] = DragonL.GetRange(2, 10);
-                _deployCoords["ice_golem"] = DragonL.GetRange(4, 5);
-                _fallbackDeployCoords["dragon"] = DragonFallbackL;
-                _fallbackDeployCoords["e_drag"] = DragonFallbackL;
-                _fallbackDeployCoords["balloon"] = BalloonFallbackL;
+            List<Point> dragon = bottom ? DragonBottomL.ConvertAll(transform) : right ? DragonR : DragonL;
+            List<Point> balloon = bottom ? BalloonBottomL.ConvertAll(transform) : right ? BalloonR : BalloonL;
+            List<Point> rage = (bottom ? RageBottomL : RageL).ConvertAll(transform);
+            List<Point> freeze = (bottom ? FreezeBottomL : FreezeL).ConvertAll(transform);
+            List<Point> dragonFallback = (bottom ? DragonFallbackBottomL : DragonFallbackL).ConvertAll(transform);
+            List<Point> balloonFallback = (bottom ? BalloonFallbackBottomL : BalloonFallbackL).ConvertAll(transform);
+            List<HeroInfo> heroes = (bottom ? HeroBottomL : HeroL).ConvertAll(h => new HeroInfo { Name = h.Name, Coord = transform(h.Coord) });
 
-                _heroCoords = HeroL.ConvertAll(h => new HeroInfo { Name = h.Name, Coord = h.Coord });
-            }
-            else
-            {
-                // Quy đổi đối xứng tọa độ từ trái qua phải (1600 - x)
-                Converter<Point, Point> mirror = pt => new Point(ScreenWidth - 1 - pt.X, pt.Y);
+            _deployCoords["dragon"] = dragon;
+            _deployCoords["e_drag"] = dragon.GetRange(2, Math.Min(10, dragon.Count - 2));
+            _deployCoords["balloon"] = balloon;
+            _deployCoords["rage"] = rage;
+            _deployCoords["rage_initial"] = rage.Take(2).ToList();
+            _deployCoords["freeze"] = freeze;
+            _deployCoords["rage_remaining"] = rage.Skip(2).ToList();
+            _deployCoords["siege_machine"] = new List<Point> { heroes[0].Coord };
+            _deployCoords["azure_dragon"] = new List<Point> { heroes[2].Coord };
+            _deployCoords["ice_minion"] = dragon.GetRange(2, Math.Min(10, dragon.Count - 2));
+            _deployCoords["ice_golem"] = dragon.GetRange(4, Math.Min(5, dragon.Count - 4));
+            _fallbackDeployCoords["dragon"] = dragonFallback;
+            _fallbackDeployCoords["e_drag"] = dragonFallback;
+            _fallbackDeployCoords["balloon"] = balloonFallback;
 
-                _deployCoords["dragon"] = DragonR;
-                _deployCoords["e_drag"] = DragonR.GetRange(2, 10);
-                _deployCoords["balloon"] = BalloonR;
-                SpellDeploymentGroups mirroredSpellGroups = new()
-                {
-                    RageInitial = defaultSpellGroups.RageInitial.ConvertAll(mirror),
-                    Freeze = defaultSpellGroups.Freeze.ConvertAll(mirror),
-                    RageRemaining = defaultSpellGroups.RageRemaining.ConvertAll(mirror)
-                };
-
-                _deployCoords["rage"] = RageL.ConvertAll(mirror);
-                _deployCoords["rage_initial"] = mirroredSpellGroups.RageInitial;
-                _deployCoords["freeze"] = FreezeL.ConvertAll(mirror);
-                _deployCoords["rage_remaining"] = mirroredSpellGroups.RageRemaining;
-                _deployCoords["siege_machine"] = new List<Point> { mirror(HeroL[0].Coord) };
-                _deployCoords["azure_dragon"] = new List<Point> { mirror(HeroL[2].Coord) };
-                _deployCoords["ice_minion"] = DragonR.GetRange(2, 10);
-                _deployCoords["ice_golem"] = DragonR.GetRange(4, 5);
-                _fallbackDeployCoords["dragon"] = DragonFallbackL.ConvertAll(mirror);
-                _fallbackDeployCoords["e_drag"] = DragonFallbackL.ConvertAll(mirror);
-                _fallbackDeployCoords["balloon"] = BalloonFallbackL.ConvertAll(mirror);
-
-                _heroCoords = HeroL.ConvertAll(h => new HeroInfo { Name = h.Name, Coord = mirror(h.Coord) });
-            }
+            _heroCoords = heroes;
 
             ApplyCustomSpellCoordinates();
         }
@@ -311,7 +335,6 @@ namespace CvAut
             var categories = new Dictionary<string, string>
             {
                 { "dragon", "troops/dragon" },
-                { "e_drag", "troops/E_Drag" },
                 { "balloon", "troops/balloon" },
                 { "event_goblin", "troops/event_goblin" },
                 { "azure_dragon", "troops/azure_dragon" },
@@ -325,6 +348,15 @@ namespace CvAut
                 { "prince", "heroes/prince" },
                 { "rc", "heroes/rc" }
             };
+
+            if (_scanElectroDragonTab)
+            {
+                categories["e_drag"] = "troops/E_Drag";
+            }
+            else
+            {
+                Console.WriteLine("[ATTACK-CS] phase=scan_bar status=skip action=scan item=e_drag reason=strategy_not_selected");
+            }
 
             foreach (var eventTroop in LoadEventTroopTemplates())
             {
@@ -589,8 +621,9 @@ namespace CvAut
         /// Đảm bảo quân lính được thả hoàn toàn (rải bù nhanh nếu đọc thấy số lượng lính còn thừa trên giao diện thẻ).
         /// Chỉ chạy một lượt để ưu tiên tốc độ trong attack flow.
         /// </summary>
-        public void EnsureTroopFullyDeployed(string troopKey)
+        public void EnsureTroopFullyDeployed(string troopKey, CancellationToken token = default)
         {
+            if (IsStopRequested(token)) return;
             string key = troopKey.ToLower();
             if (!_tabs.TryGetValue(key, out Point tab))
             {
@@ -609,7 +642,7 @@ namespace CvAut
 
             for (int pass = 1; pass <= MaxRemainingDeployPasses; pass++)
             {
-                Thread.Sleep(RemainingTroopSettleDelayMs);
+                if (InterruptibleSleep(RemainingTroopSettleDelayMs, token)) return;
                 int remaining = ReadRemainingTroopCount(key, out double confidence);
                 if (remaining < 0)
                 {
@@ -621,7 +654,7 @@ namespace CvAut
                     }
 
                     _adb.Tap(tab.X, tab.Y);
-                    Thread.Sleep(TroopTabSelectDelayMs);
+                    if (InterruptibleSleep(TroopTabSelectDelayMs, token)) return;
                     var fallbackTaps = new List<Point>(fallbackTapCount);
                     int fallbackStartOffset = ((pass - 1) * 4) % fallbackCoords.Count;
                     for (int i = 0; i < fallbackTapCount; i++)
@@ -629,7 +662,7 @@ namespace CvAut
                         fallbackTaps.Add(JitterCoord(fallbackCoords[(fallbackStartOffset + i) % fallbackCoords.Count]));
                     }
 
-                    _adb.TapSequence(fallbackTaps);
+                    _adb.TapSequenceSafeFast(fallbackTaps, batchSize: 5, batchDelayMs: _delays.TroopDeployDelayMs, token);
                     return;
                 }
 
@@ -641,7 +674,7 @@ namespace CvAut
 
                 Console.WriteLine($"[ATTACK-CS WARNING] phase=validate_remaining status=fallback item={troopKey} remaining={remaining} confidence={confidence:F2}");
                 _adb.Tap(tab.X, tab.Y);
-                Thread.Sleep(TroopTabSelectDelayMs);
+                if (InterruptibleSleep(TroopTabSelectDelayMs, token)) return;
 
                 int tapCount = Math.Min(remaining + 2, fallbackCoords.Count);
                 var taps = new List<Point>(tapCount);
@@ -651,7 +684,7 @@ namespace CvAut
                     taps.Add(JitterCoord(fallbackCoords[(startOffset + i) % fallbackCoords.Count]));
                 }
 
-                _adb.TapSequence(taps);
+                _adb.TapSequenceSafeFast(taps, batchSize: 5, batchDelayMs: _delays.TroopDeployDelayMs, token);
             }
 
 
@@ -676,21 +709,21 @@ namespace CvAut
             }
 
             // Thử vùng ROI số 1
-            Rect countRoi = Rect.FromLTRB(tab.X - 5, tab.Y - 94, tab.X + 72, tab.Y - 42);
+            Rect countRoi = ImageUtils.ClampRect(Rect.FromLTRB(tab.X - 5, tab.Y - 94, tab.X + 72, tab.Y - 42), screenshot.Width, screenshot.Height);
             if (TryReadCountFromRoi(screenshot, countRoi, out int value, out confidence))
             {
                 return value;
             }
 
             // Thử vùng ROI số 2 (chỉ lấy phần chữ số)
-            Rect digitOnlyRoi = Rect.FromLTRB(tab.X + 22, tab.Y - 96, tab.X + 78, tab.Y - 50);
+            Rect digitOnlyRoi = ImageUtils.ClampRect(Rect.FromLTRB(tab.X + 22, tab.Y - 96, tab.X + 78, tab.Y - 50), screenshot.Width, screenshot.Height);
             if (TryReadCountFromRoi(screenshot, digitOnlyRoi, out value, out confidence))
             {
                 return value;
             }
 
             // Thử vùng ROI số 3 (rộng hơn)
-            Rect widerCountRoi = Rect.FromLTRB(tab.X - 20, tab.Y - 98, tab.X + 78, tab.Y - 40);
+            Rect widerCountRoi = ImageUtils.ClampRect(Rect.FromLTRB(tab.X - 20, tab.Y - 98, tab.X + 78, tab.Y - 40), screenshot.Width, screenshot.Height);
             if (TryReadCountFromRoi(screenshot, widerCountRoi, out value, out confidence))
             {
                 return value;
@@ -704,6 +737,13 @@ namespace CvAut
         /// </summary>
         private bool TryReadCountFromRoi(Mat screenshot, Rect roi, out int value, out double confidence)
         {
+            if (roi.Width <= 0 || roi.Height <= 0)
+            {
+                value = 0;
+                confidence = 0;
+                return false;
+            }
+
             // Thử dùng RGB thresholding trước để loại bỏ nền thẻ lính
             if (_vision.TryExtractNumericalMetrics(screenshot, roi, out value, out confidence, useRgbThresh: true) && IsPlausibleTroopCount(value, confidence))
             {
@@ -822,7 +862,7 @@ namespace CvAut
                 }
                 else
                 {
-                    Console.WriteLine($"[ATTACK-CS WARNING] phase=activate_abilities status=skip item={tag} reason=tab_unavailable");
+                    Console.WriteLine($"[ATTACK-CS] phase=activate_abilities status=skip item={tag} reason=optional_unavailable");
                 }
             }
         }
@@ -858,16 +898,18 @@ namespace CvAut
         public void Run(string attackStrategy = "Dragon_Attack", CancellationToken token = default, bool useEventTroops = false)
         {
             if (IsStopRequested(token)) return;
-            // Ngẫu nhiên chọn hướng tấn công trái/phải
-            string[] directions = { "top_left", "top_right", "bottom_left", "bottom_right" };
+            string normalizedStrategy = NormalizeAttackStrategy(attackStrategy);
+            // Tạm thời tắt hướng bottom_left/bottom_right khi thả lính.
+            string[] directions = { "top_left", "top_right" };
             _attackDirection = directions[_rand.Next(directions.Length)];
             _side = _attackDirection.EndsWith("left", StringComparison.OrdinalIgnoreCase) ? "left" : "right";
             InitializePatterns();
 
-            Console.WriteLine("[ATTACK-CS] phase=run_attack status=start strategy=\"" + attackStrategy + "\" side=\"" + _side.ToUpper() + "\" direction=\"" + _attackDirection + "\"");
+            Console.WriteLine("[ATTACK-CS] phase=run_attack status=start strategy=\"" + attackStrategy + "\" normalized_strategy=\"" + normalizedStrategy + "\" side=\"" + _side.ToUpper() + "\" direction=\"" + _attackDirection + "\"");
 
-            if (attackStrategy == "Dragon_Attack")
+            if (normalizedStrategy == "Dragon_Attack")
             {
+                _scanElectroDragonTab = false;
                 _requiredTabs.Clear();
                 foreach (string key in new[] { "dragon", "balloon", "rage", "freeze" })
                 {
@@ -907,10 +949,11 @@ namespace CvAut
                 DeploySpells("freeze", token);
                 DeploySpells("rage_remaining", token);
 
-                EnsureTroopFullyDeployed("dragon");
+                EnsureTroopFullyDeployed("dragon", token);
             }
-            else if (attackStrategy == "ElectroDragon_Attack")
+            else if (normalizedStrategy == "ElectroDragon_Attack")
             {
+                _scanElectroDragonTab = true;
                 _requiredTabs.Clear();
                 foreach (string key in new[] { "e_drag", "balloon", "rage", "freeze" })
                 {
@@ -946,10 +989,11 @@ namespace CvAut
                 DeploySpells("freeze", token);
                 DeploySpells("rage_remaining", token);
 
-                EnsureTroopFullyDeployed("e_drag");
+                EnsureTroopFullyDeployed("e_drag", token);
             }
             else
             {
+                _scanElectroDragonTab = true;
                 _requiredTabs.Clear();
                 UpdateTabs();
                 Console.WriteLine($"[ATTACK-CS ERROR] phase=run_attack status=fail reason=unknown_strategy strategy=\"{attackStrategy}\"");
@@ -959,6 +1003,17 @@ namespace CvAut
             if (InterruptibleSleep(_delays.GrandWardenAbilityDelayMs, token)) return;
             RetapHeroes(token);
             Console.WriteLine("[ATTACK-CS] phase=run_attack status=success");
+        }
+
+        private static string NormalizeAttackStrategy(string? attackStrategy)
+        {
+            string strategy = string.IsNullOrWhiteSpace(attackStrategy) ? "Dragon_Attack" : attackStrategy.Trim();
+            return strategy switch
+            {
+                "Dragon_Attack" or "Dragon attack" => "Dragon_Attack",
+                "ElectroDragon_Attack" or "Electro Dragon attack" => "ElectroDragon_Attack",
+                _ => strategy
+            };
         }
     }
 }

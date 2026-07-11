@@ -31,19 +31,35 @@ namespace CvAut
             @"C:\Program Files (x86)\Microvirt\MEmu\MEmu.exe"
         };
 
-        private static readonly string[] NoxCandidates =
-        {
-            @"C:\Program Files\Nox\bin\Nox.exe",
-            @"C:\Program Files (x86)\Nox\bin\Nox.exe",
-            @"D:\Program Files\Nox\bin\Nox.exe"
-        };
-
         private static readonly string[] LDPlayerCandidates =
         {
+            // Direct drive roots (LDPlayer9 / LDPlayer4 / LDPlayer variants).
             @"C:\LDPlayer\LDPlayer9\dnplayer.exe",
             @"C:\LDPlayer\LDPlayer4\dnplayer.exe",
             @"C:\LDPlayer\LDPlayer\dnplayer.exe",
-            @"D:\LDPlayer\LDPlayer9\dnplayer.exe"
+            @"D:\LDPlayer\LDPlayer9\dnplayer.exe",
+            @"D:\LDPlayer\LDPlayer4\dnplayer.exe",
+            @"D:\LDPlayer\LDPlayer\dnplayer.exe",
+            @"E:\LDPlayer\LDPlayer9\dnplayer.exe",
+            @"E:\LDPlayer\LDPlayer4\dnplayer.exe",
+            @"E:\LDPlayer\LDPlayer\dnplayer.exe",
+            @"F:\LDPlayer\LDPlayer9\dnplayer.exe",
+            @"F:\LDPlayer\LDPlayer4\dnplayer.exe",
+            @"F:\LDPlayer\LDPlayer\dnplayer.exe",
+            // Download subfolders (e.g. user machine installs into E:\Download\LDPlayer\LDPlayer9).
+            @"C:\Download\LDPlayer\LDPlayer9\dnplayer.exe",
+            @"D:\Download\LDPlayer\LDPlayer9\dnplayer.exe",
+            @"E:\Download\LDPlayer\LDPlayer9\dnplayer.exe",
+            @"F:\Download\LDPlayer\LDPlayer9\dnplayer.exe",
+            @"C:\Download\LDPlayer\LDPlayer4\dnplayer.exe",
+            @"D:\Download\LDPlayer\LDPlayer4\dnplayer.exe",
+            @"E:\Download\LDPlayer\LDPlayer4\dnplayer.exe",
+            @"F:\Download\LDPlayer\LDPlayer4\dnplayer.exe",
+            // Program Files variants.
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "LDPlayer", "LDPlayer9", "dnplayer.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "LDPlayer", "LDPlayer9", "dnplayer.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "LDPlayer", "LDPlayer4", "dnplayer.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "LDPlayer", "LDPlayer4", "dnplayer.exe"),
         };
 
         private static readonly string[] MuMuCandidates =
@@ -59,7 +75,6 @@ namespace CvAut
             switch (type?.ToLowerInvariant())
             {
                 case "memu": return MEmuCandidates;
-                case "nox": return NoxCandidates;
                 case "ldplayer": return LDPlayerCandidates;
                 case "mumu": return MuMuCandidates;
                 case "bluestacks":
@@ -68,9 +83,13 @@ namespace CvAut
             }
         }
 
-        public static bool EnsureReady(ADBHelper adb, string host, int port, string emulatorType, string emulatorPath, CancellationToken token)
+        public static bool EnsureReady(ADBHelper adb, string host, int port, string emulatorType, string emulatorPath, CancellationToken token, string emulatorInstance = "")
         {
             Console.WriteLine($"[ADB] phase=boot status=start host={host} port={port} type={emulatorType}");
+
+            // BlueStacks multi-instance: launch flag "--instance <key>" targets the exact
+            // instance; empty falls back to whatever instance the player opens by default.
+            string instanceName = emulatorInstance?.Trim() ?? string.Empty;
 
             string? playerPath = null;
             if (!string.IsNullOrWhiteSpace(emulatorPath) && File.Exists(emulatorPath))
@@ -97,11 +116,16 @@ namespace CvAut
                 string confPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                     @"BlueStacks_nxt\bluestacks.conf");
+                // Configure the exact selected instance; fall back to the historical
+                // Pie64 default only when no instance key was resolved from discovery.
+                string instancePrefix = string.IsNullOrWhiteSpace(instanceName)
+                    ? DefaultInstancePrefix
+                    : $"bst.instance.{instanceName}.";
                 if (File.Exists(confPath))
                 {
                     Console.WriteLine($"[ADB] phase=boot status=pending action=locate_conf details=\"{confPath}\"");
-                    Console.WriteLine($"[ADB] phase=boot status=pending action=set_instance prefix=\"{DefaultInstancePrefix}\"");
-                    displaySettingsChanged = EnsureBlueStacksDisplaySettings(confPath, DefaultInstancePrefix);
+                    Console.WriteLine($"[ADB] phase=boot status=pending action=set_instance prefix=\"{instancePrefix}\"");
+                    displaySettingsChanged = EnsureBlueStacksDisplaySettings(confPath, instancePrefix);
                 }
                 else
                 {
@@ -113,12 +137,12 @@ namespace CvAut
             {
                 Console.WriteLine("[ADB] phase=boot status=pending action=restart_emulator reason=settings_changed");
                 KillEmulatorProcesses(emulatorType);
-                Thread.Sleep(1500);
+                if (token.WaitHandle.WaitOne(1500)) return false;
             }
 
             if (!IsEmulatorRunning(emulatorType))
             {
-                if (!ResetAdbAndStartEmulator(playerPath, emulatorType, $"{emulatorType} is not running"))
+                if (!ResetAdbAndStartEmulator(playerPath, emulatorType, $"{emulatorType} is not running", instanceName))
                 {
                     return false;
                 }
@@ -131,7 +155,7 @@ namespace CvAut
             if (!WaitForOnline(adb, token))
             {
                 Console.WriteLine("[ADB WARNING] phase=boot status=pending action=wait_online reason=timeout_retrying");
-                if (!ResetAdbAndStartEmulator(playerPath, emulatorType, "ADB connection is not online"))
+                if (!ResetAdbAndStartEmulator(playerPath, emulatorType, "ADB connection is not online", instanceName))
                 {
                     return false;
                 }
@@ -167,7 +191,7 @@ namespace CvAut
             }
 
             Console.WriteLine("[ADB WARNING] phase=launch_app status=retry reason=timeout");
-            if (!ResetAdbAndStartEmulator(playerPath, emulatorType, "Clash of Clans failed to launch"))
+            if (!ResetAdbAndStartEmulator(playerPath, emulatorType, "Clash of Clans failed to launch", instanceName))
             {
                 return false;
             }
@@ -202,7 +226,7 @@ namespace CvAut
                     return true;
                 }
 
-                Thread.Sleep(1000);
+                if (token.WaitHandle.WaitOne(1000)) return false;
             }
 
             return false;
@@ -280,7 +304,7 @@ namespace CvAut
             return false;
         }
 
-        private static bool ResetAdbAndStartEmulator(string? playerPath, string emulatorType, string reason)
+        private static bool ResetAdbAndStartEmulator(string? playerPath, string emulatorType, string reason, string instanceName = "")
         {
             if (playerPath == null)
             {
@@ -290,7 +314,7 @@ namespace CvAut
 
             Console.WriteLine($"[ADB] phase=boot status=pending action=kill_adb reason=\"{reason}\"");
             KillAdbProcesses();
-            StartEmulator(playerPath);
+            StartEmulator(playerPath, emulatorType, instanceName);
             return true;
         }
 
@@ -299,7 +323,6 @@ namespace CvAut
             switch (type?.ToLowerInvariant())
             {
                 case "memu": return "MEmu";
-                case "nox": return "Nox";
                 case "ldplayer": return "dnplayer";
                 case "mumu": return "MuMuPlayer";
                 case "bluestacks":
@@ -379,7 +402,7 @@ namespace CvAut
                     return true;
                 }
 
-                Thread.Sleep(1000);
+                if (token.WaitHandle.WaitOne(1000)) return false;
             }
 
             return false;
@@ -394,13 +417,23 @@ namespace CvAut
                 || activityInfo.Contains(ClashPackageName, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static void StartEmulator(string playerPath)
+        private static void StartEmulator(string playerPath, string emulatorType = "", string instanceName = "")
         {
             var startInfo = new ProcessStartInfo
             {
                 FileName = playerPath,
                 UseShellExecute = true
             };
+
+            // BlueStacks HD-Player selects the target instance via "--instance <key>".
+            // Only pass it for BlueStacks; other players use their own launch scheme.
+            if (!string.IsNullOrWhiteSpace(instanceName)
+                && string.Equals(emulatorType, "BlueStacks", StringComparison.OrdinalIgnoreCase))
+            {
+                startInfo.ArgumentList.Add("--instance");
+                startInfo.ArgumentList.Add(instanceName);
+                Console.WriteLine($"[ADB] phase=boot status=pending action=start_emulator details=\"instance={instanceName}\"");
+            }
 
             Process.Start(startInfo);
         }

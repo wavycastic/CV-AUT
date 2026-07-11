@@ -22,11 +22,13 @@ namespace CvAut
     public static partial class ReleaseSecurity
     {
         private const string IntegrityManifestRelativePath = @"security\integrity.manifest.json";
-        private const string AllowDebuggerVariable = "SIMPLIMIXI_ALLOW_DEBUGGER";
+        private const string AllowDebuggerVariable = "AUTOCLASHOFCLAN20206_ALLOW_DEBUGGER";
         private const int RuntimeCheckIntervalMs = 15000;
 
+#if !DEBUG
         private static int _startupValidated;
         private static long _lastRuntimeCheckTicks;
+#endif
 
         public static void EnforceStartupPolicy()
         {
