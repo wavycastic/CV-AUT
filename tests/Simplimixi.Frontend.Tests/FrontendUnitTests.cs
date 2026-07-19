@@ -4,6 +4,7 @@ using CvAut;
 using CvAut.Models;
 using CvAut.Services.Emulators;
 using CvAut.ViewModels;
+using CvAut.ViewModels.Settings;
 using Xunit;
 
 namespace CvAut.Tests
@@ -123,6 +124,52 @@ namespace CvAut.Tests
             var store = NewIsolatedStore();
             store.DeleteProfile("Default");
             Assert.Contains(store.Profiles, p => p.Name == "Default");
+        }
+
+        [Fact]
+        public void NightVillage_DefaultsAndViewModel_RoundTrip()
+        {
+            var store = NewIsolatedStore();
+            JsonObject config = store.LoadActiveConfig();
+            var night = Assert.IsType<JsonObject>(config["night_village"]);
+            Assert.Equal("1", night["attack_count"]!.ToString());
+            Assert.Equal("true", night["enable_attack"]!.ToString().ToLowerInvariant());
+            Assert.Equal("false", night["boost_clock_tower"]!.ToString().ToLowerInvariant());
+            Assert.Equal("true", night["army_management"]!.ToString().ToLowerInvariant());
+            Assert.Equal("auto", night["army_formation"]!.ToString());
+            Assert.Equal("fixed", night["attack_count_mode"]!.ToString());
+            Assert.Equal("true", night["enable_stage2"]!.ToString().ToLowerInvariant());
+
+            var vm = new NightVillageViewModel(store)
+            {
+                AttackCount = 3,
+                EnableAttack = true,
+                BoostClockTower = true,
+                UpgradeWall = true,
+                FillArmy = true,
+                ArmyFormation = "power_pekka",
+                WaitForHeroes = true,
+                HeroWaitSeconds = 120,
+                AttackCountMode = "trophy",
+                CustomDropOrderEnabled = true,
+                DropOrder = "BattleMachine|Bomber|PowerPekka",
+                NextTroopDelayMs = 700,
+                SameTroopDelayMs = 220
+            };
+            vm.ApplyTo(config);
+
+            night = Assert.IsType<JsonObject>(config["night_village"]);
+            Assert.Equal("3", night["attack_count"]!.ToString());
+            Assert.Equal("true", night["boost_clock_tower"]!.ToString().ToLowerInvariant());
+            Assert.Equal("true", night["upgrade_wall"]!.ToString().ToLowerInvariant());
+            Assert.Equal("true", night["fill_army"]!.ToString().ToLowerInvariant());
+            Assert.Equal("power_pekka", night["army_formation"]!.ToString());
+            Assert.Equal("120", night["hero_wait_seconds"]!.ToString());
+            Assert.Equal("trophy", night["attack_count_mode"]!.ToString());
+            Assert.Equal("true", night["custom_drop_order_enabled"]!.ToString().ToLowerInvariant());
+            Assert.Equal("BattleMachine|Bomber|PowerPekka", night["drop_order"]!.ToString());
+            Assert.Equal("700", night["next_troop_delay_ms"]!.ToString());
+            Assert.Equal("220", night["same_troop_delay_ms"]!.ToString());
         }
     }
 
@@ -313,6 +360,31 @@ namespace CvAut.Tests
             {
                 AppLog.LineWrittenWithContext -= handler;
             }
+        }
+    }
+
+    public class LogEntryDisplayTests
+    {
+        [Fact]
+        public void Summary_IncludesBotInputFieldsForDebugging()
+        {
+            var entry = new LogEntry("[ADB] phase=input status=send action=bot_swipe x1=1 y1=2 x2=3 y2=4 duration_ms=300", LogLevel.Info, "emu:5556");
+
+            Assert.Contains("giai_đoạn=nhập_liệu", entry.Summary);
+            Assert.Contains("hành_động=bot_swipe", entry.Summary);
+            Assert.Contains("emu:5556", entry.SearchText);
+        }
+
+        [Fact]
+        public void Summary_TranslatesStatusAndCommonMessages()
+        {
+            var entry1 = new LogEntry("[WALL] phase=read_resources status=success reason=unsupported_wall_level", LogLevel.Info);
+            Assert.Contains("giai_đoạn=đọc_tài_nguyên", entry1.Summary);
+            Assert.Contains("trạng_thái=thành_công", entry1.Summary);
+            Assert.Contains("lý_do=cấp_tường_không_hỗ_trợ", entry1.Summary);
+
+            var entry2 = new LogEntry("Screenshot failed", LogLevel.Error);
+            Assert.Contains("[LỖI] Chụp màn hình giả lập thất bại.", entry2.Summary);
         }
     }
 
