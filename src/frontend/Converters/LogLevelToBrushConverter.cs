@@ -22,7 +22,7 @@ namespace CvAut.Converters
             {
                 LogLevel.Error => "AppDangerBrush",
                 LogLevel.Warning => "AppWarningBrush",
-                LogLevel.Info => "AppSuccessBrush",
+                LogLevel.Info => "AppTextPrimaryBrush",
                 _ => "AppTextMutedBrush",
             };
 
@@ -31,7 +31,14 @@ namespace CvAut.Converters
                 return brush;
             }
 
-            return Brushes.Gray;
+            // Fallback colors for safety
+            return value switch
+            {
+                LogLevel.Error => Brushes.Red,
+                LogLevel.Warning => Brushes.Orange,
+                LogLevel.Info => Brush.Parse("#ABB2BF"),
+                _ => Brushes.Gray
+            };
         }
 
         public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

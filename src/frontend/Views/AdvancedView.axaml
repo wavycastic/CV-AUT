@@ -9,7 +9,118 @@
              x:DataType="vm:AdvancedViewModel">
     <Design.DataContext><vm:AdvancedViewModel /></Design.DataContext>
 
-    <Grid Background="{DynamicResource AppBackgroundBrush}">
-        <!-- Blank View -->
+    <Grid RowDefinitions="Auto,*" Margin="18" Background="{DynamicResource AppBackgroundBrush}">
+        <!-- Row 0: Header with Actions -->
+        <Border Grid.Row="0" Classes="Card" Padding="16" Margin="0,0,0,16">
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <materialIcons:MaterialIcon Kind="Tune" Width="22" Height="22"
+                                                Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="Thiết lập nâng cao" Classes="h2" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Text="Tinh chỉnh các tham số trễ và tọa độ thả quân tự động." Classes="muted" />
+            </StackPanel>
+            
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Status}" Classes="caption" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <Button Classes="accent" Content="Lưu cài đặt" Command="{Binding SaveCommand}" Height="34" Padding="16,0"/>
+                <Button Content="Hoàn tác" Command="{Binding UndoCommand}" Height="34" Padding="16,0"/>
+            </StackPanel>
+        </Grid>
+        </Border>
+
+        <!-- Row 1: Content Columns -->
+        <Grid Grid.Row="1" ColumnDefinitions="320,*" ColumnSpacing="18">
+            <!-- Left Column: Delays & Actions -->
+            <StackPanel Grid.Column="0" Spacing="14">
+                <!-- Delays Card -->
+                <Border Classes="Card" Padding="16">
+                    <StackPanel Spacing="14">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,2">
+                            <materialIcons:MaterialIcon Kind="ClockOutline" Width="16" Height="16" Foreground="{DynamicResource AppAccentBrush}"/>
+                            <TextBlock Text="THAM SỐ TRỄ (MS)" Classes="subhead" VerticalAlignment="Center" />
+                        </StackPanel>
+                        
+                        <!-- Search Delay -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Trễ tìm kiếm trận" Classes="label" />
+                            <NumericUpDown Value="{Binding SearchDelayMs}" Minimum="100" Maximum="10000" Increment="50" Height="32"/>
+                            <TextBlock Text="Khoảng thời gian chờ giữa các lần bấm tìm trận đấu mới." Classes="caption" Margin="2,0,0,0" />
+                        </StackPanel>
+
+                        <!-- Deploy Delay -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Trễ thả quân" Classes="label" />
+                            <NumericUpDown Value="{Binding DeployDelayMs}" Minimum="10" Maximum="2000" Increment="10" Height="32"/>
+                            <TextBlock Text="Khoảng thời gian giữa các lượt thả đơn vị quân lính." Classes="caption" Margin="2,0,0,0" />
+                        </StackPanel>
+
+                        <!-- Return Home Delay -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Trễ trở về nhà" Classes="label" />
+                            <NumericUpDown Value="{Binding ReturnHomeDelayMs}" Minimum="500" Maximum="10000" Increment="100" Height="32"/>
+                            <TextBlock Text="Thời gian chờ sau khi bấm kết thúc trận để load về làng." Classes="caption" Margin="2,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Clean/Reset Card -->
+                <Border Classes="Card" Padding="16">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <materialIcons:MaterialIcon Kind="Restore" Width="16" Height="16" Foreground="{DynamicResource AppDangerTextBrush}"/>
+                            <TextBlock Text="KHÔI PHỤC TỌA ĐỘ" Classes="subhead" />
+                        </StackPanel>
+                        <TextBlock Text="Thiết lập lại toàn bộ tọa độ thả quân về 0 (sẽ tự động xác định lại khi chạy)." Classes="muted" TextWrapping="Wrap"/>
+                        <Button Classes="danger" Content="Xóa toàn bộ tọa độ" Command="{Binding ClearCoordinatesCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Height="32"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- Right Column: Coordinates List -->
+            <Border Grid.Column="1" Classes="Card" Padding="16">
+                <Grid RowDefinitions="Auto,*">
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+                        <materialIcons:MaterialIcon Kind="GamepadVariant" Width="16" Height="16" Foreground="{DynamicResource AppAccentBrush}"/>
+                        <TextBlock Text="TỌA ĐỘ THẢ QUÂN VÀ PHÉP BỔ TRỢ" Classes="subhead" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <ScrollViewer Grid.Row="1" Background="Transparent">
+                        <ItemsControl ItemsSource="{Binding Coordinates}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource AppSurfaceAltBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Margin="0,0,10,10" Width="228" Padding="12">
+                                        <StackPanel Spacing="8">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="{Binding DisplayDirection}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource AppAccentBrush}"/>
+                                                <Border Grid.Column="1" Padding="6,2" CornerRadius="4" Background="{DynamicResource AppSurfaceBrush}">
+                                                    <TextBlock Text="{Binding DisplayKind}" FontSize="10" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
+                                                </Border>
+                                            </Grid>
+                                            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                                                <StackPanel Spacing="3">
+                                                    <TextBlock Text="Tọa độ X" Classes="caption"/>
+                                                    <NumericUpDown Value="{Binding X}" Minimum="0" Maximum="2000" Height="28" Padding="6,2" FontSize="11"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="3">
+                                                    <TextBlock Text="Tọa độ Y" Classes="caption"/>
+                                                    <NumericUpDown Value="{Binding Y}" Minimum="0" Maximum="2000" Height="28" Padding="6,2" FontSize="11"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

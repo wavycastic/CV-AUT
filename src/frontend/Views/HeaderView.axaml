@@ -12,11 +12,12 @@
 
     <Grid>
     <Border Padding="12,0" Height="48"
-            Background="{DynamicResource AppSurfaceBrush}"
-            BorderBrush="{DynamicResource AppBorderBrush}"
-            BorderThickness="0,0,0,1">
+             Background="{DynamicResource AppSurfaceBrush}"
+             BorderBrush="{DynamicResource AppBorderBrush}"
+             BorderThickness="0,0,0,1"
+             WindowDecorationProperties.ElementRole="TitleBar">
         <!-- Accent underline -->
-        <Grid ColumnDefinitions="*,Auto">
+        <Grid ColumnDefinitions="*,Auto,Auto">
             <!-- Left side: App Logo and Title -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Border Width="24" Height="24" CornerRadius="{DynamicResource RadiusSm}" Background="{DynamicResource AppAccentBrush}">
@@ -25,20 +26,27 @@
                                                 Foreground="{DynamicResource AppAccentTextBrush}" />
                 </Border>
                 <TextBlock Text="SimpliMixi" Classes="statNum" VerticalAlignment="Center" />
-                <TextBlock Text="Bảng điều khiển" Classes="caption" VerticalAlignment="Center" Margin="0,2,0,0" />
             </StackPanel>
 
-            <!-- Right side: Actions (License) -->
+            <!-- Right side: Actions (License & Profile selector) -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                 <Button Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).OpenLicenseCommand}"
                         ToolTip.Tip="Bản quyền" Classes="ghost" Width="32" Height="32" Padding="0">
                     <materialIcons:MaterialIcon Kind="KeyVariant" Width="14" Height="14"
                                                 Foreground="{DynamicResource AppTextSecondaryBrush}" />
                 </Button>
-                <Button Click="MinimizeButton_OnClick"
-                        ToolTip.Tip="Thu nhỏ" Classes="ghost" Width="32" Height="32" Padding="0">
-                    <materialIcons:MaterialIcon Kind="WindowMinimize" Width="14" Height="14"
-                                                Foreground="{DynamicResource AppTextSecondaryBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,-12,0">
+                <Button Width="44" Height="48" Padding="0" CornerRadius="0" Classes="ghost"
+                        WindowDecorationProperties.ElementRole="MinimizeButton"
+                        Click="MinimizeButton_OnClick" ToolTip.Tip="Thu nhỏ">
+                    <materialIcons:MaterialIcon Kind="WindowMinimize" Width="14" Height="14" />
+                </Button>
+                <Button Width="44" Height="48" Padding="0" CornerRadius="0" Classes="ghost"
+                        WindowDecorationProperties.ElementRole="CloseButton"
+                        Click="CloseButton_OnClick" ToolTip.Tip="Đóng">
+                    <materialIcons:MaterialIcon Kind="Close" Width="15" Height="15" />
                 </Button>
             </StackPanel>
         </Grid>

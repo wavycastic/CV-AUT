@@ -13,6 +13,10 @@ namespace CvAut
     {
         private static readonly object Gate = new object();
         private static bool _installed;
+        private static StreamWriter? _fileWriter;
+
+        /// <summary>Absolute path of the repo-local log file created for this process.</summary>
+        public static string? CurrentLogFilePath { get; private set; }
 
         /// <summary>Raised on whatever thread the backend logged from. Subscribers must marshal to the UI thread.</summary>
         public static event Action<string>? LineWritten;
@@ -41,10 +45,67 @@ namespace CvAut
 
                 _installed = true;
                 TextWriter original = Console.Out;
-                var tee = new LineForwardingWriter(original, Raise);
+                TextWriter output = CreateRepoLogWriter(original);
+                var tee = new LineForwardingWriter(output, Raise);
                 Console.SetOut(tee);
                 Console.SetError(tee);
+
+                if (!string.IsNullOrWhiteSpace(CurrentLogFilePath))
+                {
+                    Console.WriteLine($"[APP_LOG] phase=startup status=ready path=\"{CurrentLogFilePath}\"");
+                }
             }
+        }
+
+        private static TextWriter CreateRepoLogWriter(TextWriter original)
+        {
+            try
+            {
+                string repoRoot = FindRepoRoot();
+                string logDir = Path.Combine(repoRoot, "logs");
+                Directory.CreateDirectory(logDir);
+
+                string logPath = Path.Combine(logDir, $"dotnet_run_{DateTime.Now:yyyyMMdd_HHmmss_fff}.log");
+                _fileWriter = new StreamWriter(new FileStream(logPath, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+                {
+                    AutoFlush = true
+                };
+
+                CurrentLogFilePath = logPath;
+                return new TeeTextWriter(original, _fileWriter);
+            }
+            catch (Exception ex)
+            {
+                original.WriteLine($"[APP_LOG] phase=startup status=fail reason=\"{ex.Message}\"");
+                return original;
+            }
+        }
+
+        private static string FindRepoRoot()
+        {
+            string? dir = Environment.CurrentDirectory;
+            while (!string.IsNullOrWhiteSpace(dir))
+            {
+                if (File.Exists(Path.Combine(dir, "CV-AUT.slnx")) || Directory.Exists(Path.Combine(dir, ".git")) || File.Exists(Path.Combine(dir, ".git")))
+                {
+                    return dir;
+                }
+
+                dir = Directory.GetParent(dir)?.FullName;
+            }
+
+            dir = AppContext.BaseDirectory;
+            while (!string.IsNullOrWhiteSpace(dir))
+            {
+                if (File.Exists(Path.Combine(dir, "CV-AUT.slnx")) || Directory.Exists(Path.Combine(dir, ".git")) || File.Exists(Path.Combine(dir, ".git")))
+                {
+                    return dir;
+                }
+
+                dir = Directory.GetParent(dir)?.FullName;
+            }
+
+            return Environment.CurrentDirectory;
         }
 
         internal static void Raise(string line)
@@ -123,6 +184,57 @@ namespace CvAut
                 string line = sb.ToString();
                 sb.Clear();
                 _onLine(line);
+            }
+        }
+
+        private sealed class TeeTextWriter : TextWriter
+        {
+            private readonly TextWriter _first;
+            private readonly TextWriter _second;
+            private readonly object _gate = new object();
+
+            public TeeTextWriter(TextWriter first, TextWriter second)
+            {
+                _first = first;
+                _second = second;
+            }
+
+            public override Encoding Encoding => _first.Encoding;
+
+            public override void Write(char value)
+            {
+                lock (_gate)
+                {
+                    _first.Write(value);
+                    _second.Write(value);
+                }
+            }
+
+            public override void Write(string? value)
+            {
+                lock (_gate)
+                {
+                    _first.Write(value);
+                    _second.Write(value);
+                }
+            }
+
+            public override void WriteLine(string? value)
+            {
+                lock (_gate)
+                {
+                    _first.WriteLine(value);
+                    _second.WriteLine(value);
+                }
+            }
+
+            public override void Flush()
+            {
+                lock (_gate)
+                {
+                    _first.Flush();
+                    _second.Flush();
+                }
             }
         }
     }

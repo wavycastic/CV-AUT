@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CvAut.Models;
 using CvAut.ViewModels.Settings;
 
 namespace CvAut.ViewModels
@@ -30,6 +31,16 @@ namespace CvAut.ViewModels
 
         public ObservableCollection<SettingsTab> Tabs { get; } = new();
         public ObservableCollection<BotProfile> Profiles { get; } = new();
+        public ObservableCollection<string> PlayModes { get; } = new()
+        {
+            PlayMode.MainVillageLabel,
+            PlayMode.NightVillageLabel,
+            PlayMode.ClanGamesLabel,
+            PlayMode.ClanCapitalLabel
+        };
+
+        [ObservableProperty]
+        private string _selectedPlayMode = PlayMode.MainVillageLabel;
 
         public bool HasTabs => Tabs.Count > 0;
 
@@ -58,6 +69,25 @@ namespace CvAut.ViewModels
 
         public SettingsViewModel() : this(new MainVillageViewModel(), new NightVillageViewModel(), new ClanGamesViewModel(), new ClanCapitalViewModel(), new ConfigStore())
         {
+        }
+
+        partial void OnSelectedPlayModeChanged(string value)
+        {
+            if (!IsInstanceMode)
+            {
+                return;
+            }
+
+            RebuildInstanceModeTabs(value);
+        }
+
+        private void RebuildInstanceModeTabs(string playMode)
+        {
+            Tabs.Clear();
+            SettingsTab selectedModeTab = CreateTabForPlayMode(playMode);
+            Tabs.Add(selectedModeTab);
+            SelectedTab = selectedModeTab;
+            OnPropertyChanged(nameof(HasTabs));
         }
 
         [RelayCommand]
@@ -209,44 +239,28 @@ namespace CvAut.ViewModels
             _clanCapital.Reload();
             RefreshProfiles();
 
-            Tabs.Clear();
-            OnPropertyChanged(nameof(HasTabs));
-            if (string.Equals(playMode, "Làng chính", System.StringComparison.OrdinalIgnoreCase))
-            {
-                Tabs.Add(new SettingsTab("Làng chính", "Home", _mainVillage));
-            }
-            else if (string.Equals(playMode, "Làng đêm", System.StringComparison.OrdinalIgnoreCase))
-            {
-                Tabs.Add(new SettingsTab("Làng đêm", "MoonWaningCrescent", _nightVillage));
-            }
-            else if (string.Equals(playMode, "Trò chơi hội (sắp ra mắt)", System.StringComparison.OrdinalIgnoreCase))
-            {
-                Tabs.Add(new SettingsTab("Trò chơi hội", "SwordCross", _clanGames));
-            }
-            else if (string.Equals(playMode, "Kinh đô hội (sắp ra mắt)", System.StringComparison.OrdinalIgnoreCase))
-            {
-                Tabs.Add(new SettingsTab("Kinh đô hội", "HomeModern", _clanCapital));
-            }
-            else
-            {
-                Tabs.Add(new SettingsTab("Làng chính", "Home", _mainVillage));
-                Tabs.Add(new SettingsTab("Làng đêm", "MoonWaningCrescent", _nightVillage));
-                Tabs.Add(new SettingsTab("Trò chơi hội", "SwordCross", _clanGames));
-                Tabs.Add(new SettingsTab("Kinh đô hội", "HomeModern", _clanCapital));
-            }
-
-            if (Tabs.Count > 0)
-            {
-                SelectedTab = Tabs[0];
-            OnPropertyChanged(nameof(HasTabs));
-            }
+            SelectedPlayMode = PlayMode.ToDisplay(playMode);
+            RebuildInstanceModeTabs(SelectedPlayMode);
 
             Status = "Đã tải cấu hình " + name;
+        }
+
+        private SettingsTab CreateTabForPlayMode(string playMode)
+        {
+            string token = Models.PlayMode.ToToken(playMode);
+            return token switch
+            {
+                "night_village" => new SettingsTab("Làng đêm", "MoonWaningCrescent", _nightVillage),
+                "clan_games" => new SettingsTab("Trò chơi hội", "SwordCross", _clanGames),
+                "clan_capital" => new SettingsTab("Kinh đô hội", "HomeModern", _clanCapital),
+                _ => new SettingsTab("Làng chính", "Home", _mainVillage)
+            };
         }
 
         public void UpdateProfileDirectly()
         {
             var config = _configStore.LoadActiveConfig();
+            config["play_mode"] = PlayMode.ToToken(SelectedPlayMode);
             _mainVillage.ApplyTo(config);
             _nightVillage.ApplyTo(config);
             _clanGames.ApplyTo(config);

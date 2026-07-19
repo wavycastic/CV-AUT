@@ -48,12 +48,15 @@
 
             <!-- Semantic (Gaming Neon) -->
             <Color x:Key="AppSuccessColor">#22c55e</Color>
-            <Color x:Key="AppWarningColor">#f59e0b</Color>
+            <Color x:Key="AppSuccessSoftColor">#1822c55e</Color>
+            <Color x:Key="AppSuccessHoverColor">#cc22c55e</Color>
+            <Color x:Key="AppSuccessTextColor">#ff22c55e</Color>
+            <Color x:Key="AppSuccessBorderColor">#8022c55e</Color>
             <Color x:Key="AppDangerColor">#ef4444</Color>
-            <Color x:Key="AppDangerSoftColor">#450a0a</Color>
-            <Color x:Key="AppDangerHoverColor">#5B1414</Color>
-            <Color x:Key="AppDangerTextColor">#fca5a5</Color>
-            <Color x:Key="AppDangerBorderColor">#991b1b</Color>
+            <Color x:Key="AppDangerSoftColor">#18ef4444</Color>
+            <Color x:Key="AppDangerHoverColor">#ccef4444</Color>
+            <Color x:Key="AppDangerTextColor">#ffef4444</Color>
+            <Color x:Key="AppDangerBorderColor">#80ef4444</Color>
             <Color x:Key="AppInfoColor">#06b6d4</Color>
 
             <!-- Brushes (what views actually bind) -->
@@ -78,7 +81,10 @@
             <SolidColorBrush x:Key="AppAccentTextBrush" Color="{StaticResource AppAccentTextColor}" />
             <SolidColorBrush x:Key="AppAccentBorderBrush" Color="{StaticResource AppAccentBorderColor}" />
             <SolidColorBrush x:Key="AppSuccessBrush" Color="{StaticResource AppSuccessColor}" />
-            <SolidColorBrush x:Key="AppWarningBrush" Color="{StaticResource AppWarningColor}" />
+            <SolidColorBrush x:Key="AppSuccessSoftBrush" Color="{StaticResource AppSuccessSoftColor}" />
+            <SolidColorBrush x:Key="AppSuccessHoverBrush" Color="{StaticResource AppSuccessHoverColor}" />
+            <SolidColorBrush x:Key="AppSuccessTextBrush" Color="{StaticResource AppSuccessTextColor}" />
+            <SolidColorBrush x:Key="AppSuccessBorderBrush" Color="{StaticResource AppSuccessBorderColor}" />
             <SolidColorBrush x:Key="AppDangerBrush" Color="{StaticResource AppDangerColor}" />
             <SolidColorBrush x:Key="AppDangerSoftBrush" Color="{StaticResource AppDangerSoftColor}" />
             <SolidColorBrush x:Key="AppDangerHoverBrush" Color="{StaticResource AppDangerHoverColor}" />
@@ -219,6 +225,27 @@
             <Setter Property="RenderTransform" Value="scale(0.97)" />
         </Style>
 
+        <!-- Success button -->
+        <Style Selector="Button.success">
+            <Setter Property="Background" Value="{DynamicResource AppSuccessSoftBrush}" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.15" />
+                </Transitions>
+            </Setter>
+            <Setter Property="Foreground" Value="{DynamicResource AppSuccessTextBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSuccessBorderBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.success /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource AppSuccessTextBrush}" />
+        </Style>
+        <Style Selector="Button.success:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSuccessHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSuccessBrush}" />
+            <Setter Property="TextElement.Foreground" Value="#0a0a0c" />
+        </Style>
+
         <!-- Danger button -->
         <Style Selector="Button.danger">
             <Setter Property="Background" Value="{DynamicResource AppDangerSoftBrush}" />
@@ -237,6 +264,38 @@
         <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AppDangerHoverBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource AppDangerBrush}" />
+            <Setter Property="TextElement.Foreground" Value="#0a0a0c" />
+        </Style>
+
+        <!-- Segmented pill buttons (Start / Stop halves) -->
+        <Style Selector="Button.seg-start,
+                        Button.seg-end">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.15" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button.seg-start /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="10,0,0,10" />
+        </Style>
+        <Style Selector="Button.seg-end /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="0,10,10,0" />
+        </Style>
+        <Style Selector="Button.seg-start:pointerover,
+                        Button.seg-end:pointerover">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.seg-start:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                        Button.seg-end:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+        </Style>
+        <Style Selector="Button.seg-start:pressed /template/ ContentPresenter#PART_ContentPresenter,
+                        Button.seg-end:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
         </Style>
 
         <!-- Ghost button: transparent, used for nav / icon-only actions -->
@@ -319,9 +378,12 @@
         <Style Selector="CheckBox:checked">
             <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
         </Style>
-        <Style Selector="CheckBox:checked /template/ Border#NormalRectangle">
+        <Style Selector="CheckBox:checked /template/ Border#border">
             <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+        <Style Selector="CheckBox:checked /template/ Path#checkMark">
+            <Setter Property="Stroke" Value="{DynamicResource AppBackgroundBrush}" />
         </Style>
 
         

@@ -16,14 +16,10 @@
         <conv:LogLevelToBrushConverter x:Key="LevelToBrush" />
     </UserControl.Resources>
 
-    <Grid Background="{DynamicResource AppBackgroundBrush}" RowDefinitions="Auto,*" Margin="16" RowSpacing="10">
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-            <Button Content="Copy" Command="{Binding CopyCommand}" Height="32" />
-            <Button Content="Export" Command="{Binding ExportCommand}" Height="32" />
-        </StackPanel>
-
-        <Border Grid.Row="1" CornerRadius="{DynamicResource RadiusMd}" ClipToBounds="True" BorderThickness="1"
-                Background="{DynamicResource AppConsoleBgBrush}" BorderBrush="{DynamicResource AppBorderBrush}" Padding="8">
+    <Grid Background="{DynamicResource AppBackgroundBrush}" RowDefinitions="*,Auto" Margin="16" RowSpacing="12">
+        <!-- Row 0: The Log Console -->
+        <Border Grid.Row="0" CornerRadius="{DynamicResource RadiusMd}" ClipToBounds="True" BorderThickness="1"
+                Background="{DynamicResource AppConsoleBgBrush}" BorderBrush="{DynamicResource AppBorderBrush}" Padding="12,10">
             <Grid>
                 <TextBlock Text="Không có log phù hợp" Classes="muted"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -34,17 +30,23 @@
                           ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.Styles>
                         <Style Selector="ListBoxItem">
-                            <Setter Property="Padding" Value="2,1" />
+                            <Setter Property="Padding" Value="2,4" />
                             <Setter Property="MinHeight" Value="0" />
                         </Style>
                     </ListBox.Styles>
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="models:LogEntry">
-                            <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="6">
-                                <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Top" />
-                                <TextBlock Grid.Column="1" Text="{Binding FormattedLevel}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="{Binding Level, Converter={StaticResource LevelToBrush}}" VerticalAlignment="Top" />
-                                <TextBlock Grid.Column="2" Text="{Binding FormattedModule}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Top" />
-                                <TextBlock Grid.Column="3" Text="{Binding CleanMessage}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="{DynamicResource AppLogTextBrush}" TextWrapping="Wrap" VerticalAlignment="Top" />
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                <!-- Timestamp (Clean, muted gray-blue) -->
+                                <TextBlock Grid.Column="0" Text="{Binding TimeText}" 
+                                           FontSize="12" Foreground="#80A0A0A0" VerticalAlignment="Top" />
+                                
+                                <!-- Message (Sleek text using default App font, colored by severity for WRN/ERR) -->
+                                <TextBlock Grid.Column="1" Text="{Binding Summary}" 
+                                           FontSize="12.5" 
+                                           LineHeight="18"
+                                           Foreground="{Binding Level, Converter={StaticResource LevelToBrush}}" 
+                                           TextWrapping="Wrap" VerticalAlignment="Top" />
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -52,6 +54,10 @@
             </Grid>
         </Border>
 
-        <TextBlock Grid.Row="1" Text="{Binding Status}" Classes="caption" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+        <!-- Row 1: Bottom Control Area -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+            <!-- Right: Copy Button -->
+            <Button Grid.Column="1" Content="Sao chép nhật ký" Command="{Binding CopyCommand}" Height="32" Padding="16,0" VerticalAlignment="Center" />
+        </Grid>
     </Grid>
 </UserControl>

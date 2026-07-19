@@ -12,11 +12,13 @@
     x:Class="CvAut.Views.MainWindow"
     x:DataType="vm:MainWindowViewModel"
     Title="SimpliMixi Console"
-    Width="1280"
+    Width="480"
     Height="720"
-    MinWidth="800"
+    MinWidth="450"
     MinHeight="500"
-    CanResize="True"
+    CanResize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    WindowDecorations="None"
     WindowStartupLocation="CenterScreen"
     FontFamily="Inter, Segoe UI, sans-serif"
     Background="{DynamicResource AppBackgroundBrush}">
@@ -26,20 +28,62 @@
     </Design.DataContext>
 
     <Grid Background="{DynamicResource AppBackgroundBrush}">
-        <Grid RowDefinitions="Auto,Auto,*,Auto" Background="{DynamicResource AppBackgroundBrush}">
+        <Grid RowDefinitions="Auto,*,Auto,Auto" Background="{DynamicResource AppBackgroundBrush}">
             <!-- Row 0: Header -->
             <views:HeaderView Grid.Row="0" DataContext="{Binding TopBar}" />
-            
-            <!-- Row 1: Mini Status Bar -->
-            <views:StatusBarView Grid.Row="1" DataContext="{Binding TopBar}" />
 
-            <!-- Row 2: Content Area -->
+            <!-- Row 1: Content Area -->
             <ContentControl
-                Grid.Row="2"
+                Grid.Row="1"
                 Content="{Binding Sidebar.CurrentPage}"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
             />
+
+            <!-- Row 2: Control Panel (Segmented pill: Start / Stop) -->
+            <Border Grid.Row="2"
+                    Background="{DynamicResource AppSurfaceBrush}"
+                    BorderBrush="{DynamicResource AppBorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Padding="0">
+                <Border Height="44" CornerRadius="10"
+                        Background="{DynamicResource AppConsoleBrush}"
+                        BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1"
+                        HorizontalAlignment="Center" MinWidth="240" Margin="16,10">
+                    <Grid ColumnDefinitions="*,Auto,*">
+                        <!-- Start -->
+                        <Button Grid.Column="0"
+                                Classes="seg-start"
+                                Command="{Binding StartAllCommand}"
+                                Height="42" CornerRadius="0"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <materialIcons:MaterialIcon Kind="Play" Width="14" Height="14" VerticalAlignment="Center"/>
+                                <TextBlock Text="Khởi chạy" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Vertical divider -->
+                        <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource AppBorderStrongBrush}" />
+
+                        <!-- Stop -->
+                        <Button Grid.Column="2"
+                                Classes="seg-end"
+                                Command="{Binding StopAllCommand}"
+                                Height="42" CornerRadius="0"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <materialIcons:MaterialIcon Kind="Stop" Width="14" Height="14" VerticalAlignment="Center"/>
+                                <TextBlock Text="Dừng" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+            </Border>
 
             <!-- Row 3: Bottom Nav -->
             <views:BottomNavView Grid.Row="3" DataContext="{Binding Sidebar}" />
