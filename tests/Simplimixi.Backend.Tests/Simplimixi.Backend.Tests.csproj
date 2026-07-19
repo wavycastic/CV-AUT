@@ -19,4 +19,13 @@
     <ProjectReference Include="..\..\src\backend\Simplimixi.Backend.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\adb\**\*" Link="adb\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\Templates\**\*" Link="assets\Templates\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
