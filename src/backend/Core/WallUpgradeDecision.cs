@@ -16,7 +16,7 @@ namespace CvAut
         int ElixirStartThreshold,
         int GoldReserve,
         int ElixirReserve,
-        int BatchLimit);
+        int BatchLimit = 10);
 
     internal sealed record WallUpgradeDecision(
         WallUpgradeResource Resource,
@@ -49,22 +49,15 @@ namespace CvAut
                 ? Math.Max(0, input.Elixir - Math.Max(0, input.ElixirReserve)) / cost
                 : 0;
 
-            int cappedGold = Cap(affordableGold, input.BatchLimit);
-            int cappedElixir = Cap(affordableElixir, input.BatchLimit);
-
-            if (cappedGold == 0 && cappedElixir == 0)
+            if (affordableGold == 0 && affordableElixir == 0)
             {
                 return Skip("cannot_afford_or_below_threshold", affordableGold, affordableElixir);
             }
 
-            return cappedGold >= cappedElixir
-                ? new WallUpgradeDecision(WallUpgradeResource.Gold, cappedGold, string.Empty, affordableGold, affordableElixir)
-                : new WallUpgradeDecision(WallUpgradeResource.Elixir, cappedElixir, string.Empty, affordableGold, affordableElixir);
-        }
-
-        private static int Cap(int count, int batchLimit)
-        {
-            return Math.Min(count, Math.Max(0, batchLimit));
+            int batchLimit = Math.Max(0, input.BatchLimit);
+            return affordableGold >= affordableElixir
+                ? new WallUpgradeDecision(WallUpgradeResource.Gold, Math.Min(affordableGold, batchLimit), string.Empty, affordableGold, affordableElixir)
+                : new WallUpgradeDecision(WallUpgradeResource.Elixir, Math.Min(affordableElixir, batchLimit), string.Empty, affordableGold, affordableElixir);
         }
 
         private static WallUpgradeDecision Skip(string reason, int affordableGold, int affordableElixir)

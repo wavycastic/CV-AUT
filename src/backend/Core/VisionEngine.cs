@@ -223,7 +223,7 @@ namespace CvAut
         /// <param name="isOffline">Bật chế độ đọc offline (dùng mẫu chữ số dự phòng 10).</param>
         /// <param name="useRgbThresh">True để dùng phân ngưỡng màu RGB (trắng sáng), False để dùng nhị phân hóa thang xám.</param>
         /// <returns>True nếu đọc và chuyển đổi thành công ít nhất một số, ngược lại False.</returns>
-        public bool TryExtractNumericalMetrics(Mat screenshot, Rect roi, out int value, out double confidence, bool isOffline = false, bool useRgbThresh = false)
+        public bool TryExtractNumericalMetrics(Mat screenshot, Rect roi, out int value, out double confidence, bool isOffline = false, bool useRgbThresh = false, bool invert = false)
         {
             value = 0;
             confidence = 0;
@@ -239,13 +239,17 @@ namespace CvAut
             {
                 // Lọc vùng màu trắng sáng (giá trị kênh từ 180 đến 255) nhằm loại bỏ các tạp chất màu vàng/hồng nền
                 Cv2.InRange(crop, new Scalar(180, 180, 180), new Scalar(255, 255, 255), thresh);
+                if (invert)
+                {
+                    Cv2.BitwiseNot(thresh, thresh);
+                }
             }
             else
             {
                 // Chuyển sang ảnh xám rồi nhị phân hóa
                 using Mat gray = new Mat();
                 Cv2.CvtColor(crop, gray, ColorConversionCodes.BGR2GRAY);
-                Cv2.Threshold(gray, thresh, 180, 255, ThresholdTypes.Binary);
+                Cv2.Threshold(gray, thresh, 180, 255, invert ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary);
             }
 
             // Tìm các đường bao quanh (contour) ký tự chữ số đơn lẻ
@@ -332,9 +336,9 @@ namespace CvAut
         /// <summary>
         /// Trích xuất chỉ số số nguyên đơn giản từ vùng ROI ảnh mà không cần lấy chi tiết độ tin cậy.
         /// </summary>
-        public int ExtractNumericalMetrics(Mat screenshot, Rect roi, bool isOffline = false, bool useRgbThresh = false)
+        public int ExtractNumericalMetrics(Mat screenshot, Rect roi, bool isOffline = false, bool useRgbThresh = false, bool invert = false)
         {
-            return TryExtractNumericalMetrics(screenshot, roi, out int value, out _, isOffline, useRgbThresh)
+            return TryExtractNumericalMetrics(screenshot, roi, out int value, out _, isOffline, useRgbThresh, invert)
                 ? value
                 : 0;
         }

@@ -132,6 +132,14 @@ namespace CvAut
                     Console.WriteLine($"[ADB WARNING] phase=boot status=pending action=locate_conf reason=not_found details=\"{confPath}\"");
                 }
             }
+            else if (string.Equals(emulatorType, "LDPlayer", StringComparison.OrdinalIgnoreCase))
+            {
+                displaySettingsChanged = EnsureLdPlayerDisplaySettings(playerPath, instanceName);
+            }
+            else if (string.Equals(emulatorType, "MEmu", StringComparison.OrdinalIgnoreCase))
+            {
+                displaySettingsChanged = EnsureMemuDisplaySettings(playerPath, instanceName);
+            }
 
             if (displaySettingsChanged && IsEmulatorRunning(emulatorType))
             {
@@ -302,6 +310,87 @@ namespace CvAut
             }
 
             return false;
+        }
+
+        private static bool EnsureLdPlayerDisplaySettings(string? playerPath, string instanceName)
+        {
+            string? installDir = string.IsNullOrWhiteSpace(playerPath) ? null : Path.GetDirectoryName(playerPath);
+            string? consolePath = installDir is null ? null : Path.Combine(installDir, "ldconsole.exe");
+            if (consolePath is null || !File.Exists(consolePath))
+            {
+                consolePath = installDir is null ? null : Path.Combine(installDir, "dnconsole.exe");
+            }
+
+            if (consolePath is null || !File.Exists(consolePath))
+            {
+                Console.WriteLine("[ADB WARNING] phase=configure status=skip type=LDPlayer reason=missing_console");
+                return false;
+            }
+
+            string selector = int.TryParse(instanceName, out int index)
+                ? $"--index {index}"
+                : "--index 0";
+            return RunConfigCommand(consolePath, $"modify {selector} --resolution 1600,900,300", "LDPlayer");
+        }
+
+        private static bool EnsureMemuDisplaySettings(string? playerPath, string instanceName)
+        {
+            string? installDir = string.IsNullOrWhiteSpace(playerPath) ? null : Path.GetDirectoryName(playerPath);
+            string? memucPath = installDir is null ? null : Path.Combine(installDir, "memuc.exe");
+            if (memucPath is null || !File.Exists(memucPath))
+            {
+                Console.WriteLine("[ADB WARNING] phase=configure status=skip type=MEmu reason=missing_memuc");
+                return false;
+            }
+
+            string selector = int.TryParse(instanceName, out int index)
+                ? $"-i {index}"
+                : "-i 0";
+            return RunConfigCommand(memucPath, $"setconfigex {selector} custom_resolution \"1600 900 300\"", "MEmu");
+        }
+
+        private static bool RunConfigCommand(string fileName, string arguments, string emulatorType)
+        {
+            try
+            {
+                using var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = fileName,
+                    Arguments = arguments,
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                });
+
+                if (process is null)
+                {
+                    Console.WriteLine($"[ADB WARNING] phase=configure status=skip type={emulatorType} reason=start_failed");
+                    return false;
+                }
+
+                if (!process.WaitForExit(5000))
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { /* best effort */ }
+                    Console.WriteLine($"[ADB WARNING] phase=configure status=skip type={emulatorType} reason=timeout");
+                    return false;
+                }
+
+                string stderr = process.StandardError.ReadToEnd().Trim();
+                if (process.ExitCode != 0)
+                {
+                    Console.WriteLine($"[ADB WARNING] phase=configure status=skip type={emulatorType} exit={process.ExitCode} reason=command_failed details=\"{stderr}\"");
+                    return false;
+                }
+
+                Console.WriteLine($"[ADB] phase=configure status=success type={emulatorType} resolution=1600x900 dpi=300");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ADB WARNING] phase=configure status=skip type={emulatorType} reason=\"{ex.Message}\"");
+                return false;
+            }
         }
 
         private static bool ResetAdbAndStartEmulator(string? playerPath, string emulatorType, string reason, string instanceName = "")

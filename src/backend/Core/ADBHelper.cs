@@ -41,6 +41,19 @@ namespace CvAut
             return token.WaitHandle.WaitOne(milliseconds);
         }
 
+        private static void LogBotInput(string action, string status, string details)
+        {
+            Console.WriteLine($"[ADB] phase=input status={status} action={action} {details}");
+        }
+
+        private static void LogBotInputResult(string action, string details, string result)
+        {
+            if (result.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
+            {
+                LogBotInput(action, "fail", details + " reason=\"" + result + "\"");
+            }
+        }
+
         public Func<bool>? BeforeInputAction { get; set; }
 
         public string DeviceAddress => _deviceAddress;
@@ -343,7 +356,9 @@ namespace CvAut
                 return;
             }
 
-            ExecuteShell($"input tap {x} {y}");
+            string details = $"x={x} y={y}";
+            LogBotInput("bot_tap", "send", details);
+            LogBotInputResult("bot_tap", details, ExecuteShell($"input tap {x} {y}"));
         }
 
         /// <summary>
@@ -370,8 +385,10 @@ namespace CvAut
                 return;
             }
 
+            string details = $"count={commands.Count}";
+            LogBotInput("bot_tap_sequence", "send", details);
             // Gộp tất cả các lệnh tap lại và gửi đi trong 1 phiên làm việc
-            ExecuteShell(string.Join("; ", commands));
+            LogBotInputResult("bot_tap_sequence", details, ExecuteShell(string.Join("; ", commands)));
         }
 
         /// <summary>
@@ -420,7 +437,9 @@ namespace CvAut
                 return;
             }
 
-            ExecuteShell($"input swipe {x1} {y1} {x2} {y2} {durationMs}");
+            string details = $"x1={x1} y1={y1} x2={x2} y2={y2} duration_ms={durationMs}";
+            LogBotInput("bot_swipe", "send", details);
+            LogBotInputResult("bot_swipe", details, ExecuteShell($"input swipe {x1} {y1} {x2} {y2} {durationMs}"));
         }
 
         /// <summary>
@@ -451,12 +470,15 @@ namespace CvAut
             // 2. Chạy fallback vuốt song song ngầm bằng lệnh sh
             for (int i = 0; i < count; i++)
             {
+                string details = $"index={i + 1} count={count} duration_ms={durationMs}";
+                LogBotInput("bot_pinch_fallback", "send", details);
                 // Gửi đồng thời lệnh vuốt hướng tâm từ trái và phải để mô phỏng bóp 2 ngón tay thu nhỏ bản đồ
                 string result = ExecuteShell(
                     "sh -c \"input swipe 360 450 790 450 " + durationMs +
                     " & input swipe 1240 450 810 450 " + durationMs +
                     " & wait\""
                 );
+                LogBotInputResult("bot_pinch_fallback", details, result);
 
                 if (!result.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
                 {
