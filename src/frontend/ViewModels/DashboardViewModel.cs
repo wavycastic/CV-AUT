@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json.Nodes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -92,6 +93,7 @@ namespace CvAut.ViewModels
         [NotifyPropertyChangedFor(nameof(HasNoDevices))]
         [NotifyPropertyChangedFor(nameof(ShowDeviceList))]
         [NotifyPropertyChangedFor(nameof(ShowActivePanel))]
+        [NotifyPropertyChangedFor(nameof(ShowGridPane))]
         [NotifyPropertyChangedFor(nameof(ShowSelectionPane))]
         [NotifyPropertyChangedFor(nameof(ShowConfiguringPanel))]
         [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
@@ -134,6 +136,8 @@ namespace CvAut.ViewModels
         [ObservableProperty]
         private IRelayCommand<DeviceViewModel>? _showDeviceLogsCommand;
 
+        public event Action<string>? CopyDeviceLogsRequested;
+
         // --- Computed visibility booleans (single source: State + ActiveDevice) ---
 
         /// <summary>True before the first Detect pass — drives the "No device yet" hint.</summary>
@@ -161,10 +165,10 @@ namespace CvAut.ViewModels
         /// panel) should render — the complement of <see cref="ShowActivePanel"/>. Avalonia 12
         /// ships no built-in bool negation converter, so this is exposed as a first-class prop.
         /// </summary>
-        public bool ShowSelectionPane => !ShowActivePanel && !ShowGridPane && !ShowConfiguringPanel;
+        public bool ShowSelectionPane => !ShowActivePanel && !ShowGridPane;
 
-        /// <summary>True when the multi-device grid should render (grid mode + at least one device, not configuring).</summary>
-        public bool ShowGridPane => IsGridMode && !ShowConfiguringPanel && (Devices?.Count ?? 0) > 0;
+        /// <summary>True when the multi-device grid should render (grid mode + at least one device).</summary>
+        public bool ShowGridPane => IsGridMode && State != DashboardDeviceState.ConfiguringDevice && (Devices?.Count ?? 0) > 0;
         public bool ShowConfiguringPanel => State == DashboardDeviceState.ConfiguringDevice;
 
         /// <summary>True when any empty-state panel (Idle or NoDevices) should render.</summary>
@@ -253,6 +257,7 @@ namespace CvAut.ViewModels
             if (SelectedDeviceForConfig is not null)
             {
                 _settingsViewModel.UpdateProfileDirectly();
+                SelectedDeviceForConfig.SelectedPlayMode = _settingsViewModel.SelectedPlayMode;
             }
             State = DashboardDeviceState.DeviceSelected;
             SelectedDeviceForConfig = null;
@@ -263,6 +268,12 @@ namespace CvAut.ViewModels
         {
             State = DashboardDeviceState.DeviceSelected;
             SelectedDeviceForConfig = null;
+        }
+
+        [RelayCommand]
+        private void CopyDeviceLogs(DeviceViewModel device)
+        {
+            CopyDeviceLogsRequested?.Invoke(BuildDeviceLogText(device));
         }
 
         [RelayCommand]
@@ -337,7 +348,7 @@ namespace CvAut.ViewModels
 
             foreach (var device in Devices)
             {
-                if (device.CanStart)
+                if (device.IsSelected && device.CanStart)
                     device.StartCommand.Execute(null);
             }
         }
@@ -352,9 +363,20 @@ namespace CvAut.ViewModels
 
             foreach (var device in Devices)
             {
-                if (device.CanStop)
+                if (device.IsSelected && device.CanStop)
                     device.StopCommand.Execute(null);
             }
+        }
+
+        private static string BuildDeviceLogText(DeviceViewModel device)
+        {
+            var builder = new StringBuilder();
+            foreach (LogEntry entry in device.Logs)
+            {
+                builder.AppendLine($"[{entry.TimeText}] {entry.LevelText} {entry.Message}");
+            }
+
+            return builder.ToString().TrimEnd();
         }
     }
 }

@@ -3,6 +3,8 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -34,6 +36,40 @@ namespace CvAut.ViewModels
 
         public string DisplayName => Device.DisplayName;
 
+        public Bitmap? EmulatorIcon
+        {
+            get
+            {
+                try
+                {
+                    string type = Device.EmulatorType ?? string.Empty;
+                    string resourcePath = "android.ico";
+                    if (type.Contains("BlueStacks", StringComparison.OrdinalIgnoreCase))
+                        resourcePath = "bluestacks.ico";
+                    else if (type.Contains("LDPlayer", StringComparison.OrdinalIgnoreCase))
+                        resourcePath = "ldplayer.png";
+                    else if (type.Contains("MEmu", StringComparison.OrdinalIgnoreCase))
+                        resourcePath = "memu.ico";
+
+                    string appDir = AppContext.BaseDirectory;
+                    string filePath = System.IO.Path.Combine(appDir, "assets", "AppIcon", resourcePath);
+                    if (!System.IO.File.Exists(filePath))
+                    {
+                        filePath = System.IO.Path.Combine(appDir, "assets", "AppIcon", "android.ico");
+                    }
+                    if (System.IO.File.Exists(filePath))
+                    {
+                        return new Bitmap(filePath);
+                    }
+                    return null;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+        }
+
         /// <summary>
         /// Human-readable explanation of the device's <see cref="DeviceStatus"/> for the UI,
         /// so a closed-but-installed emulator (or an unauthorized/offline one) shows a clear
@@ -60,6 +96,12 @@ namespace CvAut.ViewModels
         [NotifyPropertyChangedFor(nameof(ShowStartButton))]
         [NotifyPropertyChangedFor(nameof(ShowStopButton))]
         private BotStatus _status = BotStatus.Idle;
+
+        [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+        [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+        private bool _isSelected = true;
+
 
         public string DisplayStatus => Status switch
         {

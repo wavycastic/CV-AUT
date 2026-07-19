@@ -84,7 +84,6 @@
     <Compile Include="ViewModels\AdvancedViewModel.cs" />
     <Compile Include="ViewModels\LogsViewModel.cs" />
     <Compile Include="ViewModels\LicenseViewModel.cs" />
-    <Compile Include="ViewModels\SetupWizardViewModel.cs" />
     <Compile Include="ViewModels\Settings\MainVillageViewModel.cs" />
     <Compile Include="ViewModels\Settings\NightVillageViewModel.cs" />
     <Compile Include="ViewModels\Settings\ClanGamesViewModel.cs" />
@@ -98,13 +97,11 @@
     <Compile Include="Views\HeaderView.axaml.cs" />
     <Compile Include="Views\StatusBarView.axaml.cs" />
     <Compile Include="Views\BottomNavView.axaml.cs" />
-    <Compile Include="Views\DevicePanelView.axaml.cs" />
     <Compile Include="Views\DeviceListItemView.axaml.cs" />
     <Compile Include="Views\Settings\MainVillageView.axaml.cs" />
     <Compile Include="Views\Settings\NightVillageView.axaml.cs" />
     <Compile Include="Views\Settings\ClanGamesView.axaml.cs" />
     <Compile Include="Views\Settings\ClanCapitalView.axaml.cs" />
-    <Compile Include="Views\SetupWizardView.axaml.cs" />
     <Compile Include="Models\BotStatus.cs" />
     <Compile Include="Models\PlayMode.cs" />
     <Compile Include="Models\NotificationSettings.cs" />
@@ -139,6 +136,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="..\..\assets\Templates\**\*" Link="assets\Templates\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\AppIcon\**\*" Link="assets\AppIcon\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <!-- Dev/script/doc artifacts must never ship in the protected package; the

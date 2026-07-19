@@ -1,7 +1,11 @@
+using System;
+using System.IO;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CvAut.ViewModels;
 
@@ -61,7 +65,31 @@ namespace CvAut.Views
         private async void OnCopyRequested(string text)
         {
             TopLevel? topLevel = TopLevel.GetTopLevel(this);
-            if (topLevel?.Clipboard is not null)
+            if (topLevel == null) return;
+
+            string tempFile = Path.Combine(Path.GetTempPath(), "Simplimixi_Logs.txt");
+            try
+            {
+                // Write current logs to a temporary text file
+                File.WriteAllText(tempFile, text);
+
+                // Get the StorageFile object for this path
+                var fileUri = new Uri(tempFile);
+                var file = await topLevel.StorageProvider.TryGetFileFromPathAsync(fileUri);
+
+                if (file != null && topLevel.Clipboard is not null)
+                {
+                    // Copy the file object to clipboard
+                    await topLevel.Clipboard.SetFilesAsync(new[] { file });
+                    return;
+                }
+            }
+            catch
+            {
+                // Fallback to text copy if temp file write or file copy fails
+            }
+
+            if (topLevel.Clipboard is not null)
             {
                 await topLevel.Clipboard.SetTextAsync(text);
             }

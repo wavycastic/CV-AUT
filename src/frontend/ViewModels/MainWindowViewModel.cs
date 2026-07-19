@@ -32,7 +32,6 @@ namespace CvAut.ViewModels
         private readonly LicenseViewModel _license;
         private readonly SettingsViewModel _settings;
         private readonly AdvancedViewModel _advanced;
-        private readonly SetupWizardViewModel _wizard;
         private readonly IConfigStore _configStore;
         private readonly IEmulatorDiscovery _discovery;
         private readonly CvAut.Services.Notifications.INotificationService? _notifications;
@@ -41,7 +40,7 @@ namespace CvAut.ViewModels
         public MainWindowViewModel()
             : this(new AppStateService(), new DeviceSessionManager(), new ConfigStore(), new AdbEmulatorDiscovery(),
                    new DashboardViewModel(), new LogsViewModel(), new LicenseViewModel(),
-                   new SettingsViewModel(), new AdvancedViewModel(), new SetupWizardViewModel(), null)
+                   new SettingsViewModel(), new AdvancedViewModel(), null)
         {
         }
 
@@ -55,7 +54,6 @@ namespace CvAut.ViewModels
             LicenseViewModel license,
             SettingsViewModel settings,
             AdvancedViewModel advanced,
-            SetupWizardViewModel wizard,
             CvAut.Services.Notifications.INotificationService? notifications = null)
         {
             _appState = appState;
@@ -68,7 +66,6 @@ namespace CvAut.ViewModels
             _license = license;
             _settings = settings;
             _advanced = advanced;
-            _wizard = wizard;
             ConfigPath = _configStore.ResolveActiveConfigPath();
 
             TopBar = new TopBarViewModel(appState, sessions, configStore);
@@ -76,7 +73,6 @@ namespace CvAut.ViewModels
             Sidebar.Seed(new[]
             {
                 new NavItem("Bảng điều khiển", "ViewDashboard", dashboard),
-                new NavItem("Thiết lập", "AutoFix", wizard),
                 new NavItem("Nâng cao", "Tune", advanced),
                 new NavItem("Nhật ký", "ScriptText", logs),
             });
@@ -115,9 +111,6 @@ namespace CvAut.ViewModels
 
         /// <summary>Advanced tuning page (delays + coordinate editor).</summary>
         public AdvancedViewModel Advanced => _advanced;
-
-        /// <summary>Setup wizard page (emulator detect + display verify + trial run).</summary>
-        public SetupWizardViewModel Wizard => _wizard;
 
         [ObservableProperty] private bool _isLicenseOpen;
 
@@ -185,7 +178,7 @@ namespace CvAut.ViewModels
         /// (multiple concurrent sessions) reports accurate running/paused counts, not just the active one.</summary>
         private void OnDeviceStatusChangedForSummary(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(DeviceViewModel.Status))
+            if (e.PropertyName == nameof(DeviceViewModel.Status) || e.PropertyName == nameof(DeviceViewModel.IsSelected))
             {
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -194,7 +187,7 @@ namespace CvAut.ViewModels
                     NotifyFleetCommands();
                 });
 
-                if (_notifications is not null && sender is DeviceViewModel vm)
+                if (e.PropertyName == nameof(DeviceViewModel.Status) && _notifications is not null && sender is DeviceViewModel vm)
                 {
                     _ = _notifications.NotifyStatusAsync(vm.DisplayName, vm.Status);
                 }
@@ -284,9 +277,9 @@ namespace CvAut.ViewModels
             }
         }
 
-        private bool CanStartAll() => Devices.Any(vm => vm.StartCommand.CanExecute(null));
-        private bool CanPauseAll() => Devices.Any(vm => vm.PauseCommand.CanExecute(null));
-        private bool CanStopAll() => Devices.Any(vm => vm.StopCommand.CanExecute(null));
+        private bool CanStartAll() => Devices.Any(vm => vm.IsSelected && vm.StartCommand.CanExecute(null));
+        private bool CanPauseAll() => Devices.Any(vm => vm.IsSelected && vm.PauseCommand.CanExecute(null));
+        private bool CanStopAll() => Devices.Any(vm => vm.IsSelected && vm.StopCommand.CanExecute(null));
 
         private void NotifyFleetCommands()
         {
@@ -303,7 +296,7 @@ namespace CvAut.ViewModels
         {
             foreach (DeviceViewModel vm in Devices)
             {
-                if (vm.StartCommand.CanExecute(null))
+                if (vm.IsSelected && vm.StartCommand.CanExecute(null))
                 {
                     await vm.StartCommand.ExecuteAsync(null);
                 }
@@ -333,7 +326,7 @@ namespace CvAut.ViewModels
         {
             foreach (DeviceViewModel vm in Devices)
             {
-                if (vm.StopCommand.CanExecute(null))
+                if (vm.IsSelected && vm.StopCommand.CanExecute(null))
                 {
                     await vm.StopCommand.ExecuteAsync(null);
                 }

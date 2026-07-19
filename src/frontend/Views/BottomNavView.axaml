@@ -13,70 +13,74 @@
     <UserControl.Styles>
         <Style Selector="Button.nav-btn">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="7" />
             <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="VerticalAlignment" Value="Stretch" />
-            <Setter Property="Padding" Value="0" />
+            <Setter Property="Padding" Value="8,0" />
             <Setter Property="Margin" Value="0" />
         </Style>
         <Style Selector="Button.nav-btn /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="7" />
         </Style>
         <Style Selector="Button.nav-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+        </Style>
+        <Style Selector="Button.nav-btn:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+        </Style>
+        <Style Selector="Button.nav-btn:focus-visible">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
         </Style>
         <Style Selector="Button.nav-btn.active">
             <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
+        <Style Selector="Button.nav-btn.active /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}" />
+        </Style>
         <Style Selector="Button.nav-btn.active materialIcons|MaterialIcon">
             <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
         </Style>
-        <Style Selector="Button.nav-btn Border.indicator">
-            <Setter Property="IsVisible" Value="False" />
-        </Style>
-        <Style Selector="Button.nav-btn.active Border.indicator">
-            <Setter Property="IsVisible" Value="True" />
-        </Style>
     </UserControl.Styles>
 
-    <Border Height="56"
+    <Border Height="60"
             Background="{DynamicResource AppSurfaceBrush}"
             BorderBrush="{DynamicResource AppBorderBrush}"
             BorderThickness="0,1,0,0">
-        <ItemsControl ItemsSource="{Binding Items}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <UniformGrid Rows="1" HorizontalAlignment="Stretch" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:NavItem">
-                    <Button
-                        Classes="nav-btn"
-                        Command="{Binding $parent[UserControl].DataContext.NavigateCommand}"
-                        CommandParameter="{Binding}"
-                        Classes.active="{Binding IsActive}"
-                    >
-                        <Grid RowDefinitions="Auto,*,Auto" Margin="0,2">
-                            <!-- Indicator at top -->
-                            <Border Classes="indicator" Grid.Row="0" Height="3" Width="24" CornerRadius="2"
-                                     Background="{DynamicResource AppAccentBrush}"
-                                     HorizontalAlignment="Center" />
-                            
-                            <!-- Icon in middle -->
-                            <materialIcons:MaterialIcon Grid.Row="1" Kind="{Binding IconKind}" Width="20" Height="20"
-                                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            
-                            <!-- Title at bottom -->
-                            <TextBlock Grid.Row="2" Text="{Binding Title}" FontSize="10"
-                                       HorizontalAlignment="Center" Margin="0,0,0,4"
-                                       Foreground="{Binding $parent[Button].Foreground}" />
-                        </Grid>
-                    </Button>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <Border Width="420" Height="44" Padding="4" CornerRadius="10"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{DynamicResource AppSurfaceAltBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+            <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1" HorizontalAlignment="Stretch" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NavItem">
+                        <Button Classes="nav-btn"
+                                Command="{Binding $parent[UserControl].DataContext.NavigateCommand}"
+                                CommandParameter="{Binding}"
+                                Classes.active="{Binding IsActive}">
+                            <StackPanel Orientation="Horizontal" Spacing="8"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <materialIcons:MaterialIcon Kind="{Binding IconKind}" Width="17" Height="17"
+                                                            VerticalAlignment="Center"
+                                                            Foreground="{Binding $parent[Button].Foreground}" />
+                                <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Foreground="{Binding $parent[Button].Foreground}" />
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
     </Border>
 </UserControl>

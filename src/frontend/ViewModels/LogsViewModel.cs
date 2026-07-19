@@ -110,6 +110,12 @@ namespace CvAut.ViewModels
             OnPropertyChanged(nameof(HasFilteredLogs));
         }
 
+        /// <summary>
+        /// Copies the currently filtered log view using the same pipeline as the built-in
+        /// "Sao chép nhật ký" button.
+        /// </summary>
+        public void CopyVisibleLogs() => Copy();
+
         [RelayCommand]
         private void Copy()
         {
@@ -190,7 +196,7 @@ namespace CvAut.ViewModels
                     .Append('\t')
                     .Append(entry.DeviceId)
                     .Append('\t')
-                    .AppendLine(entry.Message);
+                    .AppendLine(entry.Summary);
             }
 
             return builder.ToString();

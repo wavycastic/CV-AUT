@@ -14,23 +14,22 @@
     <UserControl.Styles>
         <Style Selector="ListBox#SidebarList ListBoxItem">
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Margin" Value="0,2" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
         </Style>
         <Style Selector="ListBox#SidebarList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
         </Style>
         <Style Selector="ListBox#SidebarList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#1ad4af37" />
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}" />
         </Style>
         <Style Selector="ListBox#SidebarList ListBoxItem:selected Border">
             <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
-            <Setter Property="BorderThickness" Value="0,0,0,0" />
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="8" Background="{DynamicResource AppBackgroundBrush}">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="8" Background="{DynamicResource AppBackgroundBrush}">
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,14" IsVisible="{Binding !IsInstanceMode}">
             <StackPanel Spacing="4">
                 <StackPanel Orientation="Horizontal" Spacing="10">
@@ -103,8 +102,23 @@
             </StackPanel>
         </Border>
 
+        <!-- Instance mode play mode selector: one device config edits exactly one play mode at a time. -->
+        <Border Grid.Row="3" Classes="Card" Padding="12" Margin="0,0,0,14" IsVisible="{Binding IsInstanceMode}">
+            <StackPanel Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <materialIcons:MaterialIcon Kind="GamepadVariant" Width="18" Height="18"
+                                                Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="Chế độ đánh" Classes="label" VerticalAlignment="Center" />
+                </StackPanel>
+                <ComboBox ItemsSource="{Binding PlayModes}"
+                          SelectedItem="{Binding SelectedPlayMode}"
+                          HorizontalAlignment="Stretch" />
+                <TextBlock Text="Chỉ cấu hình chế độ được chọn cho thiết bị này." Classes="muted" />
+            </StackPanel>
+        </Border>
+
         <!-- Layout 1: Normal mode (two columns with sidebar) -->
-        <Grid Grid.Row="3" ColumnDefinitions="Auto,*" IsVisible="{Binding !IsInstanceMode}">
+        <Grid Grid.Row="4" ColumnDefinitions="Auto,*" IsVisible="{Binding !IsInstanceMode}">
             <Border Grid.Column="0" Width="170" Margin="0,0,10,0" Classes="Card" Padding="8">
                 <StackPanel Spacing="10">
                     <TextBlock Text="DANH MỤC" Classes="section" Margin="6,4,0,0" />
@@ -134,7 +148,7 @@
         </Grid>
 
         <!-- Layout 2: Instance mode (direct vertical stacked sub-pages with section titles) -->
-        <ScrollViewer Grid.Row="3" IsVisible="{Binding IsInstanceMode}">
+        <ScrollViewer Grid.Row="4" IsVisible="{Binding IsInstanceMode}">
             <ItemsControl ItemsSource="{Binding Tabs}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:SettingsTab">

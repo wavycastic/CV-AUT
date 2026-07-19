@@ -199,7 +199,8 @@ namespace CvAut.Services.Emulators.Scanners
                         null,
                         DeviceStatus.Installed,
                         "LDPlayer",
-                        dnplayerPath);
+                        dnplayerPath,
+                        instance.index.ToString(CultureInfo.InvariantCulture));
                     emittedAny = true;
                 }
             }
@@ -217,7 +218,8 @@ namespace CvAut.Services.Emulators.Scanners
                     null,
                     DeviceStatus.Installed,
                     "LDPlayer",
-                    dnplayerPath);
+                    dnplayerPath,
+                    "0");
             }
         }
 
@@ -311,16 +313,82 @@ namespace CvAut.Services.Emulators.Scanners
     /// <summary>MEmu install-path scanner.</summary>
     public sealed class MemuScanner : EmulatorInstallScanner
     {
+        private static readonly string[] InstallRoots =
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microvirt", "MEmu"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microvirt", "MEmu"),
+        };
+
         public MemuScanner()
             : base("MEmu",
-                   new[]
-                   {
-                       Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microvirt", "MEmu"),
-                       Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microvirt", "MEmu"),
-                   },
+                   InstallRoots,
                    CommonPorts.All,
                    new[] { "MEmu.exe", "MEmuConsole.exe" })
         {
+        }
+
+        public override IEnumerable<DeviceCandidate> Scan(CancellationToken cancellationToken = default)
+        {
+            foreach (DeviceCandidate candidate in base.Scan(cancellationToken))
+            {
+                string? instance = TryResolveMemuInstance(candidate.Port);
+                yield return candidate with { EmulatorInstance = instance };
+            }
+        }
+
+        private static string? TryResolveMemuInstance(int port)
+        {
+            string? memucPath = InstallRoots
+                .Select(root => Path.Combine(root, "memuc.exe"))
+                .FirstOrDefault(File.Exists);
+            if (memucPath is null)
+            {
+                return null;
+            }
+
+            try
+            {
+                using var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = memucPath,
+                    Arguments = "listvms --running",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                });
+
+                if (process is null)
+                {
+                    return null;
+                }
+
+                if (!process.WaitForExit(3000))
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { /* best effort */ }
+                    return null;
+                }
+
+                string output = process.StandardOutput.ReadToEnd();
+                foreach (string rawLine in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string line = rawLine.Trim();
+                    if (line.Contains(port.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+                    {
+                        string[] parts = line.Split(',', StringSplitOptions.TrimEntries);
+                        if (parts.Length > 0 && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int index))
+                        {
+                            return index.ToString(CultureInfo.InvariantCulture);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                return null;
+            }
+
+            return null;
         }
     }
 

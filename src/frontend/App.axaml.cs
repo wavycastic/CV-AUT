@@ -78,7 +78,6 @@ namespace CvAut
             services.AddTransient<LogsViewModel>();
             services.AddTransient<LicenseViewModel>();
             services.AddTransient<AdvancedViewModel>();
-            services.AddTransient<SetupWizardViewModel>();
 
             // Shell host (owns TopBar + Sidebar + page tree).
             services.AddTransient<MainWindowViewModel>();

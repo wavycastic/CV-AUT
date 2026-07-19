@@ -30,7 +30,7 @@ namespace CvAut
         /// <summary>Ensures a per-device config file exists whose device_connection points at this device,
         /// then returns its path. Does not change the active profile — safe to call per device before Start
         /// so concurrent devices each load their own host/port (Phase 3 multi-device).</summary>
-        string PrepareDeviceConfig(string deviceProfileKey, string host, int port);
+        string PrepareDeviceConfig(string deviceProfileKey, string host, int port, string? emulatorType = null, string? emulatorPath = null, string? emulatorInstance = null);
 
         /// <summary>Loads opt-in notification settings (disabled/empty by default).</summary>
         NotificationSettings LoadNotificationSettings();
@@ -126,7 +126,7 @@ namespace CvAut
             ReloadProfiles();
         }
 
-        public string PrepareDeviceConfig(string deviceProfileKey, string host, int port)
+        public string PrepareDeviceConfig(string deviceProfileKey, string host, int port, string? emulatorType = null, string? emulatorPath = null, string? emulatorInstance = null)
         {
             string safeName = MakeSafeProfileName(deviceProfileKey);
             if (string.IsNullOrWhiteSpace(safeName))
@@ -155,6 +155,32 @@ namespace CvAut
             JsonObject device = GetOrCreateObject(config, "device_connection");
             device["host"] = host;
             device["port"] = port;
+            if (!string.IsNullOrWhiteSpace(emulatorType))
+            {
+                device["emulator_type"] = emulatorType;
+            }
+            else
+            {
+                device.Remove("emulator_type");
+            }
+
+            if (!string.IsNullOrWhiteSpace(emulatorPath))
+            {
+                device["emulator_path"] = emulatorPath;
+            }
+            else
+            {
+                device.Remove("emulator_path");
+            }
+
+            if (!string.IsNullOrWhiteSpace(emulatorInstance))
+            {
+                device["emulator_instance"] = emulatorInstance;
+            }
+            else
+            {
+                device.Remove("emulator_instance");
+            }
 
             File.WriteAllText(path, config.ToJsonString(JsonOptions));
             ReloadProfiles();
@@ -402,7 +428,36 @@ namespace CvAut
             night["farm_mode"] ??= "auto";
             night["min_cups"] ??= 0;
             night["max_cups"] ??= 5000;
+            night["attack_count"] ??= 1;
+            night["attack_count_mode"] ??= "fixed";
+            night["stop_when_loot_unavailable"] ??= true;
+            night["enable_attack"] ??= true;
+            night["boost_clock_tower"] ??= false;
             night["upgrade_wall"] ??= false;
+            night["army_management"] ??= true;
+            night["fill_army"] ??= true;
+            night["army_formation"] ??= "auto";
+            night["wait_for_heroes"] ??= true;
+            night["hero_wait_seconds"] ??= 90;
+            night["custom_drop_order_enabled"] ??= false;
+            night["drop_order"] ??= "BattleMachine|Bomber|PowerPekka|BabyDragon|CannonCart|NightWitch|RagedBarbarian";
+            night["next_troop_delay_ms"] ??= 600;
+            night["same_troop_delay_ms"] ??= 180;
+            night["handle_bomber"] ??= true;
+            night["loop_hero_ability"] ??= true;
+            night["enable_stage2"] ??= true;
+            night["clean_yard"] ??= false;
+            night["suggested_upgrades"] ??= false;
+            night["place_new_buildings"] ??= false;
+            night["ignore_gold_upgrades"] ??= false;
+            night["ignore_elixir_upgrades"] ??= false;
+            night["ignore_hall_upgrades"] ??= true;
+            night["ignore_wall_upgrades"] ??= true;
+            night["star_laboratory"] ??= false;
+            night["star_laboratory_troop"] ??= "auto";
+            night["upgrade_battle_machine"] ??= false;
+            night["upgrade_battle_copter"] ??= false;
+            night["bob_upgrades"] ??= false;
 
             JsonObject clanGames = GetOrCreateObject(root, "clan_games");
             clanGames["village"] ??= "main_village";

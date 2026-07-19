@@ -36,7 +36,10 @@ namespace CvAut.Services.Emulators
         {
             get
             {
-                if (!string.IsNullOrWhiteSpace(_emulatorType) && _emulatorType.Equals("BlueStacks", StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(_emulatorType)
+                    && (_emulatorType.Equals("BlueStacks", StringComparison.OrdinalIgnoreCase)
+                        || _emulatorType.Equals("LDPlayer", StringComparison.OrdinalIgnoreCase)
+                        || _emulatorType.Equals("MEmu", StringComparison.OrdinalIgnoreCase)))
                 {
                     return DensityDpi == 300;
                 }
