@@ -44,7 +44,7 @@ namespace CvAut
     /// - Thực hiện kịch bản rải quân (tạp biến ngẫu nhiên chống chống-bot), rải phép đóng băng/cuồng nộ.
     /// - Quét số lượng lính còn dư để tiến hành rải bù.
     /// </summary>
-    internal class Attacks
+    internal partial class Attacks
     {
         private readonly ADBHelper _adb;
         private readonly VisionEngine _vision;

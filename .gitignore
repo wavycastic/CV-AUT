@@ -35,7 +35,7 @@ scratch/
 tmp/
 
 # Local ADB Binaries
-adb/
+/adb/
 
 # Local User Profiles & Statistics
 profiles/Stats_*.json
@@ -63,6 +63,14 @@ legacy/Simplicity
 
 # Cloudflare Wrangler cache
 .wrangler/
+
+# Build Output & Extracted Tools
+publish/
+MBR/
+Simplicity.exe_extracted/
+captures/
+LiveScreenshot.png
+run_output.log
 
 # Local Avalonia 12 docs reference (downloaded from AvaloniaUI/avalonia-docs)
 # Kept locally for development reference; not tracked to avoid bloating history.

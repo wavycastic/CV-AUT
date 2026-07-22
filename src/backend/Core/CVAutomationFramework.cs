@@ -21,14 +21,24 @@ namespace CvAut
     /// - Hỗ trợ điều khiển Zoom Out ngầm giả lập MEmu qua PostMessage Win32 API hoặc giả lập BlueStacks qua ADB Pinch-In.
     /// - Hỗ trợ cơ chế chơi luân phiên nhiều tài khoản (Multi-Account) từ cấu hình.
     /// </summary>
-    internal class CVAutomationFramework : IAutomationRunner
+    internal partial class CVAutomationFramework : IAutomationRunner
     {
         private readonly ADBHelper _adb;
         private readonly VisionEngine _vision;
         private readonly Training _training;
-        private readonly Attacks _attacks;
+        private Attacks _attacks;
         private readonly WallUpdater _wallUpdater;
+        private readonly BuilderBaseNavigator _builderBaseNavigator;
+        private readonly BuilderBaseResources _builderBaseResources;
+        private readonly BuilderBaseReport _builderBaseReport;
+        private readonly BuilderBaseArmyManager _builderBaseArmyManager;
+        private readonly BuilderBaseAttacks _builderBaseAttacks;
+        private readonly BuilderBaseClockTower _builderBaseClockTower;
+        private readonly BuilderBaseWallUpdater _builderBaseWallUpdater;
+        private readonly BuilderBaseMaintenance _builderBaseMaintenance;
+        private readonly Random _builderBaseRandom = new();
         private readonly string _templatesPath;
+        private readonly string _configPath;
 
         private CancellationTokenSource? _cts;
         private Task? _workerTask;
@@ -46,6 +56,7 @@ namespace CvAut
         private int _sessionBattlesCompleted;
         private string _activeAccountName = "unknown";
         private static bool s_loggedLegacyWallConfigMigration;
+        private static bool s_loggedBuilderBaseAssetAudit;
 
         private static readonly string WritableLogsDirectory = ResolveWritableLogsDirectory();
 
@@ -101,6 +112,7 @@ namespace CvAut
         /// </summary>
         public CVAutomationFramework(string configPath = "Config/test_config.json")
         {
+            _configPath = configPath;
             LoadConfig(configPath);
 
             // Đọc kết nối cổng của giả lập cấu hình
@@ -117,6 +129,14 @@ namespace CvAut
             _training = new Training(_adb, _templatesPath, _vision);
             _attacks = new Attacks(_adb, _vision, _templatesPath, ReadAttackDelayConfig(Config), ReadAttackCoordinateConfig(Config));
             _wallUpdater = new WallUpdater(_adb, _vision, _templatesPath);
+            _builderBaseNavigator = new BuilderBaseNavigator(_adb, _vision);
+            _builderBaseResources = new BuilderBaseResources(_adb, _vision, _builderBaseNavigator);
+            _builderBaseReport = new BuilderBaseReport(_adb, _vision, _builderBaseNavigator);
+            _builderBaseArmyManager = new BuilderBaseArmyManager(_adb, _vision, _builderBaseNavigator);
+            _builderBaseAttacks = new BuilderBaseAttacks(_adb, _vision, _builderBaseNavigator);
+            _builderBaseClockTower = new BuilderBaseClockTower(_adb, _vision, _builderBaseNavigator);
+            _builderBaseWallUpdater = new BuilderBaseWallUpdater(_adb, _vision, _builderBaseNavigator);
+            _builderBaseMaintenance = new BuilderBaseMaintenance(_adb, _vision, _builderBaseNavigator, _templatesPath);
 
             Console.WriteLine("[FSM-CS] phase=init status=success details=\"automation_core_initialized\"");
         }
@@ -152,6 +172,7 @@ namespace CvAut
                 ""wall_gold_reserve"": 100000,
                 ""wall_elixir_reserve"": 0,
                 ""enable_stats"": true,
+                ""night_village"": {""farm_mode"": ""auto"", ""min_cups"": 0, ""max_cups"": 5000, ""attack_count"": 1, ""attack_count_mode"": ""fixed"", ""stop_when_loot_unavailable"": true, ""enable_attack"": true, ""boost_clock_tower"": false, ""upgrade_wall"": false, ""army_management"": true, ""fill_army"": true, ""army_formation"": ""auto"", ""wait_for_heroes"": true, ""hero_wait_seconds"": 90, ""custom_drop_order_enabled"": false, ""drop_order"": ""BattleMachine|Bomber|PowerPekka|BabyDragon|CannonCart|NightWitch|RagedBarbarian"", ""next_troop_delay_ms"": 600, ""same_troop_delay_ms"": 180, ""handle_bomber"": true, ""loop_hero_ability"": true, ""enable_stage2"": true},
                 ""run_session"": {""play_mode"": ""main_village"", ""stop_after_battles_enabled"": false, ""stop_after_battles"": 0, ""stop_after_minutes_enabled"": false, ""stop_after_minutes"": 0},
                 ""multi_account"": {""enable_multi_account"": false, ""multi_interval_mins"": 60, ""switch_after_battles_enabled"": false, ""switch_after_battles"": 0, ""switch_after_minutes_enabled"": true, ""switch_after_clan_points_enabled"": false, ""switch_after_clan_points"": 0, ""selected_villages"": [1], ""accounts"": [{""id"": ""acc_1"", ""name"": ""Account 1"", ""profileVillage"": 1, ""targetVillage"": ""main_village"", ""templatePath"": """", ""enabled"": true}]}
             }";
@@ -165,6 +186,9 @@ namespace CvAut
         public void Start()
         {
             if (_isRunning) return;
+
+            LoadConfig(_configPath);
+            _attacks = new Attacks(_adb, _vision, _templatesPath, ReadAttackDelayConfig(Config), ReadAttackCoordinateConfig(Config));
 
             _isRunning = true;
             _fastAttackQueued = false;
@@ -393,20 +417,30 @@ namespace CvAut
                 Console.WriteLine("[FSM-CS] phase=cycle status=pending mode=fast_attack");
             }
 
-            MainVillageConfig mainConfig = GetMainVillageConfig(cfg, _currentVillageIdx);
-
-            // 1. Xác thực màn hình Làng chính (Home Base) TRƯỚC. Khi mới vào game màn hình
+            // 1. Xác thực màn hình game đã tải xong TRƯỚC. Khi mới vào game màn hình
             // còn đang tải (screenshot trắng) nên zoom sẽ vô tác dụng — phải chờ render xong.
             WaitIfPaused(token);
             if (CheckStop(token)) return;
 
-            Console.WriteLine("[FSM-CS] phase=home_check status=start");
-            bool isHome = EnsureHomeBase(fastAttackOnly ? 8 : 50);
-            if (!isHome)
+            bool nightVillageMode = IsNightVillageMode(cfg, _currentVillageIdx);
+            if (!nightVillageMode)
             {
-                Console.WriteLine("[FSM-CS ERROR] phase=cycle status=skip reason=home_not_detected");
+                Console.WriteLine("[FSM-CS] phase=home_check status=start");
+                bool isLoaded = EnsureHomeBase(fastAttackOnly ? 8 : 50);
+                if (!isLoaded)
+                {
+                    Console.WriteLine("[FSM-CS ERROR] phase=cycle status=skip reason=home_not_detected");
+                    return;
+                }
+            }
+
+            if (nightVillageMode)
+            {
+                OneBuilderBaseCycle(cfg, token);
                 return;
             }
+
+            MainVillageConfig mainConfig = GetMainVillageConfig(cfg, _currentVillageIdx);
 
             // 2. Kéo camera rộng sau khi Home Base đã render để thấy toàn bộ mỏ tài nguyên.
             WaitIfPaused(token);
@@ -633,10 +667,336 @@ namespace CvAut
             Console.WriteLine($"[FSM-CS] phase=cycle status=success village={_currentVillageIdx}");
         }
 
+        private void OneBuilderBaseCycle(JsonElement cfg, CancellationToken token)
+        {
+            WaitIfPaused(token);
+            if (CheckStop(token)) return;
+
+            Console.WriteLine($"[BB-CS] phase=cycle status=start village={_currentVillageIdx}");
+
+            if (!EnsureBuilderBaseEntry(token))
+            {
+                Console.WriteLine("[BB-CS] phase=cycle status=fail reason=switch_to_builder_base_failed");
+                return;
+            }
+
+            WaitIfPaused(token);
+            if (CheckStop(token)) return;
+
+            JsonElement night = GetObjectOrDefault(cfg, "night_village");
+            int rawAttackCount = Math.Clamp(GetIntOrDefault(night, "attack_count", 1), 0, 10);
+            string attackCountMode = GetStringOrDefault(night, "attack_count_mode", "fixed");
+            bool stopWhenLootUnavailable = GetBoolOrDefault(night, "stop_when_loot_unavailable", true);
+            bool forceAttackForClanGames = GetBoolOrDefault(night, "force_attack_for_clan_games", false);
+            bool trophyRangeEnabled = GetBoolOrDefault(night, "trophy_range_enabled", false);
+            int minTrophy = Math.Clamp(GetIntOrDefault(night, "min_cups", 0), 0, 10000);
+            int maxTrophy = Math.Clamp(GetIntOrDefault(night, "max_cups", 5000), 0, 10000);
+            bool haltOnGoldFull = GetBoolOrDefault(night, "halt_on_gold_full", false);
+            bool haltOnElixirFull = GetBoolOrDefault(night, "halt_on_elixir_full", false);
+            bool upgradeWall = GetBoolOrDefault(night, "upgrade_wall", false);
+            bool enableAttack = GetBoolOrDefault(night, "enable_attack", true);
+            bool boostClockTower = GetBoolOrDefault(night, "boost_clock_tower", false);
+            var armyOptions = new BuilderBaseArmyOptions(
+                Enabled: GetBoolOrDefault(night, "army_management", true),
+                Formation: GetStringOrDefault(night, "army_formation", "auto"),
+                FillArmy: GetBoolOrDefault(night, "fill_army", true),
+                WaitForHeroes: GetBoolOrDefault(night, "wait_for_heroes", true),
+                HeroWaitSeconds: Math.Clamp(GetIntOrDefault(night, "hero_wait_seconds", 90), 0, 900));
+            var battleOptions = new BuilderBaseBattleOptions(
+                DropOrder: GetStringOrDefault(night, "drop_order", "BattleMachine|Bomber|PowerPekka|BabyDragon|CannonCart|NightWitch|RagedBarbarian"),
+                UseCustomDropOrder: GetBoolOrDefault(night, "custom_drop_order_enabled", false),
+                NextTroopDelayMs: Math.Clamp(GetIntOrDefault(night, "next_troop_delay_ms", 600), 0, 10000),
+                SameTroopDelayMs: Math.Clamp(GetIntOrDefault(night, "same_troop_delay_ms", 180), 50, 5000),
+                HandleBomber: GetBoolOrDefault(night, "handle_bomber", true),
+                LoopHeroAbility: GetBoolOrDefault(night, "loop_hero_ability", true),
+                EnableStage2: GetBoolOrDefault(night, "enable_stage2", true));
+            var maintenanceOptions = new BuilderBaseMaintenanceOptions(
+                CleanYard: GetBoolOrDefault(night, "clean_yard", false),
+                SuggestedUpgrades: GetBoolOrDefault(night, "suggested_upgrades", false),
+                StarLaboratory: GetBoolOrDefault(night, "star_laboratory", false),
+                UpgradeBattleMachine: GetBoolOrDefault(night, "upgrade_battle_machine", false),
+                UpgradeBattleCopter: GetBoolOrDefault(night, "upgrade_battle_copter", false),
+                BobUpgrades: GetBoolOrDefault(night, "bob_upgrades", false),
+                PlaceNewBuildings: GetBoolOrDefault(night, "place_new_buildings", false),
+                IgnoreGoldUpgrades: GetBoolOrDefault(night, "ignore_gold_upgrades", false),
+                IgnoreElixirUpgrades: GetBoolOrDefault(night, "ignore_elixir_upgrades", false),
+                IgnoreHallUpgrades: GetBoolOrDefault(night, "ignore_hall_upgrades", true),
+                IgnoreWallUpgrades: GetBoolOrDefault(night, "ignore_wall_upgrades", true),
+                StarLaboratoryTroop: GetStringOrDefault(night, "star_laboratory_troop", "auto"),
+                VillageIdx: _currentVillageIdx,
+                StarLaboratoryDebugScreenshots: GetBoolOrDefault(night, "star_laboratory_debug_screenshots", GetBoolOrDefault(night, "debug_screenshots", false)));
+
+            LogBuilderBaseBaselineAssetAudit(armyOptions, battleOptions, maintenanceOptions, boostClockTower, upgradeWall);
+
+            int attackTarget = ResolveBuilderBaseAttackTarget(rawAttackCount, attackCountMode);
+            Console.WriteLine($"[BB-CS] phase=cycle status=pending step=collect attack_count={rawAttackCount} attack_count_mode={attackCountMode} attack_target={attackTarget} upgrade_wall={upgradeWall} enable_attack={enableAttack} boost_clock_tower={boostClockTower} trophy_range={trophyRangeEnabled} min_trophy={minTrophy} max_trophy={maxTrophy} halt_gold_full={haltOnGoldFull} halt_elixir_full={haltOnElixirFull} force_clan_games={forceAttackForClanGames} clean_yard={maintenanceOptions.CleanYard} suggested_upgrades={maintenanceOptions.SuggestedUpgrades} star_laboratory={maintenanceOptions.StarLaboratory} hero_upgrades={maintenanceOptions.UpgradeBattleMachine || maintenanceOptions.UpgradeBattleCopter} bob_upgrades={maintenanceOptions.BobUpgrades} army_management={armyOptions.Enabled} army_formation={armyOptions.Formation} wait_for_heroes={armyOptions.WaitForHeroes} custom_drop_order={battleOptions.UseCustomDropOrder}");
+            BuilderBaseReportSnapshot beforeReport = _builderBaseReport.Read();
+            Console.WriteLine($"[BB-CS] phase=cycle status=pending step=report_before gold={beforeReport.Gold} elixir={beforeReport.Elixir} trophy={beforeReport.Trophy} free_builders={beforeReport.FreeBuilders} total_builders={beforeReport.TotalBuilders} builder_hall_level={beforeReport.BuilderHallLevel} loot_available={beforeReport.LootAvailable} remaining_stars={beforeReport.RemainingStars} max_stars={beforeReport.MaxStars} gold_storage_full={beforeReport.GoldStorageFull} elixir_storage_full={beforeReport.ElixirStorageFull}");
+            int collected = _builderBaseResources.Collect(token);
+            Console.WriteLine($"[BB-CS] phase=cycle status=pending step=collect_resources taps={collected}");
+
+            if (boostClockTower)
+            {
+                bool boosted = _builderBaseClockTower.TryBoost(token);
+                Console.WriteLine($"[BB-CS] phase=cycle status=pending step=clock_tower_boost success={boosted}");
+                Console.WriteLine($"[BB-CS] phase=cycle status=pending step=clock_tower_boost success={boosted}");
+            }
+            {
+                bool wallUpgraded = _builderBaseWallUpdater.TryUpgradeOne(token);
+                Console.WriteLine($"[BB-CS] phase=cycle status=pending step=wall_upgrade_done success={wallUpgraded}");
+                UpdateWallStats(_currentVillageIdx, wallUpgraded ? 1 : 0);
+            }
+
+            if (!CheckStop(token)
+                && (maintenanceOptions.CleanYard || maintenanceOptions.SuggestedUpgrades || maintenanceOptions.StarLaboratory
+                    || maintenanceOptions.UpgradeBattleMachine || maintenanceOptions.UpgradeBattleCopter || maintenanceOptions.BobUpgrades))
+            {
+                Console.WriteLine("[BB-CS] phase=cycle status=pending step=maintenance_skipped reason=temporary_scope_attack_and_wall_only");
+            }
+
+            if (!CheckStop(token))
+            {
+                BuilderBaseReportSnapshot afterMaintenanceReport = _builderBaseReport.Read();
+                Console.WriteLine($"[BB-CS] phase=cycle status=pending step=report_after_maintenance gold={afterMaintenanceReport.Gold} elixir={afterMaintenanceReport.Elixir} trophy={afterMaintenanceReport.Trophy} free_builders={afterMaintenanceReport.FreeBuilders} total_builders={afterMaintenanceReport.TotalBuilders} builder_hall_level={afterMaintenanceReport.BuilderHallLevel} loot_available={afterMaintenanceReport.LootAvailable} remaining_stars={afterMaintenanceReport.RemainingStars} max_stars={afterMaintenanceReport.MaxStars} gold_storage_full={afterMaintenanceReport.GoldStorageFull} elixir_storage_full={afterMaintenanceReport.ElixirStorageFull}");
+            }
+
+            if (enableAttack && !CheckStop(token))
+            {
+                int completedAttacks = 0;
+                int attempts = 0;
+                for (int attack = 1; !CheckStop(token); attack++)
+                {
+                    if (completedAttacks >= attackTarget)
+                    {
+                        Console.WriteLine($"[BB-CS] phase=prepare_attack status=skip index={attack} reason=attack_target_reached completed={completedAttacks} target={attackTarget} mode={attackCountMode}");
+                        break;
+                    }
+
+                    attempts++;
+                    if (attempts > attackTarget + 5)
+                    {
+                        Console.WriteLine($"[BB-CS] phase=prepare_attack status=skip index={attack} reason=abort_retry_guard attempts={attempts} completed={completedAttacks} target={attackTarget}");
+                        break;
+                    }
+
+                    BuilderBaseReportSnapshot attackReport = _builderBaseReport.Read();
+                    if (forceAttackForClanGames)
+                    {
+                        Console.WriteLine($"[BB-CS] phase=prepare_attack status=force_clan_games index={attack} loot_available={attackReport.LootAvailable} remaining_stars={attackReport.RemainingStars} max_stars={attackReport.MaxStars} gold_storage_full={attackReport.GoldStorageFull} elixir_storage_full={attackReport.ElixirStorageFull}");
+                    }
+                    else
+                    {
+                        if (ShouldStopBuilderBaseAttacksForMode(attackCountMode, stopWhenLootUnavailable, attackReport, trophyRangeEnabled, minTrophy, maxTrophy, haltOnGoldFull, haltOnElixirFull, out string stopReason))
+                        {
+                            Console.WriteLine($"[BB-CS] phase=prepare_attack status=skip index={attack} reason={stopReason} mode={attackCountMode} loot_available={attackReport.LootAvailable} remaining_stars={attackReport.RemainingStars} max_stars={attackReport.MaxStars} trophy={attackReport.Trophy} min={minTrophy} max={maxTrophy} gold_storage_full={attackReport.GoldStorageFull} elixir_storage_full={attackReport.ElixirStorageFull}");
+                            break;
+                        }
+                    }
+
+                    if (!_builderBaseArmyManager.EnsureReadyForAttack(armyOptions, token))
+                    {
+                        Console.WriteLine($"[BB-CS] phase=cycle status=pending step=army_not_ready index={attack}");
+                        break;
+                    }
+
+                    BuilderBaseBattleResult battleResult = _builderBaseAttacks.RunSingleAttack(battleOptions, token);
+                    Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attack_done index={attack} success={battleResult.ReturnedHome} damage={battleResult.Damage} stars={battleResult.Stars} stage2={battleResult.Stage2Entered}");
+                    bool counted = battleResult.ReturnedHome;
+                    if (counted)
+                    {
+                        UpdateBuilderBaseAttackStats(_currentVillageIdx, battleResult);
+                        completedAttacks++;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attack_not_counted index={attack} reason=abort_or_return_home_failed attempts={attempts} completed={completedAttacks}");
+                    }
+
+                    if (!PostBuilderBaseAttackMaintenance(maintenanceOptions, token, battleResult.ReturnedHome))
+                    {
+                        Console.WriteLine($"[BB-CS] phase=cycle status=fail step=post_attack_maintenance index={attack} reason=builder_base_recovery_failed");
+                        break;
+                    }
+                }
+                Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attacks_complete completed={completedAttacks} attempts={attempts} target={attackTarget} mode={attackCountMode}");
+            }
+
+            _cycleCount++;
+            Console.WriteLine($"[BB-CS] phase=cycle status=success village={_currentVillageIdx}");
+        }
+
+        private int ResolveBuilderBaseAttackTarget(int attackCount, string attackCountMode)
+        {
+            string mode = (attackCountMode ?? "fixed").Trim().ToLowerInvariant();
+            int target = mode switch
+            {
+                "while_available" or "bonus" or "stars" or "attack_while_bonus" or "attack_while_stars" => 10,
+                "trophy" or "trophy_mode" => 10,
+                "random" => _builderBaseRandom.Next(2, 8),
+                "mbr" or "mbr_combo" when attackCount == 0 => 10,
+                "mbr" or "mbr_combo" when attackCount == 1 => _builderBaseRandom.Next(2, 8),
+                "mbr" or "mbr_combo" => Math.Clamp(attackCount - 1, 1, 10),
+                _ when attackCount == 0 => 10,
+                _ => Math.Clamp(attackCount, 1, 10)
+            };
+
+            Console.WriteLine($"[BB-CS] phase=attack_count status=resolved mode={mode} raw={attackCount} target={target}");
+            return target;
+        }
+
+        private static bool ShouldStopBuilderBaseAttacksForMode(
+            string attackCountMode,
+            bool stopWhenLootUnavailable,
+            BuilderBaseReportSnapshot report,
+            bool trophyRangeEnabled,
+            int minTrophy,
+            int maxTrophy,
+            bool haltOnGoldFull,
+            bool haltOnElixirFull,
+            out string reason)
+        {
+            string mode = (attackCountMode ?? "fixed").Trim().ToLowerInvariant();
+            bool enforceLoot = stopWhenLootUnavailable || mode is "while_available" or "bonus" or "stars" or "attack_while_bonus" or "attack_while_stars";
+            bool enforceTrophy = trophyRangeEnabled || mode is "trophy" or "trophy_mode";
+
+            if (enforceLoot && !report.LootAvailable)
+            {
+                reason = "loot_unavailable";
+                return true;
+            }
+
+            if (enforceTrophy && report.Trophy > 0 && (report.Trophy < minTrophy || report.Trophy > maxTrophy))
+            {
+                reason = "trophy_out_of_range";
+                return true;
+            }
+
+            if ((haltOnGoldFull && report.GoldStorageFull) || (haltOnElixirFull && report.ElixirStorageFull))
+            {
+                reason = "storage_full";
+                return true;
+            }
+
+            reason = "none";
+            return false;
+        }
+
+        private bool PostBuilderBaseAttackMaintenance(BuilderBaseMaintenanceOptions maintenanceOptions, CancellationToken token, bool returnedHome)
+        {
+            Console.WriteLine($"[BB-CS] phase=post_attack status=start returned_home={returnedHome}");
+            DismissBuilderBasePopups(token);
+
+            if (!_builderBaseNavigator.IsOnBuilderBase())
+            {
+                Console.WriteLine("[BB-CS] phase=post_attack status=pending step=recover_builder_base reason=not_on_builder_base");
+                if (!EnsureBuilderBaseEntry(token)) return false;
+            }
+
+            DismissBuilderBasePopups(token);
+            _builderBaseNavigator.ZoomOutApprox(token);
+            if (InterruptibleSleep(700, token)) return false;
+
+            if (maintenanceOptions.CleanYard && _builderBaseNavigator.IsOnBuilderBase())
+            {
+                BuilderBaseReportSnapshot report = _builderBaseReport.Read();
+                BuilderBaseMaintenanceResult result = _builderBaseMaintenance.Run(maintenanceOptions with
+                {
+                    SuggestedUpgrades = false,
+                    StarLaboratory = false,
+                    UpgradeBattleMachine = false,
+                    UpgradeBattleCopter = false,
+                    BobUpgrades = false,
+                    PlaceNewBuildings = false
+                }, report, token);
+                UpdateBuilderBaseMaintenanceStats(_currentVillageIdx, result);
+                Console.WriteLine($"[BB-CS] phase=post_attack status=pending step=clean_yard_done obstacles={result.ObstaclesRemoved}");
+            }
+
+            DismissBuilderBasePopups(token);
+            _builderBaseNavigator.ZoomOutApprox(token);
+            bool ok = _builderBaseNavigator.IsOnBuilderBase();
+            Console.WriteLine($"[BB-CS] phase=post_attack status={(ok ? "success" : "fail")} step=verify_builder_base");
+            return ok;
+        }
+
+        private void LogBuilderBaseBaselineAssetAudit(
+            BuilderBaseArmyOptions armyOptions,
+            BuilderBaseBattleOptions battleOptions,
+            BuilderBaseMaintenanceOptions maintenanceOptions,
+            bool boostClockTower,
+            bool upgradeWall)
+        {
+            if (s_loggedBuilderBaseAssetAudit) return;
+            s_loggedBuilderBaseAssetAudit = true;
+
+            var required = new SortedSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                @"ui\switch_builder",
+                @"ui\game_setting",
+                @"ui\shop",
+                @"ui\builder_available",
+                @"ui\x_night",
+                @"resources\gold_collector",
+                @"resources\elixir_collector",
+                @"resources\collect",
+                @"ui\attack_button",
+                @"ui\start_battle",
+                @"ui\return_home",
+                @"ui\surrender_button"
+            };
+
+            if (armyOptions.Enabled || battleOptions.UseCustomDropOrder)
+            {
+                required.UnionWith(new[]
+                {
+                    @"troops\builder_base\raged_barbarian",
+                    @"troops\builder_base\raged_barbarian_click",
+                    @"troops\builder_base\power_pekka",
+                    @"troops\builder_base\power_pekka_click",
+                    @"heroes\battle_machine",
+                    @"heroes\battle_machine_a"
+                });
+            }
+
+            if (boostClockTower)
+            {
+                required.UnionWith(new[] { @"ui\clock_available", @"ui\free_boost", @"ui\boost" });
+            }
+
+            if (upgradeWall)
+            {
+                required.UnionWith(new[] { @"walls\wall", @"ui\icon_wall" });
+            }
+
+            if (maintenanceOptions.CleanYard)
+            {
+                required.Add(@"ui\remove_obstacle");
+            }
+
+            if (maintenanceOptions.SuggestedUpgrades || maintenanceOptions.UpgradeBattleMachine || maintenanceOptions.UpgradeBattleCopter || maintenanceOptions.BobUpgrades)
+            {
+                required.UnionWith(new[] { @"ui\builder_available", @"ui\open_upgrade", @"ui\icon_up", @"resources\gold", @"resources\elixir" });
+            }
+
+            if (maintenanceOptions.StarLaboratory)
+            {
+                required.UnionWith(new[] { @"builder_base\star_laboratory", @"ui\laboratory", @"ui\research" });
+            }
+
+            string[] missing = required.Where(template => !TemplateAssetLoader.Exists(_templatesPath, template)).ToArray();
+            if (missing.Length == 0)
+            {
+                Console.WriteLine($"[BB-CS] phase=asset_audit status=success checked={required.Count}");
+                return;
+            }
+
+            Console.WriteLine($"[BB-CS WARNING] phase=asset_audit status=partial checked={required.Count} missing={missing.Length} templates=\"{string.Join(",", missing)}\" action=skip_template_dependent_steps");
+        }
+
         private void TryUpgradeWallsFromHome(JsonElement cfg, CancellationToken token, string phase)
         {
             var wallConfig = GetWallUpgradeConfig(cfg, _currentVillageIdx);
-            Console.WriteLine($"[WALL DECISION] phase={phase} cycle={_cycleCount} enabled={wallConfig.Enabled} home=true level={wallConfig.WallLevel} gold_start={wallConfig.GoldThreshold:N0} elixir_start={wallConfig.ElixirThreshold:N0} gold_reserve={wallConfig.GoldReserve:N0} elixir_reserve={wallConfig.ElixirReserve:N0} wall_batch_limit={wallConfig.BatchLimit} wall_debug_screenshots={wallConfig.DebugScreenshots} status=check");
+            Console.WriteLine($"[WALL DECISION] phase={phase} cycle={_cycleCount} enabled={wallConfig.Enabled} home=true level={wallConfig.WallLevel} gold_start={wallConfig.GoldThreshold:N0} elixir_start={wallConfig.ElixirThreshold:N0} gold_reserve={wallConfig.GoldReserve:N0} elixir_reserve={wallConfig.ElixirReserve:N0} wall_debug_screenshots={wallConfig.DebugScreenshots} status=check");
 
             if (!wallConfig.Enabled)
             {
@@ -656,7 +1016,6 @@ namespace CvAut
                 wallConfig.ElixirThreshold,
                 wallConfig.GoldReserve,
                 wallConfig.ElixirReserve,
-                wallConfig.BatchLimit,
                 wallConfig.DebugScreenshots,
                 _cycleCount,
                 token);
@@ -862,45 +1221,6 @@ namespace CvAut
             _adb.Tap(1445, 804); // Chấp nhận phí tìm trận ban đầu
         }
 
-        private bool HandleTreasureHuntIfPresent(bool verboseNotFound = true)
-        {
-            using Mat? screenshot = _adb.TakeScreenshot();
-            if (screenshot == null || screenshot.Empty())
-            {
-                Console.WriteLine("[FSM-CS WARNING] phase=treasure_hunt status=fail reason=screenshot_failed");
-                return false;
-            }
-
-            return HandleTreasureHuntIfPresent(screenshot, verboseNotFound);
-        }
-
-        /// <summary>
-        /// Giải quyết popup sự kiện săn rương kho báu (Treasure Hunt) xuất hiện cản trở thao tác bot.
-        /// Bấm click liên tục để dọn giải tỏa rương báu.
-        /// </summary>
-        private bool HandleTreasureHuntIfPresent(Mat screenshot, bool verboseNotFound = true)
-        {
-            if (!TryFindTreasureHuntPopup(screenshot, out Point center, out double score))
-            {
-                if (verboseNotFound)
-                {
-                    Console.WriteLine("[FSM-CS] phase=treasure_hunt status=skip reason=popup_not_found");
-                }
-
-                return false;
-            }
-
-            Console.WriteLine("[FSM-CS] phase=treasure_hunt status=pending details=\"popup_detected\"");
-            for (int i = 1; i <= 5; i++)
-            {
-                _adb.Tap(center.X, center.Y);
-                Thread.Sleep(350);
-            }
-
-            Thread.Sleep(1200);
-            return true;
-        }
-
         /// <summary>
         /// Mở rương báu thu được trong game và bấm xác nhận liên tục để nhận thưởng.
         /// </summary>
@@ -944,65 +1264,6 @@ namespace CvAut
                 Thread.Sleep(500);
             }
 
-            return false;
-        }
-
-        /// <summary>
-        /// So khớp đa tỷ lệ tìm kiếm xem có sự xuất hiện của popup Treasure Hunt không.
-        /// </summary>
-        private bool TryFindTreasureHuntPopup(Mat screenshot, out Point center, out double score)
-        {
-            if (TryMatchTemplate(screenshot, @"ui\treasure_hunt.png", TreasureHuntRoi, TreasureHuntThreshold, out center, out score)
-                || TryMatchTemplate(screenshot, @"event\treasure_hunt.png", TreasureHuntRoi, TreasureHuntThreshold, out center, out score))
-            {
-                return true;
-            }
-
-            double bestScore = score;
-            Point bestCenter = center;
-
-            if (TryMatchTemplateRegionMultiScale(
-                    screenshot,
-                    @"ui\treasure_hunt.png",
-                    TreasureHuntRoi,
-                    TreasureHuntChestTemplateRoi,
-                    TreasureHuntMarkerThreshold,
-                    out Point chestCenter,
-                    out double chestScore))
-            {
-                center = chestCenter;
-                score = chestScore;
-                return true;
-            }
-
-            if (chestScore > bestScore)
-            {
-                bestScore = chestScore;
-                bestCenter = chestCenter;
-            }
-
-            if (TryMatchTemplateRegionMultiScale(
-                    screenshot,
-                    @"ui\treasure_hunt.png",
-                    TreasureHuntRoi,
-                    TreasureHuntTextTemplateRoi,
-                    TreasureHuntMarkerThreshold,
-                    out Point textCenter,
-                    out double textScore))
-            {
-                center = textCenter;
-                score = textScore;
-                return true;
-            }
-
-            if (textScore > bestScore)
-            {
-                bestScore = textScore;
-                bestCenter = textCenter;
-            }
-
-            center = bestCenter;
-            score = bestScore;
             return false;
         }
 
@@ -1068,86 +1329,6 @@ namespace CvAut
             }
 
             Console.WriteLine("[SCOUT-CS WARNING] phase=scout_wait status=fail reason=timeout");
-            return false;
-        }
-
-        /// <summary>
-        /// Kiểm tra sự xuất hiện của popup mất kết nối mạng. Nếu có, thực hiện khởi động lại game.
-        /// </summary>
-        private bool RecoverIfConnectionPopup(string warningMessage)
-        {
-            return HandleBlockingConnectionPopup(warningMessage);
-        }
-
-        private bool HandleBlockingConnectionPopup(string warningMessage)
-        {
-            if (_handlingConnectionPopup || !ConnectionPopupVisible(out string matchInfo))
-            {
-                return false;
-            }
-
-            _handlingConnectionPopup = true;
-            try
-            {
-                string details = warningMessage.Replace("[WARN] ", "").Replace(" → ", "_").ToLower();
-                Console.WriteLine($"[FSM-CS WARNING] phase=connection_check status=fail action=recover reason=\"connection_lost\" details=\"{details} ({matchInfo})\"");
-                BootRecovery();
-                return true;
-            }
-            finally
-            {
-                _handlingConnectionPopup = false;
-            }
-        }
-
-        /// <summary>
-        /// Kiểm tra xem có bất kỳ popup báo lỗi kết nối mạng nào đang cản màn hình không.
-        /// </summary>
-        private bool ConnectionPopupVisible(out string matchInfo, bool allowDialogShapeFallback = true)
-        {
-            matchInfo = "none";
-            if (_disableDialogShapeFallback)
-            {
-                allowDialogShapeFallback = false;
-            }
-
-            using Mat? screenshot = _adb.TakeScreenshot();
-            if (screenshot == null || screenshot.Empty())
-            {
-                return false;
-            }
-
-            foreach (string templateName in ConnectionPopupTemplates)
-            {
-                bool isLegacyConnectionTemplate = templateName.EndsWith("Client_error!.png", StringComparison.OrdinalIgnoreCase)
-                    || templateName.EndsWith("Connection_lost.png", StringComparison.OrdinalIgnoreCase)
-                    || templateName.EndsWith("Another_device.png", StringComparison.OrdinalIgnoreCase)
-                    || templateName.EndsWith("rate_coc.png", StringComparison.OrdinalIgnoreCase);
-                double threshold = templateName.EndsWith("conn.png", StringComparison.OrdinalIgnoreCase)
-                    ? ConnIconPopupThreshold
-                    : isLegacyConnectionTemplate ? LegacyConnectionPopupThreshold : ConnectionPopupThreshold;
-                Rect? popupRoi = isLegacyConnectionTemplate ? null : ConnectionPopupRoi;
-
-                bool matched = isLegacyConnectionTemplate
-                    ? TryMatchTemplateMultiScale(screenshot, templateName, popupRoi, threshold, out Point center, out double score)
-                    : TryMatchTemplate(screenshot, templateName, popupRoi, threshold, out center, out score);
-                if (!matched)
-                {
-                    continue;
-                }
-
-                matchInfo = $"{templateName} score={score:F2} center=({center.X},{center.Y})";
-                Console.WriteLine($"[FSM-CS WARNING] phase=connection_check status=fail reason=\"popup_detected\" template=\"{templateName}\"");
-                return true;
-            }
-
-            if (allowDialogShapeFallback && TryDetectReloadDialogShape(screenshot, out Rect dialogRect))
-            {
-                matchInfo = $"reload_dialog_shape rect=({dialogRect.X},{dialogRect.Y},{dialogRect.Width},{dialogRect.Height})";
-                Console.WriteLine("[FSM-CS WARNING] phase=connection_check status=fail reason=\"popup_detected\" template=\"reload_dialog_shape\"");
-                return true;
-            }
-
             return false;
         }
 
@@ -1564,7 +1745,6 @@ namespace CvAut
                     GetWallThreshold(cfg, cfg, "wall_elixir_threshold"),
                     GetWallReserve(cfg, cfg, "wall_gold_reserve", 100_000),
                     GetWallReserve(cfg, cfg, "wall_elixir_reserve", 0),
-                    GetWallBatchLimit(cfg, cfg),
                     GetBoolOrDefault(cfg, "wall_debug_screenshots", false));
             }
 
@@ -1581,7 +1761,6 @@ namespace CvAut
                     GetWallThreshold(profile, cfg, "wall_elixir_threshold"),
                     GetWallReserve(profile, cfg, "wall_gold_reserve", 100_000),
                     GetWallReserve(profile, cfg, "wall_elixir_reserve", 0),
-                    GetWallBatchLimit(profile, cfg),
                     GetBoolOrDefault(profile, "wall_debug_screenshots", GetBoolOrDefault(cfg, "wall_debug_screenshots", false)));
             }
 
@@ -1589,7 +1768,7 @@ namespace CvAut
             JsonElement wall = GetObjectOrDefault(cfg, "element_state_automation");
             if (wall.ValueKind != JsonValueKind.Object || !GetBoolOrDefault(wall, "upgrade_enabled", false))
             {
-                return new WallUpgradeConfig(false, 14, 5_000_000, 5_000_000, 100_000, 0, 1, false);
+                return new WallUpgradeConfig(false, 14, 5_000_000, 5_000_000, 100_000, 0, false);
             }
 
             return CreateWallUpgradeConfig(
@@ -1599,14 +1778,7 @@ namespace CvAut
                 GetIntOrDefault(wall, "wall_elixir_threshold", GetIntOrDefault(wall, "min_retained_elixir", 5_000_000)),
                 GetIntOrDefault(wall, "wall_gold_reserve", 100_000),
                 GetIntOrDefault(wall, "wall_elixir_reserve", 0),
-                GetWallBatchLimit(wall, cfg),
                 GetBoolOrDefault(wall, "wall_debug_screenshots", GetBoolOrDefault(cfg, "wall_debug_screenshots", false)));
-        }
-
-        private static int GetWallBatchLimit(JsonElement primary, JsonElement root)
-        {
-            int raw = GetIntOrDefault(primary, "wall_batch_limit", GetIntOrDefault(root, "wall_batch_limit", 1));
-            return Math.Clamp(raw, 0, 10);
         }
 
         private static int GetWallThreshold(JsonElement primary, JsonElement root, string key)
@@ -1660,16 +1832,15 @@ namespace CvAut
             s_loggedLegacyWallConfigMigration = true;
         }
 
-        private static WallUpgradeConfig CreateWallUpgradeConfig(bool enabled, int wallLevel, int goldThreshold, int elixirThreshold, int goldReserve, int elixirReserve, int batchLimit, bool debugScreenshots)
+        private static WallUpgradeConfig CreateWallUpgradeConfig(bool enabled, int wallLevel, int goldThreshold, int elixirThreshold, int goldReserve, int elixirReserve, bool debugScreenshots)
         {
-            int safeBatchLimit = Math.Clamp(batchLimit, 0, 10);
             if (wallLevel < WallUpgradeDecider.MinSupportedWallLevel || wallLevel > WallUpgradeDecider.MaxSupportedWallLevel)
             {
-                Console.WriteLine($"[WALL WARN] phase=config status=disabled level={wallLevel} wall_batch_limit={safeBatchLimit} reason=unsupported_wall_level supported={WallUpgradeDecider.MinSupportedWallLevel}-{WallUpgradeDecider.MaxSupportedWallLevel}");
-                return new WallUpgradeConfig(false, wallLevel, goldThreshold, elixirThreshold, goldReserve, elixirReserve, safeBatchLimit, debugScreenshots);
+                Console.WriteLine($"[WALL WARN] phase=config status=disabled level={wallLevel} reason=unsupported_wall_level supported={WallUpgradeDecider.MinSupportedWallLevel}-{WallUpgradeDecider.MaxSupportedWallLevel}");
+                return new WallUpgradeConfig(false, wallLevel, goldThreshold, elixirThreshold, goldReserve, elixirReserve, debugScreenshots);
             }
 
-            return new WallUpgradeConfig(enabled, wallLevel, goldThreshold, elixirThreshold, goldReserve, elixirReserve, safeBatchLimit, debugScreenshots);
+            return new WallUpgradeConfig(enabled, wallLevel, goldThreshold, elixirThreshold, goldReserve, elixirReserve, debugScreenshots);
         }
 
         private static JsonElement LoadVillageProfile(int villageIdx)
@@ -1703,107 +1874,6 @@ namespace CvAut
             }
 
             return default;
-        }
-
-        private static int[] GetSelectedVillages(JsonElement multiConfig)
-        {
-            if (multiConfig.ValueKind == JsonValueKind.Object
-                && multiConfig.TryGetProperty("selected_villages", out JsonElement selected)
-                && selected.ValueKind == JsonValueKind.Array)
-            {
-                var villages = new List<int>();
-                foreach (JsonElement item in selected.EnumerateArray())
-                {
-                    if (item.ValueKind == JsonValueKind.Number && item.TryGetInt32(out int villageIdx))
-                    {
-                        villages.Add(villageIdx);
-                    }
-                }
-
-                if (villages.Count > 0)
-                {
-                    return villages.ToArray();
-                }
-            }
-
-            return new[] { 1, 2 };
-        }
-
-        private static AccountConfig[] GetConfiguredAccounts(JsonElement multiConfig)
-        {
-            if (multiConfig.ValueKind == JsonValueKind.Object
-                && multiConfig.TryGetProperty("accounts", out JsonElement accounts)
-                && accounts.ValueKind == JsonValueKind.Array)
-            {
-                AccountConfig[] parsed = accounts.EnumerateArray()
-                    .Select((account, index) => ParseAccountConfig(account, index + 1))
-                    .Where(account => account.Enabled)
-                    .ToArray();
-
-                if (parsed.Length > 0)
-                {
-                    return parsed;
-                }
-            }
-
-            return GetSelectedVillages(multiConfig)
-                .Select(village => new AccountConfig(
-                    Id: $"acc_{village}",
-                    Name: $"Account {village}",
-                    ProfileVillage: village,
-                    TargetVillage: "main_village",
-                    TemplatePath: string.Empty,
-                    Enabled: true,
-                    ConfigPreset: string.Empty))
-                .ToArray();
-        }
-
-        private static AccountConfig ParseAccountConfig(JsonElement account, int fallbackIndex)
-        {
-            int profileVillage = Math.Clamp(GetIntOrDefault(account, "profileVillage", fallbackIndex), 1, 5);
-            string id = GetStringOrDefault(account, "id", $"acc_{profileVillage}");
-            string name = GetStringOrDefault(account, "name", $"Account {profileVillage}");
-            string targetVillage = GetStringOrDefault(account, "targetVillage", "main_village");
-            string templatePath = GetStringOrDefault(account, "templatePath", string.Empty);
-            bool enabled = GetBoolOrDefault(account, "enabled", true);
-            string configPreset = GetStringOrDefault(account, "configPreset", string.Empty);
-
-            return new AccountConfig(id, name, profileVillage, targetVillage, templatePath, enabled, configPreset);
-        }
-
-        private bool ShouldSwitchAccount(
-            DateTime slotStart,
-            int slotBattleStart,
-            int slotClanPointStart,
-            int villageIdx,
-            bool switchByMinutes,
-            int intervalSecs,
-            bool switchByBattles,
-            int battleLimit,
-            bool switchByClanPoints,
-            int clanPointLimit,
-            out string reason)
-        {
-            if (switchByBattles && battleLimit > 0 && _sessionBattlesCompleted - slotBattleStart >= battleLimit)
-            {
-                reason = "battle_limit";
-                return true;
-            }
-
-            if (switchByClanPoints && clanPointLimit > 0 && ReadClanGamesPoints(villageIdx) - slotClanPointStart >= clanPointLimit)
-            {
-                reason = "clan_games_points";
-                return true;
-            }
-
-            if (switchByMinutes && intervalSecs > 0 && (DateTime.Now - slotStart).TotalSeconds >= intervalSecs)
-            {
-                reason = "minute_limit";
-                return true;
-            }
-
-            reason = "none";
-            return false;
         }
 
         private static int ReadClanGamesPoints(int villageIdx)
@@ -1937,130 +2007,6 @@ namespace CvAut
                 _ => $"total total_ok={totalOk} dark_ok={darkOk}"
             };
             return accepted;
-        }
-
-        private void RunDonateOnlyCycle(MainVillageConfig config, CancellationToken token)
-        {
-            Console.WriteLine("[DONATE-CS] phase=donate_only status=start");
-            TryUseCakeIfConfigured(config, token);
-            TryRequestTroopsIfConfigured(config, token);
-            TryDonateOnce(token);
-            InterruptibleSleep(5000, token);
-            Console.WriteLine("[DONATE-CS] phase=donate_only status=success");
-        }
-
-        private void TryRequestTroopsIfConfigured(MainVillageConfig config, CancellationToken token)
-        {
-            if (!config.RequestTroops || CheckStop(token)) return;
-
-            Console.WriteLine("[REQUEST-CS] phase=request_troops status=start");
-            if (TapFirstVisibleTemplate(new[] { @"ui\request_button_unavailable", "request_button_unavailable" }, 0.78, null, out _, tap: false))
-            {
-                Console.WriteLine("[REQUEST-CS] phase=request_troops status=skip reason=cooldown_or_unavailable");
-                return;
-            }
-
-            if (!TapFirstVisibleTemplate(new[] { @"ui\request_troops", @"ui\request_button", "request_button" }, 0.70, null, out string matched))
-            {
-                Console.WriteLine("[REQUEST-CS] phase=request_troops status=fail reason=request_button_not_found");
-                return;
-            }
-
-            if (!string.IsNullOrWhiteSpace(config.RequestTroopsMessage))
-            {
-                string escaped = config.RequestTroopsMessage.Replace("'", "");
-                _adb.ExecuteShell($"input text '{escaped.Replace(" ", "%s")}'");
-                InterruptibleSleep(300, token);
-            }
-
-            TapFirstVisibleTemplate(new[] { @"ui\request_button", "request_button" }, 0.70, null, out _, tap: true);
-            Console.WriteLine($"[REQUEST-CS] phase=request_troops status=success template=\"{matched}\"");
-        }
-
-        private void TryUseCakeIfConfigured(MainVillageConfig config, CancellationToken token)
-        {
-            if (!config.UseCake || CheckStop(token)) return;
-
-            Console.WriteLine("[EVENT-CS] phase=use_cake status=start");
-            if (TapFirstVisibleTemplate(new[] { @"ui\clan_castle_cake", "clan_castle_cake" }, 0.72, null, out string matched))
-            {
-                Console.WriteLine($"[EVENT-CS] phase=use_cake status=success template=\"{matched}\"");
-                InterruptibleSleep(1000, token);
-                return;
-            }
-
-            Console.WriteLine("[EVENT-CS] phase=use_cake status=skip reason=item_not_found");
-        }
-
-        private void TryDonateOnce(CancellationToken token)
-        {
-            if (CheckStop(token)) return;
-
-            Console.WriteLine("[DONATE-CS] phase=scan_chat status=start");
-            if (!TapFirstVisibleTemplate(new[] { @"ui\donate_button", "donate_button" }, 0.72, null, out string matched))
-            {
-                Console.WriteLine("[DONATE-CS] phase=scan_chat status=skip reason=donate_button_not_found");
-                return;
-            }
-
-            Console.WriteLine($"[DONATE-CS] phase=donate status=pending template=\"{matched}\" details=\"donate_panel_opened\"");
-            InterruptibleSleep(700, token);
-        }
-
-        private bool TapFirstVisibleTemplate(string[] templates, double threshold, Rect? roi, out string matchedTemplate, bool tap = true)
-        {
-            matchedTemplate = string.Empty;
-            using Mat? screenshot = _adb.TakeScreenshot();
-            if (screenshot == null || screenshot.Empty()) return false;
-
-            foreach (string template in templates)
-            {
-                Point? center = _vision.FindElement(screenshot, template, threshold, roi, out double score);
-                if (center == null) continue;
-
-                matchedTemplate = template;
-                Console.WriteLine($"[VISION] phase=template_match status=success template=\"{template}\" score={score:F2} center=({center.Value.X},{center.Value.Y})");
-                if (tap)
-                {
-                    _adb.Tap(center.Value.X, center.Value.Y);
-                }
-                return true;
-            }
-
-            return false;
-        }
-
-        private bool ShouldSmartSurrender(DateTime battleStart, SmartSurrenderConfig config, out string reason)
-        {
-            reason = "none";
-            double elapsedSeconds = (DateTime.Now - battleStart).TotalSeconds;
-            if (config.AfterSecondsEnabled && config.AfterSeconds > 0 && elapsedSeconds >= config.AfterSeconds)
-            {
-                reason = "time_limit";
-                return true;
-            }
-
-            if (config.LowResourcesEnabled && config.LowResourcesThreshold > 0)
-            {
-                var resources = IsTarget.ExtractResources(_adb, _vision);
-                int remainingTotal = resources.Gold + resources.Elixir;
-                if (remainingTotal > 0 && remainingTotal <= config.LowResourcesThreshold)
-                {
-                    reason = "low_resources";
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private void ExecuteSurrender(string reason, CancellationToken token)
-        {
-            _adb.Tap(80, 780);
-            if (InterruptibleSleep(1000, token)) return;
-            _adb.Tap(960, 560);
-            Console.WriteLine($"[ATTACK-CS] phase=surrender status=success reason={reason}");
-            InterruptibleSleep(2000, token);
         }
 
         /// <summary>
@@ -2595,6 +2541,47 @@ namespace CvAut
             Console.WriteLine($"[FSM-CS] phase=wall_stats status=success count={upgradedCount} action=save_file path=\"{path}\"");
         }
 
+        private void UpdateBuilderBaseAttackStats(int villageIdx, BuilderBaseBattleResult result)
+        {
+            string path = StatsFilePath(villageIdx);
+            JsonObject stats = LoadStatsFromDisk(path);
+            JsonObject bb = stats["builder_base"] as JsonObject ?? new JsonObject();
+            bb["attacks"] = GetJsonInt(bb, "attacks") + 1;
+            bb["wins"] = GetJsonInt(bb, "wins") + (result.Stars > 0 ? 1 : 0);
+            bb["losses"] = GetJsonInt(bb, "losses") + (result.Stars <= 0 ? 1 : 0);
+            bb["stars"] = GetJsonInt(bb, "stars") + Math.Clamp(result.Stars, 0, 3);
+            bb["damage"] = GetJsonInt(bb, "damage") + Math.Clamp(result.Damage, 0, 200);
+            bb["stage2_entries"] = GetJsonInt(bb, "stage2_entries") + (result.Stage2Entered ? 1 : 0);
+            bb["returned_home_failures"] = GetJsonInt(bb, "returned_home_failures") + (result.ReturnedHome ? 0 : 1);
+            bb["last_update_ts"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            stats["builder_base"] = bb;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, stats.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"[BB-STATS] phase=attack_stats status=success stars={result.Stars} damage={result.Damage} stage2={result.Stage2Entered} action=save_file path=\"{path}\"");
+        }
+
+        private void UpdateBuilderBaseMaintenanceStats(int villageIdx, BuilderBaseMaintenanceResult result)
+        {
+            int total = result.ObstaclesRemoved + result.SuggestedUpgrades + result.ResearchStarted + result.HeroUpgrades + result.BobUpgrades;
+            if (total <= 0) return;
+
+            string path = StatsFilePath(villageIdx);
+            JsonObject stats = LoadStatsFromDisk(path);
+            JsonObject bb = stats["builder_base"] as JsonObject ?? new JsonObject();
+            bb["obstacles_removed"] = GetJsonInt(bb, "obstacles_removed") + result.ObstaclesRemoved;
+            bb["suggested_upgrades"] = GetJsonInt(bb, "suggested_upgrades") + result.SuggestedUpgrades;
+            bb["research_started"] = GetJsonInt(bb, "research_started") + result.ResearchStarted;
+            bb["hero_upgrades"] = GetJsonInt(bb, "hero_upgrades") + result.HeroUpgrades;
+            bb["bob_upgrades"] = GetJsonInt(bb, "bob_upgrades") + result.BobUpgrades;
+            bb["last_update_ts"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            stats["builder_base"] = bb;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, stats.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"[BB-STATS] phase=maintenance_stats status=success obstacles={result.ObstaclesRemoved} upgrades={result.SuggestedUpgrades} research={result.ResearchStarted} hero={result.HeroUpgrades} bob={result.BobUpgrades} action=save_file path=\"{path}\"");
+        }
+
         private static string StatsFilePath(int villageIdx)
         {
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -2644,22 +2631,12 @@ namespace CvAut
             int ElixirThreshold,
             int GoldReserve,
             int ElixirReserve,
-            int BatchLimit,
             bool DebugScreenshots);
 
         private sealed record TrainingConfig(
             string Mode,
             int QuickSlot,
             string AttackStrategy);
-
-        private sealed record AccountConfig(
-            string Id,
-            string Name,
-            int ProfileVillage,
-            string TargetVillage,
-            string TemplatePath,
-            bool Enabled,
-            string ConfigPreset = "");
 
         private static JsonObject LoadStatsFromDisk(string path)
         {

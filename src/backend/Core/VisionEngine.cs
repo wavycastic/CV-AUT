@@ -208,6 +208,46 @@ namespace CvAut
         }
 
         /// <summary>
+        /// Thử tìm kiếm mẫu hình ảnh và trả về giá trị boolean kết quả, tọa độ điểm tâm và điểm số tương đồng.
+        /// </summary>
+        public bool TryFindTemplate(Mat source, string templatePath, Rect? roi, double threshold, out Point center, out double score)
+        {
+            center = default;
+            score = 0;
+
+            if (source == null || source.Empty()) return false;
+
+            string fullPath = Path.IsPathRooted(templatePath) ? templatePath : Path.Combine(_templatesDir, templatePath);
+            if (!File.Exists(fullPath)) return false;
+
+            using Mat template = Cv2.ImRead(fullPath, ImreadModes.Grayscale);
+            if (template.Empty()) return false;
+
+            Rect safeRoi = roi.HasValue ? ImageUtils.ClampRect(roi.Value, source.Width, source.Height) : new Rect(0, 0, source.Width, source.Height);
+            if (safeRoi.Width < template.Width || safeRoi.Height < template.Height) return false;
+
+            using Mat crop = new Mat(source, safeRoi);
+            using Mat gray = new Mat();
+            if (crop.Channels() > 1)
+                Cv2.CvtColor(crop, gray, ColorConversionCodes.BGR2GRAY);
+            else
+                crop.CopyTo(gray);
+
+            using Mat res = new Mat();
+            Cv2.MatchTemplate(gray, template, res, TemplateMatchModes.CCoeffNormed);
+            Cv2.MinMaxLoc(res, out _, out double maxVal, out _, out Point maxLoc);
+            score = maxVal;
+
+            if (maxVal >= threshold)
+            {
+                center = new Point(safeRoi.X + maxLoc.X + template.Width / 2, safeRoi.Y + maxLoc.Y + template.Height / 2);
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Cố gắng trích xuất chuỗi chữ số từ vùng hình ảnh chỉ định (ROI) sang giá trị số nguyên nguyên bản.
         /// Sử dụng thuật toán nhận diện chữ số nhị phân IoU (Light OCR):
         /// 1. Cắt vùng ảnh (Crop), nhị phân hóa ảnh bằng Thresholding (hoặc InRange đối với ảnh màu).
