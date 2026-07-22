@@ -6,6 +6,7 @@
     <Project Path="src/backend/Simplimixi.Backend.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Simplimixi.Backend.Tests/Simplimixi.Backend.Tests.csproj" />
     <Project Path="tests/Simplimixi.Frontend.Tests/Simplimixi.Frontend.Tests.csproj" />
   </Folder>
 </Solution>

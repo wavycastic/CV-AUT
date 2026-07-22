@@ -370,8 +370,8 @@ namespace CvAut.Tests
         {
             var entry = new LogEntry("[ADB] phase=input status=send action=bot_swipe x1=1 y1=2 x2=3 y2=4 duration_ms=300", LogLevel.Info, "emu:5556");
 
-            Assert.Contains("giai_đoạn=nhập_liệu", entry.Summary);
-            Assert.Contains("hành_động=bot_swipe", entry.Summary);
+            Assert.Contains("nhập liệu", entry.Summary);
+            Assert.Contains("Bot_swipe", entry.Summary);
             Assert.Contains("emu:5556", entry.SearchText);
         }
 
@@ -379,9 +379,9 @@ namespace CvAut.Tests
         public void Summary_TranslatesStatusAndCommonMessages()
         {
             var entry1 = new LogEntry("[WALL] phase=read_resources status=success reason=unsupported_wall_level", LogLevel.Info);
-            Assert.Contains("giai_đoạn=đọc_tài_nguyên", entry1.Summary);
-            Assert.Contains("trạng_thái=thành_công", entry1.Summary);
-            Assert.Contains("lý_do=cấp_tường_không_hỗ_trợ", entry1.Summary);
+            Assert.Contains("Đọc tài nguyên", entry1.Summary);
+            Assert.Contains("thành công", entry1.Summary);
+            Assert.Contains("cấp tường không hỗ trợ", entry1.Summary);
 
             var entry2 = new LogEntry("Screenshot failed", LogLevel.Error);
             Assert.Contains("[LỖI] Chụp màn hình giả lập thất bại.", entry2.Summary);

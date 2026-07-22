@@ -32,7 +32,7 @@ namespace CvAut
 
     /// </summary>
 
-    internal sealed class WallUpdater
+    internal sealed partial class WallUpdater
 
     {
 

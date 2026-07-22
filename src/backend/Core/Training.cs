@@ -16,7 +16,7 @@ namespace CvAut
     ///   so sánh với mẫu yêu cầu, tự động xóa hàng chờ cũ (Trash queue) và bấm thêm số lượng lính/phép còn thiếu.
     /// - Trích xuất kiểm tra dung lượng sức chứa tối đa của doanh trại.
     /// </summary>
-    internal class Training
+    internal partial class Training
     {
         private readonly ADBHelper _adb;
         private readonly VisionEngine _vision;
