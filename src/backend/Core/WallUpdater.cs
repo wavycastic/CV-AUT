@@ -14,6 +14,7 @@ namespace CvAut
     /// - Quét tìm các đoạn tường trên màn hình Làng chính bằng phương pháp so khớp mẫu trong Builder menu.
     /// - Lọc trùng lặp tọa độ và sắp xếp ứng viên.
     /// - Bấm chọn tường, xác thực giao diện nâng cấp, ra quyết định chọn Vàng hoặc Dầu hồng theo ngưỡng tài nguyên và batch limit bằng WallUpgradeDecider.
+    /// - Kiểm tra cẩn thận cost OCR và xác minh tài nguyên (resource delta) post-confirm trước khi xác nhận giao dịch.
     /// </summary>
     internal sealed partial class WallUpdater
     {
@@ -119,7 +120,9 @@ namespace CvAut
                 _sessionWallVerified += result.VerifiedCount;
                 _sessionWallAttempted += result.VerifiedCount;
             }
-            else if (string.Equals(result.Reason, "outcome_unknown", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(result.Reason, "outcome_unknown", StringComparison.OrdinalIgnoreCase) ||
+                     result.Reason.StartsWith("post_confirm_", StringComparison.OrdinalIgnoreCase) ||
+                     result.Reason.Contains("delta_mismatch", StringComparison.OrdinalIgnoreCase))
             {
                 _sessionWallUnknown++;
                 _sessionWallAttempted++;
@@ -251,8 +254,30 @@ namespace CvAut
                 (int currentGold, int currentElixir, _) = IsTarget.ExtractHomeResources(_adb, _vision);
                 int detectedGoldCost = _vision.ExtractNumericalMetrics(currentScreenshot, GoldUpgradeCostRoi);
                 int detectedElixirCost = _vision.ExtractNumericalMetrics(currentScreenshot, ElixirUpgradeCostRoi);
-                int singleWallCost = Math.Max(detectedGoldCost, detectedElixirCost);
-                if (singleWallCost <= 0) singleWallCost = 1; // Fallback unit cost if OCR metrics missing
+
+                if (detectedGoldCost <= 0 && detectedElixirCost <= 0)
+                {
+                    Console.WriteLine($"[WALL RESULT] phase=cost_ocr cycle={_debugCycle} gold_cost={detectedGoldCost} elixir_cost={detectedElixirCost} status=skip reason=wall_cost_unreadable");
+                    BestEffortDismiss();
+                    return WallTransactionResult.Skip("wall_cost_unreadable").WithCandidateMatchCount(candidateMatchCount);
+                }
+
+                int singleWallCost;
+                if (detectedGoldCost > 0 && detectedElixirCost > 0)
+                {
+                    double ratio = (double)Math.Max(detectedGoldCost, detectedElixirCost) / Math.Min(detectedGoldCost, detectedElixirCost);
+                    if (ratio > 1.5)
+                    {
+                        Console.WriteLine($"[WALL RESULT] phase=cost_ocr cycle={_debugCycle} gold_cost={detectedGoldCost} elixir_cost={detectedElixirCost} ratio={ratio:F2} status=skip reason=wall_cost_mismatch");
+                        BestEffortDismiss();
+                        return WallTransactionResult.Skip("wall_cost_mismatch").WithCandidateMatchCount(candidateMatchCount);
+                    }
+                    singleWallCost = detectedGoldCost;
+                }
+                else
+                {
+                    singleWallCost = Math.Max(detectedGoldCost, detectedElixirCost);
+                }
 
                 // Quyết định tài nguyên bằng WallUpgradeDecider
                 var decisionInput = new WallUpgradeDecisionInput(
@@ -293,6 +318,8 @@ namespace CvAut
 
                 SaveDebugScreenshot("add_wall_done");
 
+                int resourceBefore = selectedResource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? currentGold : currentElixir;
+
                 Point upgradePoint = selectedResource.Equals("gold", StringComparison.OrdinalIgnoreCase)
                     ? FixedGoldUpgradePoint
                     : FixedElixirUpgradePoint;
@@ -314,12 +341,8 @@ namespace CvAut
 
                 if (InterruptibleSleep(1500, token))
                 {
-                    if (IsConfirmDialogClosed())
-                    {
-                        int estimatedCost = singleWallCost * actualSelectedCount;
-                        return WallTransactionResult.Verified(selectedResource, actualSelectedCount, estimatedCost, candidateMatchCount, actualSelectedCount);
-                    }
-                    return new WallTransactionResult(0, "outcome_unknown", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
+                    BestEffortDismiss();
+                    return new WallTransactionResult(0, "cancelled_post_confirm", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
                 }
 
                 if (!IsConfirmDialogClosed())
@@ -329,10 +352,30 @@ namespace CvAut
                     return new WallTransactionResult(0, "outcome_unknown", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
                 }
 
+                // Trích xuất lại tài nguyên sau khi confirm để xác minh delta thực sự
+                (int goldAfter, int elixirAfter, _) = IsTarget.ExtractHomeResources(_adb, _vision);
+                int resourceAfter = selectedResource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? goldAfter : elixirAfter;
+
+                long expectedSpend = (long)singleWallCost * actualSelectedCount;
+                long actualSpend = (long)resourceBefore - resourceAfter;
+                long tolerance = Math.Max(20_000, expectedSpend / 10);
+
+                bool deltaOk = resourceAfter > 0 && actualSpend >= (expectedSpend - tolerance) && actualSpend <= (expectedSpend + tolerance);
+
                 BestEffortDismiss();
-                int totalCost = singleWallCost * actualSelectedCount;
-                Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debugCycle} resource={selectedResource} candidate_match_count={candidateMatchCount} requested_count={actualSelectedCount} verified_count={actualSelectedCount} cost={totalCost:N0} status=upgraded reason=confirmed");
-                return WallTransactionResult.Verified(selectedResource, actualSelectedCount, totalCost, candidateMatchCount, actualSelectedCount);
+
+                if (resourceAfter > 0 && deltaOk)
+                {
+                    int totalCost = (int)actualSpend > 0 ? (int)actualSpend : (int)expectedSpend;
+                    Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debugCycle} resource={selectedResource} candidate_match_count={candidateMatchCount} requested_count={actualSelectedCount} verified_count={actualSelectedCount} cost={totalCost:N0} status=upgraded reason=verified");
+                    return WallTransactionResult.Verified(selectedResource, actualSelectedCount, totalCost, candidateMatchCount, actualSelectedCount);
+                }
+                else
+                {
+                    string reason = resourceAfter <= 0 ? "post_confirm_resource_unreadable" : "resource_delta_mismatch";
+                    Console.WriteLine($"[WALL RESULT] phase=confirm_verify cycle={_debugCycle} resource={selectedResource} status=unknown reason={reason} before={resourceBefore:N0} after={resourceAfter:N0} expectedSpend={expectedSpend:N0} actualSpend={actualSpend:N0}");
+                    return new WallTransactionResult(0, reason, Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
+                }
             }
             finally
             {
@@ -356,11 +399,21 @@ namespace CvAut
                 if (token.IsCancellationRequested) break;
 
                 using Mat? beforeScreenshot = _adb.TakeScreenshot();
+                if (beforeScreenshot == null || beforeScreenshot.Empty())
+                {
+                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=before_screenshot_failed");
+                    break;
+                }
+
                 _adb.Tap(AddWallPlusOneButton.X, AddWallPlusOneButton.Y);
                 if (InterruptibleSleep(WallUiAnimationDelayMs, token)) break;
 
                 using Mat? afterScreenshot = _adb.TakeScreenshot();
-                if (afterScreenshot == null || afterScreenshot.Empty()) break;
+                if (afterScreenshot == null || afterScreenshot.Empty())
+                {
+                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=after_screenshot_failed");
+                    break;
+                }
 
                 if (IsUpgradeCostRed(afterScreenshot, resource, out double redRatio, out int redPixels))
                 {
@@ -369,24 +422,24 @@ namespace CvAut
                     break;
                 }
 
-                // Kiểm tra xem hình ảnh vùng hiển thị cost/quantity có thực sự thay đổi giữa trước và sau khi bấm nút "+"
-                if (beforeScreenshot != null && !beforeScreenshot.Empty())
+                Rect clamped = ImageUtils.ClampRect(costRoi, afterScreenshot.Width, afterScreenshot.Height);
+                if (clamped.Width <= 0 || clamped.Height <= 0)
                 {
-                    Rect clamped = ImageUtils.ClampRect(costRoi, afterScreenshot.Width, afterScreenshot.Height);
-                    if (clamped.Width > 0 && clamped.Height > 0)
-                    {
-                        using Mat beforeCost = new Mat(beforeScreenshot, clamped);
-                        using Mat afterCost = new Mat(afterScreenshot, clamped);
-                        using Mat diff = new Mat();
-                        Cv2.Absdiff(beforeCost, afterCost, diff);
-                        Scalar meanDiff = Cv2.Mean(diff);
-                        double diffVal = meanDiff.Val0 + meanDiff.Val1 + meanDiff.Val2;
-                        if (diffVal < 3.0)
-                        {
-                            Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=cost_region_unchanged diff={diffVal:F2}");
-                            break;
-                        }
-                    }
+                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=invalid_roi");
+                    break;
+                }
+
+                using Mat beforeCost = new Mat(beforeScreenshot, clamped);
+                using Mat afterCost = new Mat(afterScreenshot, clamped);
+                using Mat diff = new Mat();
+                Cv2.Absdiff(beforeCost, afterCost, diff);
+                Scalar meanDiff = Cv2.Mean(diff);
+                double diffVal = meanDiff.Val0 + meanDiff.Val1 + meanDiff.Val2;
+
+                if (diffVal < 3.0)
+                {
+                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=cost_region_unchanged diff={diffVal:F2}");
+                    break;
                 }
 
                 selectedCount++;
