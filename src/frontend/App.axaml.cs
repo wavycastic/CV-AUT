@@ -40,8 +40,9 @@ namespace CvAut
         /// </summary>
         private static void ConfigureServices(IServiceCollection services)
         {
-            // App-scoped state + session manager.
+            // App-scoped state, preferences, config and session manager.
             services.AddSingleton<AppStateService>();
+            services.AddSingleton<IAppPreferences, JsonAppPreferences>();
             services.AddSingleton<IConfigStore, ConfigStore>();
 
             // Opt-in notifications (disabled by default; user pastes their own Discord webhook).
@@ -79,9 +80,8 @@ namespace CvAut
             services.AddTransient<LicenseViewModel>();
             services.AddTransient<AdvancedViewModel>();
 
-            // Shell host (owns TopBar + Sidebar + page tree).
+            // Shell host (owns Header + BottomNav + page tree).
             services.AddTransient<MainWindowViewModel>();
-
         }
     }
 }
