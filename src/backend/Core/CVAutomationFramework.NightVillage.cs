@@ -1,45 +1,18 @@
 using System;
 using System.Text.Json;
 using System.Threading;
+using CvAut.Automation;
 using OpenCvSharp;
-using static CvAut.ConfigManager;
 
 namespace CvAut
 {
     internal partial class CVAutomationFramework
     {
         private bool IsNightVillageMode(JsonElement cfg, int villageIdx)
-        {
-            string rootPlayMode = GetStringOrDefault(cfg, "play_mode", string.Empty);
-            if (rootPlayMode.Equals("night_village", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            JsonElement session = GetObjectOrDefault(cfg, "run_session");
-            string playMode = GetStringOrDefault(session, "play_mode", string.Empty);
-            if (playMode.Equals("night_village", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            JsonElement multi = GetObjectOrDefault(cfg, "multi_account");
-            if (multi.ValueKind == JsonValueKind.Object
-                && multi.TryGetProperty("accounts", out JsonElement accounts)
-                && accounts.ValueKind == JsonValueKind.Array)
-            {
-                foreach (JsonElement account in accounts.EnumerateArray())
-                {
-                    if (GetIntOrDefault(account, "profileVillage", 0) == villageIdx
-                        && GetStringOrDefault(account, "targetVillage", "main_village").Equals("night_village", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
+            => VillageModeResolver.IsNightVillage(
+                cfg,
+                _configService.RunSession,
+                villageIdx);
 
         private void DismissBuilderBasePopups(CancellationToken token)
         {
