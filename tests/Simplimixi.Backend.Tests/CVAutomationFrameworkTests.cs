@@ -79,7 +79,6 @@ namespace CvAut.Backend.Tests
         public void WallUpgradeDecider_CalculatesValidDecision()
         {
             var input = new WallUpgradeDecisionInput(
-                WallLevel: 14,
                 WallCost: 2000000,
                 Gold: 6000000,
                 Elixir: 4000000,

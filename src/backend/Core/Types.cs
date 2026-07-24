@@ -39,11 +39,11 @@ internal sealed record MainVillageConfig(
 
 internal sealed record WallUpgradeConfig(
     bool Enabled,
-    int WallLevel,
     int GoldThreshold,
     int ElixirThreshold,
     int GoldReserve,
     int ElixirReserve,
+    int BatchLimit,
     bool DebugScreenshots);
 
 internal sealed record TrainingConfig(

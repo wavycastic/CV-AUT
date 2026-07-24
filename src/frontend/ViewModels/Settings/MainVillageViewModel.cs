@@ -26,7 +26,7 @@ namespace CvAut.ViewModels.Settings
         [ObservableProperty] private bool _requestTroops;
         
         [ObservableProperty] private bool _upgradeWall;
-        [ObservableProperty] private int _wallLevel;
+        [ObservableProperty] private int _wallBatchLimit = 1;
         [ObservableProperty] private int _wallGoldThreshold;
         [ObservableProperty] private int _wallElixirThreshold;
         [ObservableProperty] private int _wallGoldReserve;
@@ -82,7 +82,7 @@ namespace CvAut.ViewModels.Settings
             config["request_troops"] = RequestTroops;
             
             config["upgrade_wall"] = UpgradeWall;
-            config["wall_level"] = WallLevel;
+            config["wall_batch_limit"] = WallBatchLimit;
             config["wall_gold_threshold"] = WallGoldThreshold;
             config["wall_elixir_threshold"] = WallElixirThreshold;
             config["wall_gold_reserve"] = WallGoldReserve;
@@ -135,7 +135,7 @@ namespace CvAut.ViewModels.Settings
                 RequestTroops = ConfigStore.TryGetBool(_config["request_troops"], false);
                 
                 UpgradeWall = ConfigStore.TryGetBool(_config["upgrade_wall"], false);
-                WallLevel = ConfigStore.TryGetInt(_config["wall_level"], 14);
+                WallBatchLimit = ConfigStore.TryGetInt(_config["wall_batch_limit"], 1);
                 WallGoldThreshold = ConfigStore.TryGetInt(_config["wall_gold_threshold"], 5000000);
                 WallElixirThreshold = ConfigStore.TryGetInt(_config["wall_elixir_threshold"], 5000000);
                 WallGoldReserve = ConfigStore.TryGetInt(_config["wall_gold_reserve"], 100000);

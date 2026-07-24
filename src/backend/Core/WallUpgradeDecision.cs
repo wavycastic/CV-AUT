@@ -8,7 +8,6 @@ namespace CvAut
     }
 
     internal sealed record WallUpgradeDecisionInput(
-        int WallLevel,
         int? WallCost,
         int Gold,
         int Elixir,
@@ -27,16 +26,8 @@ namespace CvAut
 
     internal static class WallUpgradeDecider
     {
-        internal const int MinSupportedWallLevel = 1;
-        internal const int MaxSupportedWallLevel = 18;
-
         internal static WallUpgradeDecision Decide(WallUpgradeDecisionInput input)
         {
-            if (input.WallLevel < MinSupportedWallLevel || input.WallLevel > MaxSupportedWallLevel)
-            {
-                return Skip("unsupported_wall_level", 0, 0);
-            }
-
             if (input.WallCost is not { } cost || cost <= 0)
             {
                 return Skip("missing_wall_cost", 0, 0);
@@ -45,7 +36,7 @@ namespace CvAut
             int affordableGold = input.Gold >= input.GoldStartThreshold
                 ? Math.Max(0, input.Gold - Math.Max(0, input.GoldReserve)) / cost
                 : 0;
-            int affordableElixir = input.WallLevel >= 4 && input.Elixir >= input.ElixirStartThreshold
+            int affordableElixir = input.Elixir >= input.ElixirStartThreshold
                 ? Math.Max(0, input.Elixir - Math.Max(0, input.ElixirReserve)) / cost
                 : 0;
 
