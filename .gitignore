@@ -12,7 +12,10 @@ ENV/
 # IDEs and editors
 .vscode/
 .idea/
-.claude/worktrees/
+.claude/
+.agents/
+AGENTS.md
+CLAUDE.md
 node_modules/
 *.suo
 *.ntvs*
