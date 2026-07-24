@@ -12,7 +12,7 @@ namespace CvAut.Adb
     {
         private readonly AdbDeviceConnection _connection;
         private readonly IAdbShellExecutor _shell;
-        private readonly AdbInputController _input;
+        private readonly IAdbInputController _input;
         private readonly IAdbScreenCapturer _screenCapturer;
         private readonly IUiAutomatorGestureClient _gestureClient;
         private bool _disposed;
@@ -20,7 +20,7 @@ namespace CvAut.Adb
         internal AdbCapabilityCoordinator(
             AdbDeviceConnection connection,
             IAdbShellExecutor shell,
-            AdbInputController input,
+            IAdbInputController input,
             IAdbScreenCapturer screenCapturer,
             IUiAutomatorGestureClient gestureClient)
         {

@@ -8,7 +8,7 @@ namespace CvAut.Adb
     /// <summary>
     /// Translates device input operations into Android shell commands.
     /// </summary>
-    internal sealed class AdbInputController
+    internal sealed class AdbInputController : IAdbInputController
     {
         private readonly IAdbShellExecutor _shell;
 
