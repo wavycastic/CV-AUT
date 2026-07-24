@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace CvAut.Configuration;
 
-internal sealed record DeviceConnectionConfig(
+public sealed record DeviceConnectionConfig(
     string Host,
     int Port,
     string? Serial,

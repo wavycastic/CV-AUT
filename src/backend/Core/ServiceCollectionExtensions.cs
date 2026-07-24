@@ -13,8 +13,9 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<ADBHelper>(serviceProvider =>
         {
-            var configService = serviceProvider.GetRequiredService<IConfigService>();
-            DeviceConnectionConfig device = DeviceConnectionConfigReader.Read(configService.Config);
+            DeviceConnectionConfig device = serviceProvider
+                .GetRequiredService<IConfigService>()
+                .DeviceConnection;
             return new ADBHelper(device.Host, device.Port, device.Serial);
         });
         services.AddSingleton<IADBHelper>(serviceProvider =>
