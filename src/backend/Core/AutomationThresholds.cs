@@ -15,8 +15,8 @@ namespace CvAut
         public const double ScoutUiThreshold = 0.70;
         public const double TreasureHuntThreshold = 0.70;
         public const double TreasureHuntMarkerThreshold = 0.82;
-        public const double ResultContinueThreshold = 0.38;
-        public const double ResultYouGotThreshold = 0.55;
+        public const double ResultContinueThreshold = 0.72;
+        public const double ResultYouGotThreshold = 0.70;
         public const double StarBonusPopupThreshold = 0.70;
 
         // Cấu hình thời gian & chu kỳ
