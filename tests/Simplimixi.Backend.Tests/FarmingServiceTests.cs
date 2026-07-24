@@ -1,4 +1,5 @@
 using CvAut;
+using OpenCvSharp;
 using Xunit;
 
 namespace CvAut.Backend.Tests
@@ -24,6 +25,33 @@ namespace CvAut.Backend.Tests
             bool accepted = engine.ShouldAcceptTarget(resources, config, out string reason);
 
             Assert.False(accepted);
+        }
+
+        [Fact]
+        public void IsActiveBattlePresent_ReturnsTrueWhenEndBattleRedButtonIsPresent()
+        {
+            var adb = new ADBHelper("127.0.0.1", 5555);
+            var vision = new VisionEngine(System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"));
+            var farming = new FarmingService(
+                adb,
+                vision,
+                System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"),
+                (ms, token) => false,
+                () => false,
+                () => true,
+                token => true,
+                msg => false,
+                () => false);
+
+            // Create 1600x900 image with red End Battle button at bottom-left ROI (20, 670, 180, 70)
+            using Mat img = new Mat(900, 1600, MatType.CV_8UC3, new Scalar(50, 50, 50));
+            Rect endBtnRoi = new Rect(30, 680, 100, 40);
+            img.SubMat(endBtnRoi).SetTo(new Scalar(20, 20, 220)); // Bright Red in BGR
+
+            bool isActive = farming.IsActiveBattlePresent(img, out double score);
+
+            Assert.True(isActive);
+            Assert.True(score > 0);
         }
     }
 }
