@@ -221,6 +221,11 @@ namespace CvAut
                 Console.WriteLine("[BB-ARMY] phase=hero_ready status=skip reason=not_found");
             }
 
+            return EvaluateArmyReadiness(visibleTroops, heroReady, requireHero);
+        }
+
+        internal static bool EvaluateArmyReadiness(int visibleTroops, bool heroReady, bool requireHero)
+        {
             return visibleTroops > 0 && (!requireHero || heroReady);
         }
 
