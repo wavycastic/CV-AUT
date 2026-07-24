@@ -1,18 +1,15 @@
-using System;
-using System.Threading;
-
 namespace CvAut.Adb
 {
     /// <summary>
-    /// Chuyên xử lý gửi các thao tác chạm (Tap), vuốt (Swipe) và cử chỉ tương tác ngầm với giả lập Android.
+    /// Translates device input operations into ADB commands.
     /// </summary>
-    internal class AdbInputController
+    internal sealed class AdbInputController
     {
-        private readonly AdbProcessRunner _runner;
+        private readonly IAdbCommandRunner _runner;
 
-        public AdbInputController(AdbProcessRunner runner)
+        public AdbInputController(IAdbCommandRunner runner)
         {
-            _runner = runner;
+            _runner = runner ?? throw new System.ArgumentNullException(nameof(runner));
         }
 
         public void Tap(string deviceAddress, int x, int y)
@@ -22,7 +19,9 @@ namespace CvAut.Adb
 
         public void Swipe(string deviceAddress, int x1, int y1, int x2, int y2, int durationMs = 300)
         {
-            _runner.RunAdbCommand(deviceAddress, $"shell input swipe {x1} {y1} {x2} {y2} {durationMs}");
+            _runner.RunAdbCommand(
+                deviceAddress,
+                $"shell input swipe {x1} {y1} {x2} {y2} {durationMs}");
         }
     }
 }
