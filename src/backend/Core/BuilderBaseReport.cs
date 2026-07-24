@@ -83,7 +83,7 @@ namespace CvAut
             int builderRaw = ReadNumber(screenshot, BuilderCountRoi, "builders", maxPlausible: 99);
             (int freeBuilders, int totalBuilders) = ParseBuilderCount(builderRaw);
             int builderHallLevel = ReadNumber(screenshot, BuilderHallLevelRoi, "builder_hall_level", maxPlausible: 20);
-            DetectLootAvailability(screenshot, trophy, out bool attackAvailable, out bool attackAvailabilityKnown, out bool starBonusKnown, out bool starBonusAvailable, out int remainingStars, out int maxStars);
+            DetectLootAvailability(screenshot, out bool attackAvailable, out bool attackAvailabilityKnown, out bool starBonusKnown, out bool starBonusAvailable, out int remainingStars, out int maxStars);
             bool goldStorageFull = DetectStorageFull(screenshot, FullGoldTemplates, "gold");
             bool elixirStorageFull = DetectStorageFull(screenshot, FullElixirTemplates, "elixir");
 
@@ -128,7 +128,6 @@ namespace CvAut
 
         private void DetectLootAvailability(
             Mat screenshot,
-            int trophy,
             out bool attackAvailable,
             out bool attackAvailabilityKnown,
             out bool starBonusKnown,
@@ -144,7 +143,9 @@ namespace CvAut
                 && (_vision.TryExtractNumericalMetrics(screenshot, starsRoi, out int starsRaw, out double confidence, useRgbThresh: true)
                     || _vision.TryExtractNumericalMetrics(screenshot, starsRoi, out starsRaw, out confidence)))
             {
-                (remainingStars, maxStars) = ParseStarPair(starsRaw);
+                // In this dedicated ROI, OCR commonly drops the slash and leading zero:
+                // "0/12" becomes 12, "0/10" becomes 10, and "0/6" becomes 6.
+                (remainingStars, maxStars) = ParseStarPair(starsRaw, allowCompletedShorthand: true);
                 Console.WriteLine($"[BB-REPORT] phase=loot status=stars raw={starsRaw} remaining={remainingStars} max={maxStars} confidence={confidence:F2}");
             }
 
@@ -157,16 +158,28 @@ namespace CvAut
                 || _vision.FindElement(screenshot, @"ui\battle", 0.55, LootAvailabilityRoi, out score) != null;
 
             attackAvailable = byButton;
-            attackAvailabilityKnown = byButton || starBonusKnown || trophy > 0;
+            attackAvailabilityKnown = IsAttackAvailabilityKnown(byButton, starBonusKnown);
             bool available = byStars || byButton;
-            Console.WriteLine($"[BB-REPORT] phase=loot status={(available ? "success" : "skip")} available={available} by_stars={byStars} by_button={byButton} star_bonus_known={starBonusKnown} star_bonus_avail={starBonusAvailable}");
+            Console.WriteLine($"[BB-REPORT] phase=loot status={(available ? "success" : "skip")} available={available} by_stars={byStars} by_button={byButton} attack_known={attackAvailabilityKnown} star_bonus_known={starBonusKnown} star_bonus_avail={starBonusAvailable}");
+        }
+
+        internal static bool IsAttackAvailabilityKnown(bool attackButtonDetected, bool starBonusKnown)
+        {
+            // Trophy OCR only proves that the home header is readable. It does not prove
+            // that a missing Attack button is a reliable negative detection.
+            return attackButtonDetected || starBonusKnown;
         }
 
         private static readonly int[] ValidStarMaximums = { 12, 10, 6 };
 
-        internal static (int Remaining, int Max) ParseStarPair(int raw)
+        internal static (int Remaining, int Max) ParseStarPair(int raw, bool allowCompletedShorthand = false)
         {
             if (raw <= 0) return (0, 0);
+
+            if (allowCompletedShorthand && Array.IndexOf(ValidStarMaximums, raw) >= 0)
+            {
+                return (0, raw);
+            }
 
             string digits = raw.ToString();
 
