@@ -107,32 +107,37 @@ internal sealed class ConfigService : IConfigService
     public static WallUpgradeConfig GetWallUpgradeConfig(JsonElement cfg, int villageIdx)
     {
         JsonElement profile = LoadVillageProfile(villageIdx);
-        JsonElement primary = profile.ValueKind == JsonValueKind.Object ? profile : cfg;
+        bool hasProfileKey = profile.ValueKind == JsonValueKind.Object && profile.TryGetProperty("upgrade_wall", out _);
+        bool hasRootKey = cfg.ValueKind == JsonValueKind.Object && cfg.TryGetProperty("upgrade_wall", out _);
 
-        bool enabled = ConfigManager.GetBoolOrDefault(primary, "upgrade_wall", ConfigManager.GetBoolOrDefault(cfg, "upgrade_wall", false));
-        int goldThreshold = GetWallThreshold(primary, cfg, "wall_gold_threshold");
-        int elixirThreshold = GetWallThreshold(primary, cfg, "wall_elixir_threshold");
-        int goldReserve = GetWallReserve(primary, cfg, "wall_gold_reserve", 100_000);
-        int elixirReserve = GetWallReserve(primary, cfg, "wall_elixir_reserve", 0);
-        int batchLimit = ConfigManager.GetIntOrDefault(primary, "wall_batch_limit", ConfigManager.GetIntOrDefault(cfg, "wall_batch_limit", 1));
-        bool debugScreenshots = ConfigManager.GetBoolOrDefault(primary, "wall_debug_screenshots", ConfigManager.GetBoolOrDefault(cfg, "wall_debug_screenshots", false));
-
-        if (primary.ValueKind != JsonValueKind.Object && !cfg.TryGetProperty("upgrade_wall", out _))
+        if (hasProfileKey || hasRootKey)
         {
-            JsonElement wall = ConfigManager.GetObjectOrDefault(cfg, "element_state_automation");
-            if (wall.ValueKind == JsonValueKind.Object && ConfigManager.GetBoolOrDefault(wall, "upgrade_enabled", false))
-            {
-                enabled = true;
-                goldThreshold = ConfigManager.GetIntOrDefault(wall, "wall_gold_threshold", ConfigManager.GetIntOrDefault(wall, "min_retained_gold", 5_000_000));
-                elixirThreshold = ConfigManager.GetIntOrDefault(wall, "wall_elixir_threshold", ConfigManager.GetIntOrDefault(wall, "min_retained_elixir", 5_000_000));
-                goldReserve = ConfigManager.GetIntOrDefault(wall, "wall_gold_reserve", 100_000);
-                elixirReserve = ConfigManager.GetIntOrDefault(wall, "wall_elixir_reserve", 0);
-                batchLimit = ConfigManager.GetIntOrDefault(wall, "wall_batch_limit", 1);
-                debugScreenshots = ConfigManager.GetBoolOrDefault(wall, "wall_debug_screenshots", false);
-            }
+            JsonElement primary = hasProfileKey ? profile : cfg;
+            bool enabled = ConfigManager.GetBoolOrDefault(primary, "upgrade_wall", false);
+            int goldThreshold = GetWallThreshold(primary, cfg, "wall_gold_threshold");
+            int elixirThreshold = GetWallThreshold(primary, cfg, "wall_elixir_threshold");
+            int goldReserve = GetWallReserve(primary, cfg, "wall_gold_reserve", 100_000);
+            int elixirReserve = GetWallReserve(primary, cfg, "wall_elixir_reserve", 0);
+            int batchLimit = ConfigManager.GetIntOrDefault(primary, "wall_batch_limit", ConfigManager.GetIntOrDefault(cfg, "wall_batch_limit", 1));
+            bool debugScreenshots = ConfigManager.GetBoolOrDefault(primary, "wall_debug_screenshots", ConfigManager.GetBoolOrDefault(cfg, "wall_debug_screenshots", false));
+
+            return CreateWallUpgradeConfig(enabled, goldThreshold, elixirThreshold, goldReserve, elixirReserve, batchLimit, debugScreenshots);
         }
 
-        return CreateWallUpgradeConfig(enabled, goldThreshold, elixirThreshold, goldReserve, elixirReserve, batchLimit, debugScreenshots);
+        JsonElement wall = ConfigManager.GetObjectOrDefault(cfg, "element_state_automation");
+        if (wall.ValueKind == JsonValueKind.Object && ConfigManager.GetBoolOrDefault(wall, "upgrade_enabled", false))
+        {
+            return CreateWallUpgradeConfig(
+                true,
+                ConfigManager.GetIntOrDefault(wall, "wall_gold_threshold", ConfigManager.GetIntOrDefault(wall, "min_retained_gold", 5_000_000)),
+                ConfigManager.GetIntOrDefault(wall, "wall_elixir_threshold", ConfigManager.GetIntOrDefault(wall, "min_retained_elixir", 5_000_000)),
+                ConfigManager.GetIntOrDefault(wall, "wall_gold_reserve", 100_000),
+                ConfigManager.GetIntOrDefault(wall, "wall_elixir_reserve", 0),
+                ConfigManager.GetIntOrDefault(wall, "wall_batch_limit", 1),
+                ConfigManager.GetBoolOrDefault(wall, "wall_debug_screenshots", false));
+        }
+
+        return CreateWallUpgradeConfig(false, 5_000_000, 5_000_000, 100_000, 0, 1, false);
     }
 
     public static int ReadClanGamesPoints(int villageIdx)
@@ -196,7 +201,8 @@ internal sealed class ConfigService : IConfigService
 
     private static WallUpgradeConfig CreateWallUpgradeConfig(bool enabled, int goldThreshold, int elixirThreshold, int goldReserve, int elixirReserve, int batchLimit, bool debugScreenshots)
     {
-        return new WallUpgradeConfig(enabled, goldThreshold, elixirThreshold, goldReserve, elixirReserve, Math.Max(1, batchLimit), debugScreenshots);
+        int safeBatchLimit = Math.Clamp(batchLimit, 1, 10);
+        return new WallUpgradeConfig(enabled, goldThreshold, elixirThreshold, goldReserve, elixirReserve, safeBatchLimit, debugScreenshots);
     }
 
     private static TargetSelectionLogic ParseTargetSelectionLogic(string logic)

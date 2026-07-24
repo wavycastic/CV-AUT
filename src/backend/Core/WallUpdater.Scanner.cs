@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OpenCvSharp;
 
 namespace CvAut
@@ -11,17 +12,20 @@ namespace CvAut
             var locations = new List<Point>();
             if (screenshot == null || screenshot.Empty()) return locations;
 
-            // Delegated candidate scanning logic using active generic templates
             string[] templates = GetWallTemplateNames();
             if (templates.Length == 0) return locations;
 
-            using Mat gray = new Mat();
-            Cv2.CvtColor(screenshot, gray, ColorConversionCodes.BGR2GRAY);
+            Rect roi = ImageUtils.ClampRect(BuilderUpgradeMenuRoi, screenshot.Width, screenshot.Height);
+            if (roi.Width <= 0 || roi.Height <= 0) return locations;
+
+            using Mat roiBgr = new Mat(screenshot, roi);
+            using Mat roiGray = new Mat();
+            Cv2.CvtColor(roiBgr, roiGray, ColorConversionCodes.BGR2GRAY);
 
             var merged = new List<WallCandidate>();
             foreach (string t in templates)
             {
-                merged.AddRange(MatchWallTemplateInRoi(gray, t, BuilderUpgradeMenuRoi));
+                merged.AddRange(MatchWallTemplateInRoi(roiGray, t, BuilderUpgradeMenuRoi));
             }
 
             locations.AddRange(DedupeCandidates(merged, 10).Select(c => c.Point));
