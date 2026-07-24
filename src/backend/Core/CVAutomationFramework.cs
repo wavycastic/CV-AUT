@@ -762,16 +762,17 @@ namespace CvAut
                     {
                         consecutiveFailures++;
                         Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attack_not_counted index={attack} reason=abort_or_return_home_failed consecutive_failures={consecutiveFailures} max_allowed={maxConsecutiveFailures}");
-                        if (consecutiveFailures >= maxConsecutiveFailures)
-                        {
-                            Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attack_stop reason=consecutive_attack_failures limit={maxConsecutiveFailures}");
-                            break;
-                        }
                     }
 
                     if (!PostBuilderBaseAttackMaintenance(maintenanceOptions, token, battleResult.ReturnedHome))
                     {
                         Console.WriteLine($"[BB-CS] phase=cycle status=fail step=post_attack_maintenance index={attack} reason=builder_base_recovery_failed");
+                        break;
+                    }
+
+                    if (consecutiveFailures >= maxConsecutiveFailures)
+                    {
+                        Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attack_stop reason=consecutive_attack_failures limit={maxConsecutiveFailures}");
                         break;
                     }
                 }
@@ -786,7 +787,7 @@ namespace CvAut
             Console.WriteLine($"[BB-CS] phase=cycle status=success village={_currentVillageIdx}");
         }
 
-        private static bool ShouldStopBuilderBaseAttacks(
+        internal static bool ShouldStopBuilderBaseAttacks(
             string farmMode,
             BuilderBaseReportSnapshot report,
             bool trophyRangeEnabled,
@@ -825,16 +826,16 @@ namespace CvAut
             bool isDropTrophy = farmMode.Equals("drop_trophy", StringComparison.OrdinalIgnoreCase);
             if (!isDropTrophy)
             {
-                if (!report.LootAvailable)
+                if (farmMode.Equals("star_bonus", StringComparison.OrdinalIgnoreCase)
+                    && report.Reliable && report.MaxStars > 0 && report.RemainingStars == 0)
                 {
-                    reason = "loot_exhausted";
+                    reason = "star_bonus_completed";
                     return true;
                 }
 
-                if (farmMode.Equals("star_bonus", StringComparison.OrdinalIgnoreCase)
-                    && report.MaxStars > 0 && report.RemainingStars == 0)
+                if (report.Reliable && !report.LootAvailable)
                 {
-                    reason = "star_bonus_completed";
+                    reason = "loot_exhausted";
                     return true;
                 }
             }
