@@ -731,9 +731,10 @@ namespace CvAut
                     else
                     {
                         attackReport = ReadDebouncedReport(farmMode, trophyRangeEnabled, minTrophy, maxTrophy, haltOnGoldFull, haltOnElixirFull, token, out bool shouldStop, out string stopReason);
-                        if (shouldStop)
+                        if (shouldStop || CheckStop(token))
                         {
-                            Console.WriteLine($"[BB-CS] phase=prepare_attack status=skip index={attack} reason={stopReason} attack_avail={attackReport.AttackAvailable} star_bonus_avail={attackReport.StarBonusAvailable} remaining_stars={attackReport.RemainingStars} max_stars={attackReport.MaxStars} trophy={attackReport.Trophy} min={minTrophy} max={maxTrophy} gold_storage_full={attackReport.GoldStorageFull} elixir_storage_full={attackReport.ElixirStorageFull}");
+                            if (shouldStop)
+                                Console.WriteLine($"[BB-CS] phase=prepare_attack status=skip index={attack} reason={stopReason} attack_avail={attackReport.AttackAvailable} attack_known={attackReport.AttackAvailabilityKnown} star_bonus_avail={attackReport.StarBonusAvailable} remaining_stars={attackReport.RemainingStars} max_stars={attackReport.MaxStars} trophy={attackReport.Trophy} min={minTrophy} max={maxTrophy} gold_storage_full={attackReport.GoldStorageFull} elixir_storage_full={attackReport.ElixirStorageFull} report_reliable={attackReport.Reliable}");
                             break;
                         }
                     }
@@ -830,15 +831,16 @@ namespace CvAut
         {
             shouldStop = false;
             stopReason = "none";
+
+            if (token.IsCancellationRequested)
+            {
+                return BuilderBaseReportSnapshot.UnknownSnapshot();
+            }
+
             BuilderBaseReportSnapshot report = null!;
 
             for (int check = 1; check <= 2; check++)
             {
-                if (token.IsCancellationRequested)
-                {
-                    return report ?? readReport();
-                }
-
                 report = readReport();
 
                 if (!ShouldStopBuilderBaseAttacks(farmMode, report, trophyRangeEnabled, minTrophy, maxTrophy, haltOnGoldFull, haltOnElixirFull, out stopReason))

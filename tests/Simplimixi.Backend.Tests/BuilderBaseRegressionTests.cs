@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using CvAut;
 using OpenCvSharp;
 using Xunit;
@@ -237,6 +238,110 @@ namespace CvAut.Backend.Tests
                 out bool shouldStop,
                 out string reason);
 
+            Assert.Equal(1, readCount);
+            Assert.False(shouldStop);
+        }
+
+        [Fact]
+        public void ReadDebouncedReport_StarBonusCompletedThenAvailable_DoesNotStop()
+        {
+            // 0/12 star bonus (completed) on first read, then 6/12 available on second (attack button also visible)
+            var completed = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, false, true, true, false, 0, 12, false, false, true);
+            var available = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, true, true, true, true, 6, 12, false, false, true);
+
+            int readCount = 0;
+            int sleepCount = 0;
+
+            BuilderBaseReportSnapshot result = CVAutomationFramework.ReadDebouncedReport(
+                () => ++readCount == 1 ? completed : available,
+                "star_bonus",
+                false, 1000, 5000, false, false,
+                CancellationToken.None,
+                (ms, t) => { sleepCount++; return false; },
+                out bool shouldStop,
+                out string reason);
+
+            Assert.Equal(2, readCount);
+            Assert.Equal(1, sleepCount);
+            Assert.False(shouldStop);
+            Assert.Equal("none", reason);
+        }
+
+        [Fact]
+        public void ReadDebouncedReport_TwoStarBonusCompleted_StopsWithReason()
+        {
+            // 0/12 star bonus (completed) on both reads
+            var completed = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, false, true, true, false, 0, 12, false, false, true);
+
+            int readCount = 0;
+            int sleepCount = 0;
+
+            BuilderBaseReportSnapshot result = CVAutomationFramework.ReadDebouncedReport(
+                () => { readCount++; return completed; },
+                "star_bonus",
+                false, 1000, 5000, false, false,
+                CancellationToken.None,
+                (ms, t) => { sleepCount++; return false; },
+                out bool shouldStop,
+                out string reason);
+
+            Assert.Equal(2, readCount);
+            Assert.Equal(1, sleepCount);
+            Assert.True(shouldStop);
+            Assert.Equal("star_bonus_completed", reason);
+        }
+
+        [Fact]
+        public void ShouldStopBuilderBaseAttacks_ReliableButUnknownAttackAvailability_DoesNotStopAsLootExhausted()
+        {
+            // Reliable report but AttackAvailabilityKnown=false should not trigger loot_exhausted
+            var report = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, false, false, false, false, 0, 0, false, false, true);
+            bool stop = CVAutomationFramework.ShouldStopBuilderBaseAttacks("gold", report, false, 1000, 5000, false, false, out string reason);
+
+            Assert.False(stop);
+            Assert.Equal("none", reason);
+        }
+
+        [Fact]
+        public void ReadDebouncedReport_PreCancelledToken_ReturnsUnknownWithoutReading()
+        {
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            int readCount = 0;
+
+            BuilderBaseReportSnapshot result = CVAutomationFramework.ReadDebouncedReport(
+                () => { readCount++; return new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, true, true, false, false, 0, 0, false, false, true); },
+                "gold",
+                false, 1000, 5000, false, false,
+                cts.Token,
+                null,
+                out bool shouldStop,
+                out string reason);
+
+            Assert.Equal(0, readCount);
+            Assert.False(shouldStop);
+            Assert.False(result.Reliable);
+        }
+
+        [Fact]
+        public void ReadDebouncedReport_TokenCancelledDuringSleep_AbortsWithRealCts()
+        {
+            using var cts = new CancellationTokenSource();
+            var exhausted = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, false, true, false, false, 0, 0, false, false, true);
+
+            int readCount = 0;
+
+            BuilderBaseReportSnapshot result = CVAutomationFramework.ReadDebouncedReport(
+                () => { readCount++; return exhausted; },
+                "gold",
+                false, 1000, 5000, false, false,
+                cts.Token,
+                (ms, t) => { cts.Cancel(); return true; },
+                out bool shouldStop,
+                out string reason);
+
+            // Sleep returned true (cancelled), so debounce aborted after first read
             Assert.Equal(1, readCount);
             Assert.False(shouldStop);
         }

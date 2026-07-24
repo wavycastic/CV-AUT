@@ -21,6 +21,9 @@ namespace CvAut
         bool Reliable = true)
     {
         public bool LootAvailable => (StarBonusKnown && StarBonusAvailable) || AttackAvailable;
+
+        public static BuilderBaseReportSnapshot UnknownSnapshot() =>
+            new(0, 0, 0, 0, 0, 0, false, false, false, false, 0, 0, false, false, Reliable: false);
     }
 
     /// <summary>
@@ -86,7 +89,7 @@ namespace CvAut
 
             bool reliable = trophy > 0 || gold > 0 || elixir > 0 || totalBuilders > 0 || starBonusKnown || attackAvailable;
             var report = new BuilderBaseReportSnapshot(gold, elixir, trophy, freeBuilders, totalBuilders, builderHallLevel, attackAvailable, attackAvailabilityKnown, starBonusKnown, starBonusAvailable, remainingStars, maxStars, goldStorageFull, elixirStorageFull, Reliable: reliable);
-            Console.WriteLine($"[BB-REPORT] phase=report status=success gold={report.Gold} elixir={report.Elixir} trophy={report.Trophy} free_builders={report.FreeBuilders} total_builders={report.TotalBuilders} builder_hall_level={report.BuilderHallLevel} attack_available={report.AttackAvailable} star_bonus_known={report.StarBonusKnown} star_bonus_avail={report.StarBonusAvailable} remaining_stars={report.RemainingStars} max_stars={report.MaxStars} gold_storage_full={report.GoldStorageFull} elixir_storage_full={report.ElixirStorageFull}");
+            Console.WriteLine($"[BB-REPORT] phase=report status=success gold={report.Gold} elixir={report.Elixir} trophy={report.Trophy} free_builders={report.FreeBuilders} total_builders={report.TotalBuilders} builder_hall_level={report.BuilderHallLevel} attack_available={report.AttackAvailable} attack_known={report.AttackAvailabilityKnown} star_bonus_known={report.StarBonusKnown} star_bonus_avail={report.StarBonusAvailable} remaining_stars={report.RemainingStars} max_stars={report.MaxStars} gold_storage_full={report.GoldStorageFull} elixir_storage_full={report.ElixirStorageFull} report_reliable={report.Reliable}");
             return report;
         }
 
