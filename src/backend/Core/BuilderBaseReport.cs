@@ -14,7 +14,8 @@ namespace CvAut
         int RemainingStars,
         int MaxStars,
         bool GoldStorageFull,
-        bool ElixirStorageFull);
+        bool ElixirStorageFull,
+        bool Reliable = true);
 
     /// <summary>
     /// Đọc thông tin Builder Base không gây tác động game. Các ROI bám theo MBR,
@@ -138,18 +139,28 @@ namespace CvAut
             return available;
         }
 
+        private static readonly int[] ValidStarMaximums = { 12, 10, 6 };
+
         internal static (int Remaining, int Max) ParseStarPair(int raw)
         {
             if (raw <= 0) return (0, 0);
-            if (raw < 10) return (raw, 0);
 
             string digits = raw.ToString();
-            for (int split = 1; split < digits.Length; split++)
+
+            foreach (int max in ValidStarMaximums)
             {
-                if (digits[split] == '0') continue;
-                if (!int.TryParse(digits[..split], out int remaining)
-                    || !int.TryParse(digits[split..], out int max)) continue;
-                if (remaining >= 0 && max is > 0 and <= 12 && remaining <= max) return (remaining, max);
+                string maxText = max.ToString();
+                if (!digits.EndsWith(maxText, StringComparison.Ordinal)) continue;
+
+                string remainingText = digits[..^maxText.Length];
+                if (string.IsNullOrEmpty(remainingText)) continue;
+
+                if (int.TryParse(remainingText, out int remaining)
+                    && remaining >= 0
+                    && remaining <= max)
+                {
+                    return (remaining, max);
+                }
             }
 
             return (0, 0);
@@ -172,7 +183,7 @@ namespace CvAut
 
         private static BuilderBaseReportSnapshot Unknown()
         {
-            return new BuilderBaseReportSnapshot(0, 0, 0, 0, 0, 0, false, 0, 0, false, false);
+            return new BuilderBaseReportSnapshot(0, 0, 0, 0, 0, 0, false, 0, 0, false, false, Reliable: false);
         }
     }
 }

@@ -62,6 +62,46 @@ namespace CvAut.Backend.Tests
             Assert.Equal(new Point(1176, 499), point);
         }
 
+        [Fact]
+        public void ShouldStopBuilderBaseAttacks_DropTrophyIgnoresExhaustedLoot()
+        {
+            var report = new BuilderBaseReportSnapshot(100, 100, 1500, 1, 2, 9, false, 0, 0, false, false, true);
+            bool stop = CVAutomationFramework.ShouldStopBuilderBaseAttacks("drop_trophy", report, false, 1000, 5000, false, false, out string reason);
+
+            Assert.False(stop);
+            Assert.Equal("none", reason);
+        }
+
+        [Fact]
+        public void ShouldStopBuilderBaseAttacks_StarBonusStopsOnCompletedStarsBeforeLootExhausted()
+        {
+            var report = new BuilderBaseReportSnapshot(100, 100, 1500, 1, 2, 9, false, 0, 12, false, false, true);
+            bool stop = CVAutomationFramework.ShouldStopBuilderBaseAttacks("star_bonus", report, false, 1000, 5000, false, false, out string reason);
+
+            Assert.True(stop);
+            Assert.Equal("star_bonus_completed", reason);
+        }
+
+        [Fact]
+        public void ShouldStopBuilderBaseAttacks_UnreliableReportDoesNotStopAsLootExhausted()
+        {
+            var report = new BuilderBaseReportSnapshot(0, 0, 0, 0, 0, 0, false, 0, 0, false, false, false);
+            bool stop = CVAutomationFramework.ShouldStopBuilderBaseAttacks("star_bonus", report, false, 1000, 5000, false, false, out string reason);
+
+            Assert.False(stop);
+            Assert.Equal("none", reason);
+        }
+
+        [Fact]
+        public void ShouldStopBuilderBaseAttacks_StopsWhenTrophyReachesMax()
+        {
+            var report = new BuilderBaseReportSnapshot(100, 100, 3100, 1, 2, 9, true, 6, 12, false, false, true);
+            bool stop = CVAutomationFramework.ShouldStopBuilderBaseAttacks("trophy", report, true, 1000, 3000, false, false, out string reason);
+
+            Assert.True(stop);
+            Assert.Equal("trophy_reached_max", reason);
+        }
+
         private static BuilderBaseTroopSlot Slot(string name, int index)
             => new(name, new Point(100 + index * 80, 600), index, 1, 1.0);
     }
