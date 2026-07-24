@@ -9,7 +9,12 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddCvAutBackend(this IServiceCollection services, string configPath = "Config/test_config.json")
     {
-        services.AddSingleton<IConfigService>(_ => new ConfigService(configPath));
+        string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
+
+        // --- Composition root: the only place that knows about concrete implementations. ---
+        services.AddSingleton<ConfigService>(_ => new ConfigService(configPath));
+        services.AddSingleton<IConfigService>(serviceProvider =>
+            serviceProvider.GetRequiredService<ConfigService>());
 
         services.AddSingleton<ADBHelper>(serviceProvider =>
         {
@@ -21,47 +26,40 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IADBHelper>(serviceProvider =>
             serviceProvider.GetRequiredService<ADBHelper>());
 
-        services.AddSingleton<IVisionEngine>(_ =>
-        {
-            string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
-            return new VisionEngine(templatesPath);
-        });
+        services.AddSingleton<VisionEngine>(_ => new VisionEngine(templatesPath));
+        services.AddSingleton<IVisionEngine>(serviceProvider =>
+            serviceProvider.GetRequiredService<VisionEngine>());
 
-        services.AddSingleton<IPopupHandlerService>(serviceProvider =>
-        {
-            var adb = serviceProvider.GetRequiredService<ADBHelper>();
-            var vision = (VisionEngine)serviceProvider.GetRequiredService<IVisionEngine>();
-            string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
-            return new PopupHandlerService(adb, vision, templatesPath);
-        });
+        // --- Consumers: abstractions only. ---
+        services.AddSingleton<IPopupHandlerService>(serviceProvider => new PopupHandlerService(
+            serviceProvider.GetRequiredService<IADBHelper>(),
+            serviceProvider.GetRequiredService<IVisionEngine>(),
+            templatesPath));
 
         services.AddSingleton<IZoomService>(serviceProvider =>
             new ZoomService(serviceProvider.GetRequiredService<IADBHelper>()));
 
-        services.AddSingleton<IStatsRepository>(serviceProvider =>
-        {
-            var adb = serviceProvider.GetRequiredService<ADBHelper>();
-            var vision = (VisionEngine)serviceProvider.GetRequiredService<IVisionEngine>();
-            string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
-            return new StatsRepository(adb, vision, templatesPath);
-        });
+        services.AddSingleton<IStatsRepository>(serviceProvider => new StatsRepository(
+            serviceProvider.GetRequiredService<IADBHelper>(),
+            serviceProvider.GetRequiredService<IVisionEngine>(),
+            templatesPath));
 
-        services.AddSingleton<IAccountSwitcher>(serviceProvider =>
-        {
-            var adb = serviceProvider.GetRequiredService<ADBHelper>();
-            var vision = (VisionEngine)serviceProvider.GetRequiredService<IVisionEngine>();
-            string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
-            return new AccountSwitcher(adb, vision, templatesPath, _ => true);
-        });
+        services.AddSingleton<IAccountSwitcher>(serviceProvider => new AccountSwitcher(
+            serviceProvider.GetRequiredService<IADBHelper>(),
+            serviceProvider.GetRequiredService<IVisionEngine>(),
+            templatesPath,
+            _ => true));
 
-        services.AddSingleton<CVAutomationFramework>(serviceProvider =>
-        {
-            var configService = (ConfigService)serviceProvider.GetRequiredService<IConfigService>();
-            var adb = serviceProvider.GetRequiredService<ADBHelper>();
-            var vision = (VisionEngine)serviceProvider.GetRequiredService<IVisionEngine>();
-            string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
-            return new CVAutomationFramework(configPath, configService, adb, vision, templatesPath);
-        });
+        // TODO(dependency-inversion): CVAutomationFramework still takes concrete
+        // ConfigService/ADBHelper/VisionEngine. Once its constructor accepts
+        // IConfigService/IADBHelper/IVisionEngine, switch these to GetRequiredService<I...>()
+        // and the concrete registrations above can become private to this method.
+        services.AddSingleton<CVAutomationFramework>(serviceProvider => new CVAutomationFramework(
+            configPath,
+            serviceProvider.GetRequiredService<ConfigService>(),
+            serviceProvider.GetRequiredService<ADBHelper>(),
+            serviceProvider.GetRequiredService<VisionEngine>(),
+            templatesPath));
 
         services.AddSingleton<BotOrchestrator>();
         return services;
