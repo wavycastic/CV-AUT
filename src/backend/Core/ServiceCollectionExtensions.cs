@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using CvAut.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CvAut;
@@ -13,10 +14,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ADBHelper>(serviceProvider =>
         {
             var configService = serviceProvider.GetRequiredService<IConfigService>();
-            var deviceConfig = ConfigManager.GetObjectOrDefault(configService.Config, "device_connection");
-            string host = ConfigManager.GetStringOrDefault(deviceConfig, "host", "127.0.0.1");
-            int port = ConfigManager.GetIntOrDefault(deviceConfig, "port", 5556);
-            return new ADBHelper(host, port);
+            DeviceConnectionConfig device = DeviceConnectionConfigReader.Read(configService.Config);
+            return new ADBHelper(device.Host, device.Port, device.Serial);
         });
         services.AddSingleton<IADBHelper>(serviceProvider =>
             serviceProvider.GetRequiredService<ADBHelper>());
