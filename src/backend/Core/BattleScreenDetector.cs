@@ -16,7 +16,7 @@ namespace CvAut
         /// <summary>
         /// Kiểm tra xem màn hình hiện tại có nút "End Battle" (Trận đánh đang diễn ra) hay không.
         /// </summary>
-        public static bool IsActiveBattlePresent(ADBHelper adb, VisionEngine vision, Mat screenshot, out double endBattleScore)
+        public static bool IsActiveBattlePresent(VisionEngine vision, Mat screenshot, out double endBattleScore)
         {
             endBattleScore = 0;
             if (screenshot == null || screenshot.Empty()) return false;

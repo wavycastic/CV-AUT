@@ -30,11 +30,10 @@ namespace CvAut.Backend.Tests
         [Fact]
         public void IsActiveBattlePresent_DarkScreen_ReturnsFalse()
         {
-            var adb = new ADBHelper("127.0.0.1", 5555);
-            var vision = new VisionEngine(System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"));
+            VisionEngine vision = CreateVisionEngine();
 
             using Mat img = new Mat(900, 1600, MatType.CV_8UC3, new Scalar(40, 40, 40));
-            bool isActive = BattleScreenDetector.IsActiveBattlePresent(adb, vision, img, out double score);
+            bool isActive = BattleScreenDetector.IsActiveBattlePresent(vision, img, out double score);
 
             Assert.False(isActive);
             Assert.Equal(0, score);
@@ -43,8 +42,7 @@ namespace CvAut.Backend.Tests
         [Fact]
         public void IsActiveBattlePresent_SmallRedNoise_ReturnsFalse()
         {
-            var adb = new ADBHelper("127.0.0.1", 5555);
-            var vision = new VisionEngine(System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"));
+            VisionEngine vision = CreateVisionEngine();
 
             using Mat img = new Mat(900, 1600, MatType.CV_8UC3, new Scalar(40, 40, 40));
             // Small 5x10 red patch (50 pixels) -> below 400 pixel threshold
@@ -54,7 +52,7 @@ namespace CvAut.Backend.Tests
                 noiseArea.SetTo(new Scalar(20, 20, 220));
             }
 
-            bool isActive = BattleScreenDetector.IsActiveBattlePresent(adb, vision, img, out double score);
+            bool isActive = BattleScreenDetector.IsActiveBattlePresent(vision, img, out double score);
 
             Assert.False(isActive);
             Assert.Equal(0, score);
@@ -63,8 +61,7 @@ namespace CvAut.Backend.Tests
         [Fact]
         public void IsActiveBattlePresent_RedButtonShape_ReturnsTrue()
         {
-            var adb = new ADBHelper("127.0.0.1", 5555);
-            var vision = new VisionEngine(System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"));
+            VisionEngine vision = CreateVisionEngine();
 
             using Mat img = new Mat(900, 1600, MatType.CV_8UC3, new Scalar(50, 50, 50));
             Rect endBtnRoi = new Rect(30, 680, 100, 40);
@@ -73,10 +70,57 @@ namespace CvAut.Backend.Tests
                 endButton.SetTo(new Scalar(20, 20, 220)); // Bright Red in BGR
             }
 
-            bool isActive = BattleScreenDetector.IsActiveBattlePresent(adb, vision, img, out double score);
+            bool isActive = BattleScreenDetector.IsActiveBattlePresent(vision, img, out double score);
 
             Assert.True(isActive);
             Assert.True(score > 0);
+        }
+
+        [Theory]
+        [InlineData(30, 30)]
+        [InlineData(15, 60)]
+        public void IsActiveBattlePresent_LargeRedWrongShape_ReturnsFalse(int width, int height)
+        {
+            VisionEngine vision = CreateVisionEngine();
+            using Mat img = new Mat(900, 1600, MatType.CV_8UC3, new Scalar(40, 40, 40));
+            using (Mat redArea = new Mat(img, new Rect(30, 675, width, height)))
+            {
+                redArea.SetTo(new Scalar(20, 20, 220));
+            }
+
+            bool isActive = BattleScreenDetector.IsActiveBattlePresent(vision, img, out double score);
+
+            Assert.False(isActive);
+            Assert.Equal(0, score);
+        }
+
+        [Fact]
+        public void IsActiveBattlePresent_DisconnectedRedAreas_ReturnsFalse()
+        {
+            VisionEngine vision = CreateVisionEngine();
+            using Mat img = new Mat(900, 1600, MatType.CV_8UC3, new Scalar(40, 40, 40));
+            Rect[] areas =
+            {
+                new Rect(30, 680, 20, 15),
+                new Rect(70, 680, 20, 15),
+                new Rect(110, 680, 20, 15),
+            };
+
+            foreach (Rect area in areas)
+            {
+                using Mat redArea = new Mat(img, area);
+                redArea.SetTo(new Scalar(20, 20, 220));
+            }
+
+            bool isActive = BattleScreenDetector.IsActiveBattlePresent(vision, img, out double score);
+
+            Assert.False(isActive);
+            Assert.Equal(0, score);
+        }
+
+        private static VisionEngine CreateVisionEngine()
+        {
+            return new VisionEngine(System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"));
         }
     }
 }

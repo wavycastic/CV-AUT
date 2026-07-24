@@ -1319,7 +1319,7 @@ namespace CvAut
 
         private bool IsActiveBattlePresent(Mat screenshot, out double endBattleScore)
         {
-            return BattleScreenDetector.IsActiveBattlePresent(_adb, _vision, screenshot, out endBattleScore);
+            return BattleScreenDetector.IsActiveBattlePresent(_vision, screenshot, out endBattleScore);
         }
 
         private bool TryFindContinueButton(Mat screenshot, out Point center, out double score)
