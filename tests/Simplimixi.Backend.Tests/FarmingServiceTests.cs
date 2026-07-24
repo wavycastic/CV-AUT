@@ -28,27 +28,52 @@ namespace CvAut.Backend.Tests
         }
 
         [Fact]
-        public void IsActiveBattlePresent_ReturnsTrueWhenEndBattleRedButtonIsPresent()
+        public void IsActiveBattlePresent_DarkScreen_ReturnsFalse()
         {
             var adb = new ADBHelper("127.0.0.1", 5555);
             var vision = new VisionEngine(System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"));
-            var farming = new FarmingService(
-                adb,
-                vision,
-                System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"),
-                (ms, token) => false,
-                () => false,
-                () => true,
-                token => true,
-                msg => false,
-                () => false);
 
-            // Create 1600x900 image with red End Battle button at bottom-left ROI (20, 670, 180, 70)
+            using Mat img = new Mat(900, 1600, MatType.CV_8UC3, new Scalar(40, 40, 40));
+            bool isActive = BattleScreenDetector.IsActiveBattlePresent(adb, vision, img, out double score);
+
+            Assert.False(isActive);
+            Assert.Equal(0, score);
+        }
+
+        [Fact]
+        public void IsActiveBattlePresent_SmallRedNoise_ReturnsFalse()
+        {
+            var adb = new ADBHelper("127.0.0.1", 5555);
+            var vision = new VisionEngine(System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"));
+
+            using Mat img = new Mat(900, 1600, MatType.CV_8UC3, new Scalar(40, 40, 40));
+            // Small 5x10 red patch (50 pixels) -> below 400 pixel threshold
+            Rect noiseRoi = new Rect(30, 680, 5, 10);
+            using (Mat noiseArea = new Mat(img, noiseRoi))
+            {
+                noiseArea.SetTo(new Scalar(20, 20, 220));
+            }
+
+            bool isActive = BattleScreenDetector.IsActiveBattlePresent(adb, vision, img, out double score);
+
+            Assert.False(isActive);
+            Assert.Equal(0, score);
+        }
+
+        [Fact]
+        public void IsActiveBattlePresent_RedButtonShape_ReturnsTrue()
+        {
+            var adb = new ADBHelper("127.0.0.1", 5555);
+            var vision = new VisionEngine(System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "Templates"));
+
             using Mat img = new Mat(900, 1600, MatType.CV_8UC3, new Scalar(50, 50, 50));
             Rect endBtnRoi = new Rect(30, 680, 100, 40);
-            img.SubMat(endBtnRoi).SetTo(new Scalar(20, 20, 220)); // Bright Red in BGR
+            using (Mat endButton = new Mat(img, endBtnRoi))
+            {
+                endButton.SetTo(new Scalar(20, 20, 220)); // Bright Red in BGR
+            }
 
-            bool isActive = farming.IsActiveBattlePresent(img, out double score);
+            bool isActive = BattleScreenDetector.IsActiveBattlePresent(adb, vision, img, out double score);
 
             Assert.True(isActive);
             Assert.True(score > 0);

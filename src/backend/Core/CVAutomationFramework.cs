@@ -1319,38 +1319,7 @@ namespace CvAut
 
         private bool IsActiveBattlePresent(Mat screenshot, out double endBattleScore)
         {
-            endBattleScore = 0;
-            if (screenshot == null || screenshot.Empty()) return false;
-
-            Point? endBtn = _vision.FindElement(screenshot, @"ui\end_battle.png", AutomationThresholds.ScoutUiThreshold, AutomationRoiConstants.ScoutUiRoi, out endBattleScore);
-            if (endBtn.HasValue) return true;
-
-            Rect endBtnRoi = ImageUtils.ClampRect(new Rect(20, 670, 180, 70), screenshot.Width, screenshot.Height);
-            if (endBtnRoi.Width > 0 && endBtnRoi.Height > 0)
-            {
-                using Mat roiMat = new Mat(screenshot, endBtnRoi);
-                int redPixels = 0;
-                int totalPixels = roiMat.Rows * roiMat.Cols;
-                for (int y = 0; y < roiMat.Rows; y++)
-                {
-                    for (int x = 0; x < roiMat.Cols; x++)
-                    {
-                        Vec3b px = roiMat.At<Vec3b>(y, x);
-                        if (px.Item2 > 160 && px.Item1 < 90 && px.Item0 < 90 && (px.Item2 - px.Item1) > 60 && (px.Item2 - px.Item0) > 60)
-                        {
-                            redPixels++;
-                        }
-                    }
-                }
-                double redRatio = redPixels / (double)totalPixels;
-                if (redPixels >= 120 || redRatio >= 0.08)
-                {
-                    endBattleScore = 0.99;
-                    return true;
-                }
-            }
-
-            return false;
+            return BattleScreenDetector.IsActiveBattlePresent(_adb, _vision, screenshot, out endBattleScore);
         }
 
         private bool TryFindContinueButton(Mat screenshot, out Point center, out double score)
