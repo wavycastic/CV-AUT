@@ -45,6 +45,7 @@ namespace CvAut
         // Ngưỡng so khớp mẫu để tìm tường (cần độ tin cậy cao để tránh nhận diện nhầm các vật thể khác)
         private const double WallSearchThreshold = 0.90;
         private const int SwipeDurationMs = 600;
+        private const double MaxCostMismatchRatio = 1.15;
         private readonly ADBHelper _adb;
         private readonly VisionEngine _vision;
         private readonly string _templatesPath;
@@ -71,6 +72,39 @@ namespace CvAut
 
         private static bool InterruptibleSleep(int milliseconds, CancellationToken token)
             => ThreadingUtil.InterruptibleSleep(milliseconds, token);
+
+        internal sealed record WallCostValidationResult(bool IsValid, int Cost, string Reason);
+
+        internal static WallCostValidationResult ValidateWallCosts(int goldCost, int elixirCost, double maxMismatchRatio = MaxCostMismatchRatio)
+        {
+            if (goldCost <= 0 && elixirCost <= 0)
+            {
+                return new WallCostValidationResult(false, 0, "wall_cost_unreadable");
+            }
+
+            if (goldCost > 0 && elixirCost > 0)
+            {
+                double ratio = (double)Math.Max(goldCost, elixirCost) / Math.Min(goldCost, elixirCost);
+                if (ratio > maxMismatchRatio)
+                {
+                    return new WallCostValidationResult(false, 0, "wall_cost_mismatch");
+                }
+                return new WallCostValidationResult(true, Math.Max(goldCost, elixirCost), "ok");
+            }
+
+            return new WallCostValidationResult(true, Math.Max(goldCost, elixirCost), "ok");
+        }
+
+        internal static bool IsResourceDeltaVerified(long resourceBefore, long resourceAfter, long expectedSpend, long tolerance = 0)
+        {
+            if (resourceAfter <= 0 || resourceBefore <= 0) return false;
+            long actualSpend = resourceBefore - resourceAfter;
+            if (tolerance <= 0)
+            {
+                tolerance = Math.Max(20_000, expectedSpend / 10);
+            }
+            return actualSpend >= (expectedSpend - tolerance) && actualSpend <= (expectedSpend + tolerance);
+        }
 
         /// <summary>
         /// Xử lý nâng cấp tường không phụ thuộc Wall Level.
@@ -121,6 +155,7 @@ namespace CvAut
                 _sessionWallAttempted += result.VerifiedCount;
             }
             else if (string.Equals(result.Reason, "outcome_unknown", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(result.Reason, "cancelled_post_confirm", StringComparison.OrdinalIgnoreCase) ||
                      result.Reason.StartsWith("post_confirm_", StringComparison.OrdinalIgnoreCase) ||
                      result.Reason.Contains("delta_mismatch", StringComparison.OrdinalIgnoreCase))
             {
@@ -255,29 +290,15 @@ namespace CvAut
                 int detectedGoldCost = _vision.ExtractNumericalMetrics(currentScreenshot, GoldUpgradeCostRoi);
                 int detectedElixirCost = _vision.ExtractNumericalMetrics(currentScreenshot, ElixirUpgradeCostRoi);
 
-                if (detectedGoldCost <= 0 && detectedElixirCost <= 0)
+                WallCostValidationResult costValidation = ValidateWallCosts(detectedGoldCost, detectedElixirCost);
+                if (!costValidation.IsValid)
                 {
-                    Console.WriteLine($"[WALL RESULT] phase=cost_ocr cycle={_debugCycle} gold_cost={detectedGoldCost} elixir_cost={detectedElixirCost} status=skip reason=wall_cost_unreadable");
+                    Console.WriteLine($"[WALL RESULT] phase=cost_ocr cycle={_debugCycle} gold_cost={detectedGoldCost} elixir_cost={detectedElixirCost} status=skip reason={costValidation.Reason}");
                     BestEffortDismiss();
-                    return WallTransactionResult.Skip("wall_cost_unreadable").WithCandidateMatchCount(candidateMatchCount);
+                    return WallTransactionResult.Skip(costValidation.Reason).WithCandidateMatchCount(candidateMatchCount);
                 }
 
-                int singleWallCost;
-                if (detectedGoldCost > 0 && detectedElixirCost > 0)
-                {
-                    double ratio = (double)Math.Max(detectedGoldCost, detectedElixirCost) / Math.Min(detectedGoldCost, detectedElixirCost);
-                    if (ratio > 1.5)
-                    {
-                        Console.WriteLine($"[WALL RESULT] phase=cost_ocr cycle={_debugCycle} gold_cost={detectedGoldCost} elixir_cost={detectedElixirCost} ratio={ratio:F2} status=skip reason=wall_cost_mismatch");
-                        BestEffortDismiss();
-                        return WallTransactionResult.Skip("wall_cost_mismatch").WithCandidateMatchCount(candidateMatchCount);
-                    }
-                    singleWallCost = detectedGoldCost;
-                }
-                else
-                {
-                    singleWallCost = Math.Max(detectedGoldCost, detectedElixirCost);
-                }
+                int singleWallCost = costValidation.Cost;
 
                 // Quyết định tài nguyên bằng WallUpgradeDecider
                 var decisionInput = new WallUpgradeDecisionInput(
@@ -352,15 +373,27 @@ namespace CvAut
                     return new WallTransactionResult(0, "outcome_unknown", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
                 }
 
-                // Trích xuất lại tài nguyên sau khi confirm để xác minh delta thực sự
-                (int goldAfter, int elixirAfter, _) = IsTarget.ExtractHomeResources(_adb, _vision);
-                int resourceAfter = selectedResource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? goldAfter : elixirAfter;
-
+                // Poll đọc lại tài nguyên sau confirm tối đa 3 lần (mỗi lần 250ms) để chờ thanh tài nguyên cập nhật xong
+                int resourceAfter = 0;
                 long expectedSpend = (long)singleWallCost * actualSelectedCount;
-                long actualSpend = (long)resourceBefore - resourceAfter;
-                long tolerance = Math.Max(20_000, expectedSpend / 10);
+                long actualSpend = 0;
+                bool deltaOk = false;
 
-                bool deltaOk = resourceAfter > 0 && actualSpend >= (expectedSpend - tolerance) && actualSpend <= (expectedSpend + tolerance);
+                for (int poll = 0; poll < 3; poll++)
+                {
+                    (int goldAfter, int elixirAfter, _) = IsTarget.ExtractHomeResources(_adb, _vision);
+                    resourceAfter = selectedResource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? goldAfter : elixirAfter;
+                    if (resourceAfter > 0)
+                    {
+                        actualSpend = (long)resourceBefore - resourceAfter;
+                        if (IsResourceDeltaVerified(resourceBefore, resourceAfter, expectedSpend))
+                        {
+                            deltaOk = true;
+                            break;
+                        }
+                    }
+                    Thread.Sleep(250);
+                }
 
                 BestEffortDismiss();
 
