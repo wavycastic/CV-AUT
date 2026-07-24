@@ -10,7 +10,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IConfigService>(_ => new ConfigService(configPath));
 
-        services.AddSingleton<IADBHelper>(serviceProvider =>
+        services.AddSingleton<ADBHelper>(serviceProvider =>
         {
             var configService = serviceProvider.GetRequiredService<IConfigService>();
             var deviceConfig = ConfigManager.GetObjectOrDefault(configService.Config, "device_connection");
@@ -18,6 +18,8 @@ public static class ServiceCollectionExtensions
             int port = ConfigManager.GetIntOrDefault(deviceConfig, "port", 5556);
             return new ADBHelper(host, port);
         });
+        services.AddSingleton<IADBHelper>(serviceProvider =>
+            serviceProvider.GetRequiredService<ADBHelper>());
 
         services.AddSingleton<IVisionEngine>(_ =>
         {
@@ -27,7 +29,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IPopupHandlerService>(serviceProvider =>
         {
-            var adb = (ADBHelper)serviceProvider.GetRequiredService<IADBHelper>();
+            var adb = serviceProvider.GetRequiredService<ADBHelper>();
             var vision = (VisionEngine)serviceProvider.GetRequiredService<IVisionEngine>();
             string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
             return new PopupHandlerService(adb, vision, templatesPath);
@@ -38,7 +40,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IStatsRepository>(serviceProvider =>
         {
-            var adb = (ADBHelper)serviceProvider.GetRequiredService<IADBHelper>();
+            var adb = serviceProvider.GetRequiredService<ADBHelper>();
             var vision = (VisionEngine)serviceProvider.GetRequiredService<IVisionEngine>();
             string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
             return new StatsRepository(adb, vision, templatesPath);
@@ -46,7 +48,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IAccountSwitcher>(serviceProvider =>
         {
-            var adb = (ADBHelper)serviceProvider.GetRequiredService<IADBHelper>();
+            var adb = serviceProvider.GetRequiredService<ADBHelper>();
             var vision = (VisionEngine)serviceProvider.GetRequiredService<IVisionEngine>();
             string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
             return new AccountSwitcher(adb, vision, templatesPath, _ => true);
@@ -55,7 +57,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CVAutomationFramework>(serviceProvider =>
         {
             var configService = (ConfigService)serviceProvider.GetRequiredService<IConfigService>();
-            var adb = (ADBHelper)serviceProvider.GetRequiredService<IADBHelper>();
+            var adb = serviceProvider.GetRequiredService<ADBHelper>();
             var vision = (VisionEngine)serviceProvider.GetRequiredService<IVisionEngine>();
             string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
             return new CVAutomationFramework(configPath, configService, adb, vision, templatesPath);
