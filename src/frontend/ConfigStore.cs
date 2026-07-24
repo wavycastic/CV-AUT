@@ -404,7 +404,6 @@ namespace CvAut
             root["attack"] ??= "Dragon_Attack";
             root["enable_stats"] ??= true;
             root["upgrade_wall"] ??= false;
-            root["wall_level"] ??= 14;
             MigrateLegacyWallConfig(root);
             root["wall_gold_threshold"] ??= 5000000;
             root["wall_elixir_threshold"] ??= 5000000;

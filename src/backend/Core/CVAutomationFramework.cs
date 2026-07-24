@@ -906,7 +906,7 @@ namespace CvAut
         private void TryUpgradeWallsFromHome(JsonElement cfg, CancellationToken token, string phase)
         {
             var wallConfig = GetWallUpgradeConfig(cfg, _currentVillageIdx);
-            Console.WriteLine($"[WALL DECISION] phase={phase} cycle={_cycleCount} enabled={wallConfig.Enabled} home=true level={wallConfig.WallLevel} gold_start={wallConfig.GoldThreshold:N0} elixir_start={wallConfig.ElixirThreshold:N0} gold_reserve={wallConfig.GoldReserve:N0} elixir_reserve={wallConfig.ElixirReserve:N0} wall_debug_screenshots={wallConfig.DebugScreenshots} status=check");
+            Console.WriteLine($"[WALL DECISION] phase={phase} cycle={_cycleCount} enabled={wallConfig.Enabled} home=true gold_start={wallConfig.GoldThreshold:N0} elixir_start={wallConfig.ElixirThreshold:N0} gold_reserve={wallConfig.GoldReserve:N0} elixir_reserve={wallConfig.ElixirReserve:N0} batch_limit={wallConfig.BatchLimit} wall_debug_screenshots={wallConfig.DebugScreenshots} status=check");
 
             if (!wallConfig.Enabled)
             {
@@ -921,11 +921,11 @@ namespace CvAut
             }
 
             int upgradedWalls = _wallUpdater.HandleHomeResources(
-                wallConfig.WallLevel,
                 wallConfig.GoldThreshold,
                 wallConfig.ElixirThreshold,
                 wallConfig.GoldReserve,
                 wallConfig.ElixirReserve,
+                wallConfig.BatchLimit,
                 wallConfig.DebugScreenshots,
                 _cycleCount,
                 token);

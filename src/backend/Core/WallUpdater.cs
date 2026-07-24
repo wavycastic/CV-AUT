@@ -6,20 +6,18 @@ using System.Threading;
 using OpenCvSharp;
 using Point = OpenCvSharp.Point;
 using Size = OpenCvSharp.Size;
+
 namespace CvAut
 {
     /// <summary>
     /// Bộ nâng cấp tường (Wall Updater):
-    /// - Quét tìm các đoạn tường trên màn hình Làng chính bằng phương pháp so khớp mẫu.
-    /// - Thực hiện lọc trùng lặp tọa độ để tránh bấm nhầm cùng một bức tường.
-    /// - Bấm chọn tường, xác thực giao diện nâng cấp, tính toán và nâng cấp bằng Vàng hoặc Dầu hồng tùy điều kiện tài nguyên.
+    /// - Quét tìm các đoạn tường trên màn hình Làng chính bằng phương pháp so khớp mẫu trong Builder menu.
+    /// - Lọc trùng lặp tọa độ và sắp xếp ứng viên.
+    /// - Bấm chọn tường, xác thực giao diện nâng cấp, ra quyết định chọn Vàng hoặc Dầu hồng theo ngưỡng tài nguyên và batch limit.
     /// </summary>
     internal sealed partial class WallUpdater
     {
-        // Vùng ROI tìm kiếm tường trên bản đồ (Tránh phần rìa chứa các nút UI cản trở)
-        private static readonly Rect WallSearchRoi = Rect.FromLTRB(270, 100, 1339, 785);
-        // Vùng danh sách nâng cấp trong Builder menu, port từ legacy/NX-ClashClient rois.json
-        // upgrades_menu: x=0.404, y=0.1187, w=0.217, h=0.527 trên layout 1600x900.
+        // Vùng ROI tìm kiếm tường trong Builder menu (port từ legacy/NX-ClashClient rois.json)
         private static readonly Rect BuilderUpgradeMenuRoi = new(646, 107, 347, 474);
         // Tọa độ điểm kiểm tra màu nền xám/trắng nhạt để xác nhận bảng nâng cấp đang mở
         private static readonly Point PanelCheckPoint = new(800, 750);
@@ -38,12 +36,10 @@ namespace CvAut
         private static readonly Point RemoveWallMinusOneButton = new(330, 650);
         private static readonly Rect GoldUpgradeCostRoi = new(860, 635, 120, 33);
         private static readonly Rect ElixirUpgradeCostRoi = new(1035, 635, 120, 33);
-        private const int MaxAddWallIterations = 50;
         private const int WallUiAnimationDelayMs = 400;
         private const int RedCostPixelCountThreshold = 120;
         private static readonly Point ConfirmUpgradePoint = new(1115, 782);
         private static readonly Point ConfirmMultiPoint = new(990, 620);
-        private static readonly Point SafeClosePoint = new(1229, 25);
         private static readonly Rect ConfirmDialogRoi = new(820, 540, 430, 300);
         // Ngưỡng so khớp mẫu để tìm tường (cần độ tin cậy cao để tránh nhận diện nhầm các vật thể khác)
         private const double WallSearchThreshold = 0.90;
@@ -55,7 +51,7 @@ namespace CvAut
         private const int SupportedScreenshotWidth = 1600;
         private const int SupportedScreenshotHeight = 900;
         private const int MaxCandidateAttempts = 3;
-        // Lưu trữ vị trí index bù của bức tường nâng cấp gần nhất để tăng tốc độ chọn ở chu kỳ tiếp theo
+
         private int? _savedWallOffset;
         private bool _debugScreenshotsEnabled;
         private int _debugCycle;
@@ -63,12 +59,7 @@ namespace CvAut
         private int _sessionWallVerified = 0;
         private int _sessionWallSkipped = 0;
         private int _sessionWallUnknown = 0;
-        /// <summary>
-        /// Khởi tạo bộ cập nhật nâng cấp tường.
-        /// </summary>
-        /// <param name="adb">Đối tượng ADBHelper.</param>
-        /// <param name="vision">Đối tượng VisionEngine.</param>
-        /// <param name="templatesPath">Thư mục chứa tệp mẫu template.</param>
+
         public WallUpdater(ADBHelper adb, VisionEngine vision, string templatesPath)
         {
             _adb = adb;
@@ -76,23 +67,20 @@ namespace CvAut
             _templatesPath = templatesPath;
             _debugDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimpliMixi", "debug", "wall");
         }
+
         private static bool InterruptibleSleep(int milliseconds, CancellationToken token)
             => ThreadingUtil.InterruptibleSleep(milliseconds, token);
+
         /// <summary>
-        /// Kiểm tra lượng tài nguyên Vàng và Dầu hồng hiện tại ở Làng chính,
-        /// nếu vượt ngưỡng tối thiểu (do người dùng cấu hình), thực hiện nâng cấp tường.
+        /// Xử lý nâng cấp tường không phụ thuộc Wall Level.
+        /// Quét Builder menu bằng 4 generic Wall templates, xác định tài nguyên phù hợp và thực hiện nâng cấp.
         /// </summary>
-        /// <param name="wallLevel">Cấp độ tường đích muốn nâng cấp.</param>
-        /// <param name="wallGoldThreshold">Ngưỡng Vàng tối thiểu để bắt đầu nâng tường.</param>
-        /// <param name="wallElixirThreshold">Ngưỡng Dầu hồng tối thiểu để bắt đầu nâng tường.</param>
-        /// <param name="wallGoldReserve">Lượng Vàng luôn giữ lại sau nâng tường.</param>
-        /// <param name="wallElixirReserve">Lượng Dầu hồng luôn giữ lại sau nâng tường.</param>
         public int HandleHomeResources(
-            int wallLevel,
             int wallGoldThreshold,
             int wallElixirThreshold,
             int wallGoldReserve,
             int wallElixirReserve,
+            int batchLimit = 1,
             bool debugScreenshots = false,
             int cycle = 0,
             CancellationToken token = default)
@@ -100,185 +88,248 @@ namespace CvAut
             if (token.IsCancellationRequested) return 0;
             _debugScreenshotsEnabled = debugScreenshots;
             _debugCycle = cycle;
-            // Force wall level to 14 internally as level configuration is no longer requested in FE.
-            // Level 14 is fully supported and allows both Gold and Elixir upgrades.
-            wallLevel = 14;
-            Console.WriteLine($"[WALL] phase=target_plan cycle={cycle} status=start reason=color_detection_gold_then_elixir");
-            if (!IsSupportedWallLevel(wallLevel))
+
+            Console.WriteLine($"[WALL] phase=target_plan cycle={cycle} status=start gold_start={wallGoldThreshold:N0} elixir_start={wallElixirThreshold:N0} batch_limit={batchLimit}");
+
+            string[] templateNames = GetWallTemplateNames();
+            if (templateNames.Length == 0)
             {
-                Console.WriteLine($"[WALL RESULT] phase=target_plan cycle={cycle} status=skip reason=unsupported_wall_level level={wallLevel}");
+                Console.WriteLine($"[WALL RESULT] phase=target_plan cycle={cycle} status=skip reason=wall_templates_missing");
                 return 0;
             }
-            int totalVerified = 0;
-            totalVerified += TryUpgradeWithResource(
-                "gold",
-                wallLevel,
+
+            using Mat? initialScreenshot = _adb.TakeScreenshot();
+            if (!ValidateSupportedLayout(initialScreenshot, out string layoutReason))
+            {
+                Console.WriteLine($"[WALL RESULT] phase=target_plan cycle={cycle} status=skip reason={layoutReason}");
+                return 0;
+            }
+
+            WallTransactionResult result = UpgradeWallBulk(
                 wallGoldThreshold,
                 wallElixirThreshold,
                 wallGoldReserve,
                 wallElixirReserve,
+                batchLimit,
                 token);
-            totalVerified += TryUpgradeWithResource(
-                "elixir",
-                wallLevel,
-                wallGoldThreshold,
-                wallElixirThreshold,
-                wallGoldReserve,
-                wallElixirReserve,
-                token);
-            return totalVerified;
-        }
-        private int TryUpgradeWithResource(
-            string resource,
-            int wallLevel,
-            int wallGoldThreshold,
-            int wallElixirThreshold,
-            int wallGoldReserve,
-            int wallElixirReserve,
-            CancellationToken token)
-        {
-            if (token.IsCancellationRequested) return 0;
-            bool goldOnly = resource.Equals("gold", StringComparison.OrdinalIgnoreCase);
-            int threshold = goldOnly ? wallGoldThreshold : wallElixirThreshold;
-            int reserve = goldOnly ? wallGoldReserve : wallElixirReserve;
-            Console.WriteLine($"[WALL] phase=target_plan resource={resource} threshold={threshold} reserve={reserve} status=start reason=color_detection_controls_affordability");
-            WallTransactionResult result = UpgradeWallBulk(resource, wallLevel, token);
+
             if (result.VerifiedCount > 0)
             {
                 _sessionWallVerified += result.VerifiedCount;
                 _sessionWallAttempted += result.VerifiedCount;
+            }
+            else if (string.Equals(result.Reason, "outcome_unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                _sessionWallUnknown++;
+                _sessionWallAttempted++;
             }
             else
             {
                 _sessionWallSkipped++;
                 _sessionWallAttempted++;
             }
+
             LogSessionCounters(
                 "handle_home_resources",
-                wallLevel,
-                resource,
+                result.Resource,
                 result.Cost,
                 result.CandidateMatchCount,
-                result.VerifiedCount,
+                result.RequestedCount,
                 result.VerifiedCount,
                 result.Reason);
+
             return result.VerifiedCount;
         }
+
         private sealed record WallCandidate(Point Point, double Confidence, string TemplateName);
-        private sealed record WallTransactionResult(int VerifiedCount, string Reason, int CandidateMatchCount = 0, int Cost = 0)
+        private sealed record WallTransactionResult(int VerifiedCount, string Reason, string Resource = "none", int CandidateMatchCount = 0, int RequestedCount = 0, int Cost = 0)
         {
             public static WallTransactionResult Skip(string reason) => new(0, reason);
             public WallTransactionResult WithCandidateMatchCount(int count) => this with { CandidateMatchCount = count };
             public WallTransactionResult WithCost(int cost) => this with { Cost = cost };
-            public static WallTransactionResult Verified(int count, int cost) => new(count, "verified", Cost: cost);
+            public static WallTransactionResult Verified(string resource, int count, int cost, int candidateMatchCount, int requestedCount) =>
+                new(count, "verified", Resource: resource, CandidateMatchCount: candidateMatchCount, RequestedCount: requestedCount, Cost: cost);
         }
-        /// <summary>
-        /// Thực hiện quy trình nâng cấp hàng loạt tường lên cấp độ chỉ định bằng tài nguyên vàng hoặc elixir.
-        /// Thử nghiệm tối đa 3 bức tường cho đến khi tìm được bức tường xác thực hợp lệ.
-        /// </summary>
-        /// <returns>Kết quả giao dịch, chỉ có VerifiedCount khi post-confirm verification thành công.</returns>
+
         private WallTransactionResult UpgradeWallBulk(
-            string resource,
-            int wallLevel,
+            int wallGoldThreshold,
+            int wallElixirThreshold,
+            int wallGoldReserve,
+            int wallElixirReserve,
+            int batchLimit,
             CancellationToken token = default)
         {
             if (token.IsCancellationRequested) return WallTransactionResult.Skip("cancelled");
-            Console.WriteLine($"[WALL] phase=attempt_upgrade resource={resource} level={wallLevel} status=start");
-            return TryUpgradeWallBatch(resource, wallLevel, token);
+            Console.WriteLine($"[WALL] phase=attempt_upgrade status=start batch_limit={batchLimit}");
+            return TryUpgradeWallBatch(wallGoldThreshold, wallElixirThreshold, wallGoldReserve, wallElixirReserve, batchLimit, token);
         }
+
         private WallTransactionResult TryUpgradeWallBatch(
-            string resource,
-            int wallLevel,
+            int wallGoldThreshold,
+            int wallElixirThreshold,
+            int wallGoldReserve,
+            int wallElixirReserve,
+            int batchLimit,
             CancellationToken token)
         {
             if (token.IsCancellationRequested) return WallTransactionResult.Skip("cancelled");
             int candidateMatchCount = 0;
             var triedCoords = new List<Point>();
             Point? validCoord = null;
-            for (int attempt = 0; attempt < MaxCandidateAttempts; attempt++)
+
+            try
             {
-                if (token.IsCancellationRequested)
+                for (int attempt = 0; attempt < MaxCandidateAttempts; attempt++)
                 {
-                    SafeDismiss(token);
-                    return WallTransactionResult.Skip("cancelled");
+                    if (token.IsCancellationRequested)
+                    {
+                        BestEffortDismiss();
+                        return WallTransactionResult.Skip("cancelled");
+                    }
+
+                    List<WallCandidate> candidates = FindAllWallCandidates(token)
+                        .Where(candidate => !triedCoords.Any(tried => Math.Abs(candidate.Point.Y - tried.Y) <= 20))
+                        .ToList();
+
+                    candidateMatchCount = Math.Max(candidateMatchCount, candidates.Count);
+                    if (candidates.Count == 0)
+                    {
+                        Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debugCycle} candidate_match_count={candidateMatchCount} verified_count=0 status=skip reason=no_candidates");
+                        BestEffortDismiss();
+                        return WallTransactionResult.Skip("no_candidates").WithCandidateMatchCount(candidateMatchCount);
+                    }
+
+                    WallCandidate candidate;
+                    if (_savedWallOffset.HasValue && _savedWallOffset.Value >= -candidates.Count && _savedWallOffset.Value < candidates.Count)
+                    {
+                        candidate = candidates[IndexFromEnd(candidates, _savedWallOffset.Value)];
+                    }
+                    else
+                    {
+                        candidate = candidates[candidates.Count - 1];
+                    }
+                    triedCoords.Add(candidate.Point);
+
+                    Console.WriteLine($"[WALL] phase=select_candidate cycle={_debugCycle} candidate_match_count={candidates.Count} attempt={attempt + 1} x={candidate.Point.X} y={candidate.Point.Y} conf={candidate.Confidence:F3} template=\"{candidate.TemplateName}\" status=start");
+                    _adb.Tap(candidate.Point.X, candidate.Point.Y);
+                    if (InterruptibleSleep(1000, token)) return WallTransactionResult.Skip("cancelled");
+                    SaveDebugScreenshot("candidate_selected");
+
+                    // Tắt bảng Thợ xây để hiện panel nâng cấp
+                    _adb.Tap(BuilderMenuPoint.X, BuilderMenuPoint.Y);
+                    if (InterruptibleSleep(500, token)) return WallTransactionResult.Skip("cancelled");
+
+                    // Validate xem panel nâng tường có mở không
+                    if (ValidateWallPanelOpen(out bool goldAvailable, out bool elixirAvailable))
+                    {
+                        validCoord = candidate.Point;
+                        _savedWallOffset ??= -1 - attempt;
+                        break;
+                    }
+
+                    _adb.Tap(DismissPoint.X, DismissPoint.Y);
+                    if (InterruptibleSleep(500, token)) return WallTransactionResult.Skip("cancelled");
+                    _savedWallOffset = null;
                 }
-                // Lấy tất cả các tường tìm thấy trong bảng gợi ý Thợ xây
-                List<WallCandidate> candidates = FindAllWallCandidates(token)
-                    .Where(candidate => !triedCoords.Any(tried => Math.Abs(candidate.Point.Y - tried.Y) <= 20))
-                    .ToList();
-                candidateMatchCount = Math.Max(candidateMatchCount, candidates.Count);
-                if (candidates.Count == 0)
+
+                if (!validCoord.HasValue)
                 {
-                    Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debugCycle} resource={resource} level={wallLevel} candidate_match_count={candidateMatchCount} verified_count=0 status=skip reason=no_candidates");
-                    SafeDismiss(token);
-                    return WallTransactionResult.Skip("no_candidates").WithCandidateMatchCount(candidateMatchCount);
+                    Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debugCycle} candidate_match_count={candidateMatchCount} verified_count=0 status=skip reason=unvalidated");
+                    return WallTransactionResult.Skip("unvalidated").WithCandidateMatchCount(candidateMatchCount);
                 }
-                WallCandidate candidate;
-                // Nếu đã lưu offset thành công từ lần trước, ưu tiên chọn tường quanh khu vực đó
-                if (_savedWallOffset.HasValue && _savedWallOffset.Value >= -candidates.Count && _savedWallOffset.Value < candidates.Count)
+
+                // Đánh giá resource eligibility & affordability sau khi mở panel
+                using Mat? currentScreenshot = _adb.TakeScreenshot();
+                if (currentScreenshot == null || currentScreenshot.Empty())
                 {
-                    candidate = candidates[IndexFromEnd(candidates, _savedWallOffset.Value)];
+                    BestEffortDismiss();
+                    return WallTransactionResult.Skip("screenshot_failed").WithCandidateMatchCount(candidateMatchCount);
                 }
-                else
+
+                bool goldRed = IsUpgradeCostRed(currentScreenshot, "gold", out _, out _);
+                bool elixirRed = IsUpgradeCostRed(currentScreenshot, "elixir", out _, out _);
+
+                bool goldAvailableBtn = IsResourceUpgradeButtonAvailable(currentScreenshot, "gold") && !goldRed;
+                bool elixirAvailableBtn = IsResourceUpgradeButtonAvailable(currentScreenshot, "elixir") && !elixirRed;
+
+                string selectedResource = "none";
+                if (goldAvailableBtn && elixirAvailableBtn)
                 {
-                    // Builder menu: bottom-most row first.
-                    candidate = candidates[candidates.Count - 1];
+                    selectedResource = "gold"; // Default preference to Gold when both available
                 }
-                triedCoords.Add(candidate.Point);
-                // Nhấp chọn biểu tượng Wall trong bảng gợi ý Thợ xây để game tự định vị và chọn tường
-                Console.WriteLine($"[WALL] phase=select_candidate cycle={_debugCycle} resource={resource} level={wallLevel} candidate_match_count={candidates.Count} attempt={attempt + 1} x={candidate.Point.X} y={candidate.Point.Y} conf={candidate.Confidence:F3} template=\"{candidate.TemplateName}\" status=start");
-                _adb.Tap(candidate.Point.X, candidate.Point.Y);
+                else if (goldAvailableBtn)
+                {
+                    selectedResource = "gold";
+                }
+                else if (elixirAvailableBtn)
+                {
+                    selectedResource = "elixir";
+                }
+
+                if (selectedResource == "none")
+                {
+                    Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debugCycle} candidate_match_count={candidateMatchCount} status=skip reason=resources_below_threshold_or_red");
+                    BestEffortDismiss();
+                    return WallTransactionResult.Skip("resources_below_threshold_or_red").WithCandidateMatchCount(candidateMatchCount);
+                }
+
+                int maxBatch = Math.Max(1, batchLimit);
+                int actualSelectedCount = AddWallsSafely(selectedResource, maxBatch, token);
+                if (actualSelectedCount <= 0)
+                {
+                    BestEffortDismiss();
+                    return WallTransactionResult.Skip("insufficient_resource_for_cost").WithCandidateMatchCount(candidateMatchCount);
+                }
+
+                SaveDebugScreenshot("add_wall_done");
+
+                Point upgradePoint = selectedResource.Equals("gold", StringComparison.OrdinalIgnoreCase)
+                    ? FixedGoldUpgradePoint
+                    : FixedElixirUpgradePoint;
+
+                _adb.Tap(upgradePoint.X, upgradePoint.Y);
                 if (InterruptibleSleep(1000, token)) return WallTransactionResult.Skip("cancelled");
-                SaveDebugScreenshot("candidate_selected");
-                // Tắt bảng gợi ý Thợ xây để lộ giao diện nâng cấp dưới đáy màn hình
-                _adb.Tap(BuilderMenuPoint.X, BuilderMenuPoint.Y);
-                if (InterruptibleSleep(500, token)) return WallTransactionResult.Skip("cancelled");
-                // Chỉ cần panel mở + nút tài nguyên; không OCR giá (Simplicity-style).
-                if (ValidateWallTapNew(resource))
+
+                if (!IsConfirmDialogOpen())
                 {
-                    validCoord = candidate.Point;
-                    _savedWallOffset ??= -1 - attempt;
-                    break;
+                    Console.WriteLine($"[WALL RESULT] phase=confirm_open cycle={_debugCycle} resource={selectedResource} candidate_match_count={candidateMatchCount} requested_count={actualSelectedCount} verified_count=0 status=skip reason=confirm_dialog_not_verified");
+                    BestEffortDismiss();
+                    return WallTransactionResult.Skip("confirm_dialog_not_verified").WithCandidateMatchCount(candidateMatchCount);
                 }
-                // Nếu không đúng tường (hoặc chạm nhầm công trình khác), tắt menu đi thử lại
-                _adb.Tap(DismissPoint.X, DismissPoint.Y);
-                if (InterruptibleSleep(500, token)) return WallTransactionResult.Skip("cancelled");
-                // Nếu thử sai khi đang dùng vị trí lưu từ trước, xóa lưu vị trí để thử các tọa độ khác
-                _savedWallOffset = null;
+
+                SaveDebugScreenshot("confirm_open");
+
+                Point confirmPoint = actualSelectedCount > 1 ? ConfirmMultiPoint : ConfirmUpgradePoint;
+                _adb.Tap(confirmPoint.X, confirmPoint.Y);
+
+                if (InterruptibleSleep(1500, token))
+                {
+                    // Token cancelled post-confirm: verify outcome before deciding
+                    if (IsConfirmDialogClosed())
+                    {
+                        return WallTransactionResult.Verified(selectedResource, actualSelectedCount, 0, candidateMatchCount, actualSelectedCount);
+                    }
+                    return new WallTransactionResult(0, "outcome_unknown", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
+                }
+
+                if (!IsConfirmDialogClosed())
+                {
+                    Console.WriteLine($"[WALL RESULT] phase=confirm_verify cycle={_debugCycle} resource={selectedResource} status=unknown reason=dialog_still_open");
+                    BestEffortDismiss();
+                    return new WallTransactionResult(0, "outcome_unknown", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
+                }
+
+                BestEffortDismiss();
+                Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debugCycle} resource={selectedResource} candidate_match_count={candidateMatchCount} requested_count={actualSelectedCount} verified_count={actualSelectedCount} status=upgraded reason=confirmed");
+                return WallTransactionResult.Verified(selectedResource, actualSelectedCount, 0, candidateMatchCount, actualSelectedCount);
             }
-            if (!validCoord.HasValue)
+            finally
             {
-                Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debugCycle} resource={resource} level={wallLevel} candidate_match_count={candidateMatchCount} verified_count=0 status=skip reason=unvalidated");
-                return WallTransactionResult.Skip("unvalidated").WithCandidateMatchCount(candidateMatchCount);
+                BestEffortDismiss();
             }
-            int requestedCount = AddWallsUntilCostTurnsRed(resource, token);
-            if (requestedCount <= 0)
-            {
-                SafeDismiss(token);
-                return WallTransactionResult.Skip("insufficient_resource_for_cost").WithCandidateMatchCount(candidateMatchCount);
-            }
-            SaveDebugScreenshot("add_wall_done");
-            Point upgradePoint = resource.Equals("gold", StringComparison.OrdinalIgnoreCase)
-                ? FixedGoldUpgradePoint
-                : FixedElixirUpgradePoint;
-            _adb.Tap(upgradePoint.X, upgradePoint.Y);
-            if (InterruptibleSleep(1000, token)) return WallTransactionResult.Skip("cancelled");
-            if (!IsConfirmDialogOpen())
-            {
-                Console.WriteLine($"[WALL RESULT] phase=confirm_open cycle={_debugCycle} resource={resource} level={wallLevel} candidate_match_count={candidateMatchCount} requested_count={requestedCount} verified_count=0 status=skip reason=confirm_dialog_not_open");
-                SafeDismiss(token);
-                return WallTransactionResult.Skip("confirm_dialog_not_open").WithCandidateMatchCount(candidateMatchCount);
-            }
-            SaveDebugScreenshot("confirm_open");
-            Point confirmPoint = requestedCount > 1 ? ConfirmMultiPoint : ConfirmUpgradePoint;
-            _adb.Tap(confirmPoint.X, confirmPoint.Y);
-            Thread.Sleep(1500);
-            // Simplicity: tin bấm confirm, không đọc lại vàng/dầu.
-            SafeDismiss(token);
-            Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debugCycle} resource={resource} level={wallLevel} candidate_match_count={candidateMatchCount} requested_count={requestedCount} verified_count={requestedCount} status=upgraded reason=confirmed");
-            return WallTransactionResult.Verified(requestedCount, 0).WithCandidateMatchCount(candidateMatchCount);
         }
-        private int AddWallsUntilCostTurnsRed(string resource, CancellationToken token)
+
+        private int AddWallsSafely(string resource, int batchLimit, CancellationToken token)
         {
             int selectedCount = 1;
             if (IsUpgradeCostRed(resource, out double initialRatio, out int initialRedPixels))
@@ -286,26 +337,33 @@ namespace CvAut
                 Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=skip reason=initial_cost_red selected_count=0 red_ratio={initialRatio:F3} red_pixels={initialRedPixels}");
                 return 0;
             }
-            for (int i = 0; i < MaxAddWallIterations; i++)
+
+            int addMoreTaps = Math.Max(0, batchLimit - 1);
+            for (int i = 0; i < addMoreTaps; i++)
             {
-                if (token.IsCancellationRequested) return 0;
+                if (token.IsCancellationRequested) break;
                 _adb.Tap(AddWallPlusOneButton.X, AddWallPlusOneButton.Y);
-                if (InterruptibleSleep(WallUiAnimationDelayMs, token)) return 0;
+                if (InterruptibleSleep(WallUiAnimationDelayMs, token)) break;
+
                 if (!IsUpgradeCostRed(resource, out double redRatio, out int redPixels))
                 {
                     selectedCount++;
                     Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=ok reason=cost_available selected_count={selectedCount} red_ratio={redRatio:F3} red_pixels={redPixels}");
                     continue;
                 }
+
+                // If cost turned red, revert last tap and stop tapping
                 _adb.Tap(RemoveWallMinusOneButton.X, RemoveWallMinusOneButton.Y);
-                if (InterruptibleSleep(WallUiAnimationDelayMs, token)) return 0;
+                if (InterruptibleSleep(WallUiAnimationDelayMs, token)) break;
+
                 bool stillRed = IsUpgradeCostRed(resource, out double afterRemoveRatio, out int afterRemoveRedPixels);
                 Console.WriteLine($"[WALL] phase=add_wall resource={resource} status={(stillRed ? "fail" : "ok")} reason={(stillRed ? "cost_still_red_after_remove" : "red_cost_boundary_found")} selected_count={selectedCount} red_ratio={afterRemoveRatio:F3} red_pixels={afterRemoveRedPixels}");
                 return stillRed ? 0 : selectedCount;
             }
-            Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=fail reason=max_iterations_reached selected_count={selectedCount} limit={MaxAddWallIterations}");
-            return 0;
+
+            return selectedCount;
         }
+
         private bool IsUpgradeCostRed(string resource, out double redRatio, out int redPixels)
         {
             redRatio = 0;
@@ -320,6 +378,7 @@ namespace CvAut
             Console.WriteLine($"[WALL] phase=color_check resource={resource} status=ok reason={(red ? "cost_red" : "cost_available")} red_ratio={redRatio:F3} red_pixels={redPixels}");
             return red;
         }
+
         internal static bool IsUpgradeCostRed(Mat screenshot, string resource, out double redRatio, out int redPixels)
         {
             redRatio = 0;
@@ -341,7 +400,6 @@ namespace CvAut
                     byte b = pixel.Item0;
                     byte g = pixel.Item1;
                     byte r = pixel.Item2;
-                    // Strict red text detection including anti-aliasing on white background
                     bool isRed = r > 200 && g < 160 && b < 160 && (r - g) > 50 && (r - b) > 50;
                     if (isRed)
                     {
@@ -352,11 +410,7 @@ namespace CvAut
             redRatio = redPixels / (double)(roi.Width * roi.Height);
             return redPixels >= RedCostPixelCountThreshold;
         }
-        /// <summary>
-        /// Tìm kiếm tất cả các tọa độ đoạn tường hiển thị trên màn hình hiện tại.
-        /// Hỗ trợ vuốt trượt tìm kiếm tối đa 7 lần nếu chưa tìm thấy ứng viên tường nào.
-        /// </summary>
-        /// <param name="wallLevel">Cấp độ tường hiện tại cần tìm để nâng cấp.</param>
+
         private List<WallCandidate> FindAllWallCandidates(CancellationToken token = default)
         {
             if (token.IsCancellationRequested) return new List<WallCandidate>();
@@ -364,100 +418,116 @@ namespace CvAut
             {
                 return new List<WallCandidate>();
             }
+
             string[] templateNames = GetWallTemplateNames();
             if (templateNames.Length == 0)
             {
-                Console.WriteLine("[WALL WARN] No generic wall templates found in Templates directory.");
+                Console.WriteLine("[WALL WARN] No wall templates found in Templates directory.");
                 return new List<WallCandidate>();
             }
+
             Console.WriteLine($"[WALL] phase=search_templates count={templateNames.Length} status=ok reason=loaded");
+
             for (int attempt = 0; attempt < 7; attempt++)
             {
                 if (token.IsCancellationRequested) return new List<WallCandidate>();
                 if (attempt > 0)
                 {
-                    // Vuốt bảng gợi ý Thợ xây đi một chút để tìm dòng gợi ý nâng tường tiếp theo
                     _adb.Swipe(RetrySwipeEnd.X, RetrySwipeEnd.Y, RetrySwipeStart.X, RetrySwipeStart.Y, SwipeDurationMs);
                     if (InterruptibleSleep(800, token)) return new List<WallCandidate>();
                 }
+
                 using Mat? screenshot = _adb.TakeScreenshot();
                 if (screenshot == null || screenshot.Empty())
                 {
                     Console.WriteLine("[WALL WARN] Screenshot failed while searching walls.");
                     continue;
                 }
-                Rect roi = ImageUtils.ClampRect(WallSearchRoi, screenshot.Width, screenshot.Height);
+
+                Rect roi = ImageUtils.ClampRect(BuilderUpgradeMenuRoi, screenshot.Width, screenshot.Height);
                 if (roi.Width <= 0 || roi.Height <= 0)
                 {
-                    Console.WriteLine("[WALL WARN] Wall ROI is empty; check screenshot size.");
+                    Console.WriteLine("[WALL WARN] Builder Menu ROI is empty; check screenshot size.");
                     return new List<WallCandidate>();
                 }
+
                 using Mat roiBgr = new Mat(screenshot, roi);
                 using Mat roiGray = new Mat();
                 Cv2.CvtColor(roiBgr, roiGray, ColorConversionCodes.BGR2GRAY);
+
                 var merged = new List<WallCandidate>();
-                // Chạy so khớp cho từng template mẫu biểu tượng Tường trong bảng gợi ý
                 foreach (string templateName in templateNames)
                 {
-                    merged.AddRange(MatchWallTemplate(roiGray, templateName));
+                    merged.AddRange(MatchWallTemplateInRoi(roiGray, templateName, BuilderUpgradeMenuRoi));
                 }
-                // Loại bỏ các tọa độ bị trùng lặp sát nhau (bán kính 10px) và sắp xếp tăng dần theo trục Y
+
                 List<WallCandidate> candidates = DedupeCandidates(merged, 10)
                     .OrderBy(candidate => candidate.Point.Y)
                     .ThenBy(candidate => candidate.Point.X)
                     .ToList();
+
                 if (candidates.Count > 0)
                 {
                     Console.WriteLine($"[WALL] phase=search_candidates count={candidates.Count} status=ok reason=matched");
                     return candidates;
                 }
             }
+
             return new List<WallCandidate>();
         }
-        private static bool IsSupportedWallLevel(int wallLevel)
-        {
-            return wallLevel >= WallUpgradeDecider.MinSupportedWallLevel && wallLevel <= WallUpgradeDecider.MaxSupportedWallLevel;
-        }
-        /// <summary>
-        /// Chuẩn bị giao diện để bắt đầu tìm tường (Mở bảng gợi ý thợ xây và vuốt map chuẩn).
-        /// </summary>
+
         private bool PrepareWallSearch(CancellationToken token = default)
         {
             Console.WriteLine("[WALL] phase=preflight status=start reason=open_builder_menu");
             if (token.IsCancellationRequested) return false;
-            SafeDismiss(token);
+
+            BestEffortDismiss();
             if (InterruptibleSleep(300, token)) return false;
+
             _adb.Tap(BuilderMenuPoint.X, BuilderMenuPoint.Y);
             if (InterruptibleSleep(1000, token)) return false;
+
             if (!IsBuilderMenuOpen())
             {
                 Console.WriteLine("[WALL] phase=preflight status=fail reason=builder_menu_not_visible");
                 return false;
             }
-            // Pull the list downward until it is back at the first Builder suggestions.
+
             for (int i = 0; i < 3; i++)
             {
                 if (token.IsCancellationRequested) return false;
                 _adb.Swipe(RetrySwipeStart.X, RetrySwipeStart.Y, RetrySwipeEnd.X, RetrySwipeEnd.Y, SwipeDurationMs);
                 if (InterruptibleSleep(250, token)) return false;
             }
+
             bool menuOpen = IsBuilderMenuOpen();
             Console.WriteLine($"[WALL] phase=preflight status={(menuOpen ? "ok" : "fail")} reason={(menuOpen ? "builder_menu_visible" : "builder_menu_not_visible")}");
             return menuOpen;
         }
-        private void ResetBuilderState(CancellationToken token)
+
+        private void BestEffortDismiss()
         {
-            if (token.IsCancellationRequested) return;
-            SafeDismiss(token);
-            if (InterruptibleSleep(300, token)) return;
+            try
+            {
+                _adb.Tap(HomeMenuPoint.X, HomeMenuPoint.Y);
+                Thread.Sleep(150);
+                _adb.Tap(DismissPoint.X, DismissPoint.Y);
+            }
+            catch { }
         }
+
         private void SafeDismiss(CancellationToken token)
         {
-            if (token.IsCancellationRequested) return;
+            if (token.IsCancellationRequested)
+            {
+                BestEffortDismiss();
+                return;
+            }
             _adb.Tap(HomeMenuPoint.X, HomeMenuPoint.Y);
             if (InterruptibleSleep(150, token)) return;
             _adb.Tap(DismissPoint.X, DismissPoint.Y);
         }
+
         private bool IsBuilderMenuOpen()
         {
             using Mat? screenshot = _adb.TakeScreenshot();
@@ -482,6 +552,7 @@ namespace CvAut
             Console.WriteLine($"[WALL] phase=preflight_check status={(open ? "ok" : "fail")} dark_ratio={darkRatio:F2} reason={(open ? "builder_menu_panel_visible" : "builder_menu_panel_missing")}");
             return open;
         }
+
         private string[] GetWallTemplateNames()
         {
             return new[]
@@ -492,13 +563,7 @@ namespace CvAut
                 @"walls\wall_4.png"
             }.Where(name => TemplateAssetLoader.Exists(_templatesPath, name)).ToArray();
         }
-        /// <summary>
-        /// Thực hiện so khớp mẫu ảnh tường (có hỗ trợ kênh Alpha làm mặt nạ mask nếu tệp ảnh 4 kênh).
-        /// </summary>
-        private IEnumerable<WallCandidate> MatchWallTemplate(Mat grayRoi, string templateName)
-        {
-            return MatchWallTemplateInRoi(grayRoi, templateName, WallSearchRoi);
-        }
+
         private IEnumerable<WallCandidate> MatchWallTemplateInRoi(Mat grayRoi, string templateName, Rect sourceRoi, double threshold = WallSearchThreshold)
         {
             using Mat raw = TemplateAssetLoader.Load(_templatesPath, templateName, ImreadModes.Unchanged);
@@ -515,23 +580,22 @@ namespace CvAut
             using Mat result = new Mat();
             if (mask != null && !mask.Empty())
             {
-                // Khớp mẫu có mặt nạ (Masked Template Matching) để bỏ qua phần nền trong suốt của viên tường mẫu
                 Cv2.MatchTemplate(grayRoi, templateGray, result, TemplateMatchModes.CCoeffNormed, mask);
             }
             else
             {
                 Cv2.MatchTemplate(grayRoi, templateGray, result, TemplateMatchModes.CCoeffNormed);
             }
-            // Áp dụng phép dãn nở ảnh (Dilate) để lọc lấy giá trị cực đại địa phương (Local Maxima)
+
             using Mat dilated = new Mat();
             using Mat kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
             Cv2.Dilate(result, dilated, kernel);
+
             for (int y = 0; y < result.Rows; y++)
             {
                 for (int x = 0; x < result.Cols; x++)
                 {
                     float value = result.At<float>(y, x);
-                    // Chỉ giữ lại tọa độ có độ tin cậy vượt ngưỡng và là cực đại cục bộ
                     if (value >= threshold && Math.Abs(value - dilated.At<float>(y, x)) < 0.0001)
                     {
                         yield return new WallCandidate(
@@ -544,43 +608,40 @@ namespace CvAut
                 }
             }
         }
-        /// <summary>
-        /// Panel mở + nút tài nguyên hiện. Không OCR giá.
-        /// </summary>
-        private bool ValidateWallTapNew(string resource)
+
+        private bool ValidateWallPanelOpen(out bool goldAvailable, out bool elixirAvailable)
         {
+            goldAvailable = false;
+            elixirAvailable = false;
+
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty())
             {
                 Console.WriteLine("[WALL] phase=validate_tap status=fail reason=screenshot_failed");
                 return false;
             }
+
             int width = screenshot.Width;
             int height = screenshot.Height;
             int px = Math.Clamp(PanelCheckPoint.X, 0, width - 1);
             int py = Math.Clamp(PanelCheckPoint.Y, 0, height - 1);
             Vec3b pixel = screenshot.At<Vec3b>(py, px);
             bool whitePanel = pixel.Item0 >= 180 && pixel.Item1 >= 180 && pixel.Item2 >= 180;
-            bool goldButton = IsResourceUpgradeButtonAvailable(screenshot, "gold");
-            bool elixirButton = IsResourceUpgradeButtonAvailable(screenshot, "elixir");
-            bool panelOpen = whitePanel || goldButton || elixirButton;
+
+            goldAvailable = IsResourceUpgradeButtonAvailable(screenshot, "gold");
+            elixirAvailable = IsResourceUpgradeButtonAvailable(screenshot, "elixir");
+
+            bool panelOpen = whitePanel || goldAvailable || elixirAvailable;
             if (!panelOpen)
             {
                 Console.WriteLine("[WALL] phase=validate_tap status=fail reason=panel_not_open");
                 return false;
             }
-            bool resourceOk = resource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? goldButton : elixirButton;
-            if (!resourceOk)
-            {
-                Console.WriteLine($"[WALL] phase=validate_tap resource={resource} status=fail reason=resource_button_unavailable gold={goldButton} elixir={elixirButton}");
-                return false;
-            }
-            Console.WriteLine($"[WALL] phase=validate_tap resource={resource} status=ok reason=panel_open");
+
+            Console.WriteLine($"[WALL] phase=validate_tap status=ok reason=panel_open gold={goldAvailable} elixir={elixirAvailable}");
             return true;
         }
-        /// <summary>
-        /// Phân tách ảnh nguồn 4 kênh (có alpha) thành ảnh xám và ảnh mặt nạ nhị phân (mask) để phục vụ so khớp mẫu trong suốt.
-        /// </summary>
+
         private static Mat? BuildTemplateGrayAndMask(Mat raw, Mat templateGray)
         {
             if (raw.Channels() == 4)
@@ -591,7 +652,6 @@ namespace CvAut
                     using Mat bgr = new Mat();
                     Cv2.Merge(channels.Take(3).ToArray(), bgr);
                     Cv2.CvtColor(bgr, templateGray, ColorConversionCodes.BGR2GRAY);
-                    // Tạo mặt nạ nhị phân dựa trên kênh alpha (Kênh 3)
                     Mat mask = new Mat();
                     Cv2.Threshold(channels[3], mask, 0, 255, ThresholdTypes.Binary);
                     return mask;
@@ -604,6 +664,7 @@ namespace CvAut
             Cv2.CvtColor(raw, templateGray, ColorConversionCodes.BGR2GRAY);
             return null;
         }
+
         private static List<WallCandidate> DedupeCandidates(IEnumerable<WallCandidate> candidates, int tolerance)
         {
             var result = new List<WallCandidate>();
@@ -619,6 +680,7 @@ namespace CvAut
             }
             return result;
         }
+
         private bool ValidateSupportedLayout(Mat? screenshot, out string reason)
         {
             if (screenshot == null || screenshot.Empty())
@@ -637,25 +699,18 @@ namespace CvAut
             Console.WriteLine($"[WALL] phase=layout cycle={_debugCycle} status=ok reason={reason} width={screenshot.Width} height={screenshot.Height}");
             return true;
         }
+
         private void SaveDebugScreenshot(string phase)
         {
-            if (!_debugScreenshotsEnabled)
-            {
-                return;
-            }
+            if (!_debugScreenshotsEnabled) return;
             using Mat? screenshot = _adb.TakeScreenshot();
-            if (screenshot == null || screenshot.Empty())
-            {
-                return;
-            }
+            if (screenshot == null || screenshot.Empty()) return;
             SaveDebugScreenshot(screenshot, phase);
         }
+
         private void SaveDebugScreenshot(Mat screenshot, string phase)
         {
-            if (!_debugScreenshotsEnabled || screenshot.Empty())
-            {
-                return;
-            }
+            if (!_debugScreenshotsEnabled || screenshot.Empty()) return;
             try
             {
                 Directory.CreateDirectory(_debugDirectory);
@@ -669,10 +724,12 @@ namespace CvAut
                 Console.WriteLine($"[WALL DEBUG] phase={phase} cycle={_debugCycle} status=fail reason=\"{ex.Message}\"");
             }
         }
-        private void LogSessionCounters(string phase, int wallLevel, string resource, int cost, int candidateMatchCount, int requestedCount, int verifiedCount, string reason)
+
+        private void LogSessionCounters(string phase, string resource, int cost, int candidateMatchCount, int requestedCount, int verifiedCount, string reason)
         {
-            Console.WriteLine($"[WALL SESSION] phase={phase} cycle={_debugCycle} resource={resource} level={wallLevel} cost={cost:N0} candidate_match_count={candidateMatchCount} requested_count={requestedCount} verified_count={verifiedCount} reason={reason} wall_attempted={_sessionWallAttempted} wall_verified={_sessionWallVerified} wall_skipped={_sessionWallSkipped} wall_unknown={_sessionWallUnknown}");
+            Console.WriteLine($"[WALL SESSION] phase={phase} cycle={_debugCycle} resource={resource} cost={cost:N0} candidate_match_count={candidateMatchCount} requested_count={requestedCount} verified_count={verifiedCount} reason={reason} wall_attempted={_sessionWallAttempted} wall_verified={_sessionWallVerified} wall_skipped={_sessionWallSkipped} wall_unknown={_sessionWallUnknown}");
         }
+
         private bool IsResourceUpgradeButtonAvailable(Mat screenshot, string resource)
         {
             Point point = resource.Equals("gold", StringComparison.OrdinalIgnoreCase)
@@ -689,18 +746,14 @@ namespace CvAut
             double brightness = (mean.Val0 + mean.Val1 + mean.Val2) / 3.0;
             return brightness >= 45;
         }
+
         private bool IsConfirmDialogOpen()
         {
             using Mat? screenshot = _adb.TakeScreenshot();
-            if (screenshot == null || screenshot.Empty())
-            {
-                return false;
-            }
+            if (screenshot == null || screenshot.Empty()) return false;
             Rect roi = ImageUtils.ClampRect(ConfirmDialogRoi, screenshot.Width, screenshot.Height);
-            if (roi.Width <= 0 || roi.Height <= 0)
-            {
-                return false;
-            }
+            if (roi.Width <= 0 || roi.Height <= 0) return false;
+
             using Mat dialog = new Mat(screenshot, roi);
             Scalar mean = Cv2.Mean(dialog);
             double brightness = (mean.Val0 + mean.Val1 + mean.Val2) / 3.0;
@@ -708,16 +761,25 @@ namespace CvAut
             Console.WriteLine($"[WALL] phase=confirm_open status={(open ? "ok" : "fail")} brightness={brightness:F1} reason={(open ? "dialog_visible" : "dialog_not_visible")}");
             return open;
         }
-        /// <summary>
-        /// Quy đổi chỉ số index âm (giống cú pháp Python -1, -2) sang chỉ số dương tương ứng trong List.
-        /// </summary>
+
+        private bool IsConfirmDialogClosed()
+        {
+            using Mat? screenshot = _adb.TakeScreenshot();
+            if (screenshot == null || screenshot.Empty()) return true;
+            Rect roi = ImageUtils.ClampRect(ConfirmDialogRoi, screenshot.Width, screenshot.Height);
+            if (roi.Width <= 0 || roi.Height <= 0) return true;
+
+            using Mat dialog = new Mat(screenshot, roi);
+            Scalar mean = Cv2.Mean(dialog);
+            double brightness = (mean.Val0 + mean.Val1 + mean.Val2) / 3.0;
+            return brightness < 60;
+        }
+
         private static int IndexFromEnd<T>(IReadOnlyList<T> list, int negativeIndex)
         {
             return negativeIndex < 0 ? list.Count + negativeIndex : negativeIndex;
         }
-        /// <summary>
-        /// Xóa bỏ vị trí bức tường đã lưu để bắt đầu tìm kiếm lại từ đầu ở chu kỳ sau.
-        /// </summary>
+
         public void ResetSavedOffset()
         {
             _savedWallOffset = null;

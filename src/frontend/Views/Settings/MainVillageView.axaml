@@ -97,12 +97,13 @@
                     </Border>
 
                     <StackPanel Spacing="6" IsEnabled="{Binding UpgradeWall}">
+                        <TextBlock Text="Bot tự tìm các Wall được đề xuất trong Builder menu bằng template ảnh. Không cần chọn cấp tường." Classes="muted" TextWrapping="Wrap" Margin="0,2,0,4" />
                         <StackPanel Spacing="3">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <materialIcons:MaterialIcon Kind="Wall" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
-                                <TextBlock Text="Cấp tường hiện tại cần nâng" Classes="label" VerticalAlignment="Center" />
+                                <TextBlock Text="Số Wall tối đa mỗi lần" Classes="label" VerticalAlignment="Center" />
                             </StackPanel>
-                            <NumericUpDown Value="{Binding WallLevel}" Minimum="1" Maximum="18" Height="32" />
+                            <NumericUpDown Value="{Binding WallBatchLimit}" Minimum="1" Maximum="10" Height="32" />
                         </StackPanel>
                         <StackPanel Spacing="3">
                             <StackPanel Orientation="Horizontal" Spacing="6">
