@@ -6,8 +6,8 @@ namespace CvAut;
 
 internal sealed class PopupHandlerService : IPopupHandlerService
 {
-    private readonly ADBHelper _adb;
-    private readonly VisionEngine _vision;
+    private readonly IADBHelper _adb;
+    private readonly IVisionEngine _vision;
     private readonly string _templatesPath;
     private readonly Handlers.ConnectionPopupHandler _connectionHandler;
     private readonly Handlers.StarBonusPopupHandler _starBonusHandler;
@@ -15,7 +15,7 @@ internal sealed class PopupHandlerService : IPopupHandlerService
 
     private bool _handlingConnectionPopup;
 
-    public PopupHandlerService(ADBHelper adb, VisionEngine vision, string templatesPath)
+    public PopupHandlerService(IADBHelper adb, IVisionEngine vision, string templatesPath)
     {
         _adb = adb;
         _vision = vision;
@@ -37,7 +37,7 @@ internal sealed class PopupHandlerService : IPopupHandlerService
         _handlingConnectionPopup = true;
         try
         {
-            string details = warningMessage.Replace("[WARN] ", "").Replace(" → ", "_").ToLower();
+            string details = warningMessage.Replace("[WARN] ", "").Replace(" \u2192 ", "_").ToLower();
             Console.WriteLine($"[FSM-CS WARNING] phase=connection_check status=fail action=recover reason=\"connection_lost\" details=\"{details} ({matchInfo})\"");
 
             if (reloadAction != null)
