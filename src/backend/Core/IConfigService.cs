@@ -7,8 +7,14 @@ public interface IConfigService
 {
     JsonElement Config { get; }
 
+    AutomationConfigSnapshot Snapshot
+        => AutomationConfigSnapshotReader.Read(Config);
+
     DeviceConnectionConfig DeviceConnection
-        => DeviceConnectionConfigReader.Read(Config);
+        => Snapshot.DeviceConnection;
+
+    RunSessionConfig RunSession
+        => Snapshot.RunSession;
 
     void Reload();
 }
