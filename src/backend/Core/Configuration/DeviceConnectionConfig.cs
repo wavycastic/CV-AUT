@@ -14,7 +14,6 @@ public sealed record DeviceConnectionConfig(
     public const string DefaultHost = "127.0.0.1";
     public const int DefaultPort = 5556;
     public const string DefaultEmulatorType = "BlueStacks";
-
     public string Endpoint => $"{Host}:{Port}";
 }
 
@@ -22,35 +21,17 @@ internal static class DeviceConnectionConfigReader
 {
     public static DeviceConnectionConfig Read(JsonElement root)
     {
-        JsonElement device = ConfigManager.GetObjectOrDefault(root, "device_connection");
-
-        string host = NormalizeRequired(
-            ConfigManager.GetStringOrDefault(device, "host", DeviceConnectionConfig.DefaultHost),
-            DeviceConnectionConfig.DefaultHost);
-        int port = NormalizePort(
-            ConfigManager.GetIntOrDefault(device, "port", DeviceConnectionConfig.DefaultPort));
-
+        JsonConfigReader device = new JsonConfigReader(root).Section("device_connection");
+        string host = device.String("host", DeviceConnectionConfig.DefaultHost).Trim();
         return new DeviceConnectionConfig(
-            Host: host,
-            Port: port,
-            Serial: NormalizeOptional(ConfigManager.GetStringOrDefault(device, "serial", string.Empty)),
-            EmulatorType: NormalizeRequired(
-                ConfigManager.GetStringOrDefault(device, "emulator_type", DeviceConnectionConfig.DefaultEmulatorType),
-                DeviceConnectionConfig.DefaultEmulatorType),
-            EmulatorPath: NormalizeRequired(
-                ConfigManager.GetStringOrDefault(device, "emulator_path", string.Empty),
-                string.Empty),
-            EmulatorInstance: NormalizeRequired(
-                ConfigManager.GetStringOrDefault(device, "emulator_instance", string.Empty),
-                string.Empty));
+            string.IsNullOrWhiteSpace(host) ? DeviceConnectionConfig.DefaultHost : host,
+            device.Int("port", DeviceConnectionConfig.DefaultPort, 1, 65535),
+            Optional(device.String("serial", string.Empty)),
+            device.String("emulator_type", DeviceConnectionConfig.DefaultEmulatorType),
+            device.String("emulator_path", string.Empty),
+            device.String("emulator_instance", string.Empty));
     }
 
-    private static int NormalizePort(int port)
-        => port is >= 1 and <= 65535 ? port : DeviceConnectionConfig.DefaultPort;
-
-    private static string NormalizeRequired(string value, string fallback)
-        => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
-
-    private static string? NormalizeOptional(string value)
+    private static string? Optional(string value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
