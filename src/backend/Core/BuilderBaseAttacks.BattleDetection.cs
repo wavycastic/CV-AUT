@@ -324,15 +324,9 @@ namespace CvAut
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty()) return false;
 
-            if (TryGetPixel(screenshot, 632, 406 + Math.Max(0, ScreenHeight - 732), out Vec3b rawPixel)
-                && IsColorNear(rawPixel, 0xFFE649, 20))
-            {
-                Console.WriteLine($"[BB-ATTACK] phase=end_battle status=detected reason=bb_gold_end_pixel log=\"{logText}\" point=(632,{406 + Math.Max(0, ScreenHeight - 732)})");
-                return true;
-            }
-
-            int scaledX = (int)Math.Round(632 * (screenshot.Width / 860.0));
-            int scaledY = (int)Math.Round((406 + Math.Max(0, screenshot.Height - 732)) * (screenshot.Height / 900.0));
+            Point goldEndPoint = ScaleMbrPoint(632, 406, screenshot.Width, screenshot.Height);
+            int scaledX = goldEndPoint.X;
+            int scaledY = goldEndPoint.Y;
             if (TryGetPixel(screenshot, scaledX, scaledY, out Vec3b scaledPixel)
                 && IsColorNear(scaledPixel, 0xFFE649, 20))
             {
@@ -600,7 +594,7 @@ namespace CvAut
             return true;
         }
 
-        private static Point ScaleMbrPoint(int x, int y, int imageWidth, int imageHeight)
+        internal static Point ScaleMbrPoint(int x, int y, int imageWidth, int imageHeight)
         {
             return new Point(
                 (int)Math.Round(x * (imageWidth / 860.0)),

@@ -138,14 +138,21 @@ namespace CvAut
             return available;
         }
 
-        private static (int Remaining, int Max) ParseStarPair(int raw)
+        internal static (int Remaining, int Max) ParseStarPair(int raw)
         {
             if (raw <= 0) return (0, 0);
             if (raw < 10) return (raw, 0);
-            int max = raw % 10;
-            int remaining = raw / 10;
-            if (max <= 0 || remaining > 99) return (0, 0);
-            return (remaining, max);
+
+            string digits = raw.ToString();
+            for (int split = 1; split < digits.Length; split++)
+            {
+                if (digits[split] == '0') continue;
+                if (!int.TryParse(digits[..split], out int remaining)
+                    || !int.TryParse(digits[split..], out int max)) continue;
+                if (remaining >= 0 && max is > 0 and <= 12 && remaining <= max) return (remaining, max);
+            }
+
+            return (0, 0);
         }
 
         private bool DetectStorageFull(Mat screenshot, string[] templates, string resource)

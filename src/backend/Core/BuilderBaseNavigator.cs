@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using OpenCvSharp;
 using Point = OpenCvSharp.Point;
@@ -99,6 +100,16 @@ namespace CvAut
             @"builder_base\otto_tunnel",
             @"builder_base\builder_tunnel",
             @"builder_base\tunnel"
+        };
+
+        private static readonly string[] BuilderBaseStage1Templates =
+        {
+            @"village\Page\BuilderBase\BuilderEye_0_90"
+        };
+
+        private static readonly string[] OttoStageTemplates =
+        {
+            @"village\Page\BuilderBase\MachineEye_0_90"
         };
 
         public BuilderBaseNavigator(ADBHelper adb, VisionEngine vision)
@@ -412,6 +423,12 @@ namespace CvAut
                 using Mat? screenshot = _io.TakeScreenshot();
                 if (screenshot == null || screenshot.Empty()) return false;
 
+                if (IsOnBuilderBaseStage(screenshot, targetStage, out string currentMarker, out double currentScore))
+                {
+                    Log("switch_stage", "success", targetStage, attempt, $"reason=already_there marker=\"{currentMarker}\" score={currentScore:F2}");
+                    return true;
+                }
+
                 if (TryTapStageTunnel(screenshot, targetStage, attempt))
                 {
                     if (_sleep(2600, token)) return false;
@@ -426,20 +443,35 @@ namespace CvAut
                 }
 
                 ZoomOutApprox(token);
-                if (IsOnBuilderBase())
+                using Mat? verification = _io.TakeScreenshot();
+                if (verification != null && !verification.Empty() && IsOnBuilderBaseStage(verification, targetStage, out string marker, out double markerScore))
                 {
-                    Log("switch_stage", "success", targetStage, attempt);
+                    Log("switch_stage", "success", targetStage, attempt, $"marker=\"{marker}\" score={markerScore:F2}");
                     return true;
                 }
+
+                Log("switch_stage", "retry", targetStage, attempt, "reason=target_stage_not_detected");
             }
 
             Log("switch_stage", "fail", targetStage, null, "reason=not_detected_after_attempts");
             return false;
         }
 
+        private bool IsOnBuilderBaseStage(Mat screenshot, string targetStage, out string marker, out double score)
+        {
+            string[] templates = targetStage.Equals("otto", StringComparison.OrdinalIgnoreCase)
+                ? OttoStageTemplates
+                : BuilderBaseStage1Templates;
+            return TryFindAny(screenshot, templates, BuilderBaseThreshold, BuilderBaseMarkerRoi, out marker, out score, out _);
+        }
+
         private bool TryTapStageTunnel(Mat screenshot, string targetStage, int attempt)
         {
-            foreach (string template in StageTunnelTemplates)
+            string targetMarker = targetStage.Equals("otto", StringComparison.OrdinalIgnoreCase) ? "otto" : "builder";
+            foreach (string template in StageTunnelTemplates
+                .Where(template => template.Contains(targetMarker, StringComparison.OrdinalIgnoreCase)
+                    || (!template.Contains("otto", StringComparison.OrdinalIgnoreCase)
+                        && !template.Contains("builder", StringComparison.OrdinalIgnoreCase))))
             {
                 Point? center = _io.FindElement(screenshot, template, SwitchButtonThreshold, StageTunnelRoi, out double score);
                 if (center == null) continue;

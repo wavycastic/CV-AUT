@@ -9,7 +9,8 @@ namespace CvAut
 {
     internal sealed record BuilderBaseArmyOptions(
         bool Enabled,
-        string Formation);
+        string Formation,
+        bool RequireHero);
 
     /// <summary>
     /// Quản lý army Builder Base theo kiểu an toàn:
@@ -109,7 +110,7 @@ namespace CvAut
             }
 
             if (!OpenAttackPrep(token)) return false;
-            bool ready = IsArmyReadyOnPrep(out int visibleTroops, out bool heroReady);
+            bool ready = IsArmyReadyOnPrep(options.RequireHero, out int visibleTroops, out bool heroReady);
             Console.WriteLine($"[BB-ARMY] phase=prep_check status=pending visible_troops={visibleTroops} hero_ready={heroReady}");
 
             if (ready)
@@ -127,7 +128,7 @@ namespace CvAut
                 FillArmy(options.Formation, token);
 
                 if (!OpenAttackPrep(token)) return false;
-                bool nowReady = IsArmyReadyOnPrep(out visibleTroops, out heroReady);
+                bool nowReady = IsArmyReadyOnPrep(options.RequireHero, out visibleTroops, out heroReady);
                 ClosePrep(token);
 
                 if (nowReady)
@@ -174,7 +175,7 @@ namespace CvAut
             return taps > 0;
         }
 
-        private bool IsArmyReadyOnPrep(out int visibleTroops, out bool heroReady)
+        private bool IsArmyReadyOnPrep(bool requireHero, out int visibleTroops, out bool heroReady)
         {
             visibleTroops = 0;
             heroReady = false;
@@ -220,8 +221,7 @@ namespace CvAut
                 Console.WriteLine("[BB-ARMY] phase=hero_ready status=skip reason=not_found");
             }
 
-            // Builder Base không có hàng chờ train dài như main village; nếu prep có ít nhất một troop tab là có army để đánh.
-            return visibleTroops > 0;
+            return visibleTroops > 0 && (!requireHero || heroReady);
         }
 
         private int CountPrepSlots(Mat screenshot, Rect roi)

@@ -656,9 +656,11 @@ namespace CvAut
             bool upgradeWall = GetBoolOrDefault(night, "upgrade_wall", false);
             bool enableAttack = GetBoolOrDefault(night, "enable_attack", true);
             bool boostClockTower = GetBoolOrDefault(night, "boost_clock_tower", false);
+            int maxAttacksPerCycle = Math.Clamp(GetIntOrDefault(night, "max_attacks_per_cycle", 20), 1, 100);
             var armyOptions = new BuilderBaseArmyOptions(
                 Enabled: true,
-                Formation: GetStringOrDefault(night, "army_formation", "auto"));
+                Formation: GetStringOrDefault(night, "army_formation", "auto"),
+                RequireHero: GetBoolOrDefault(night, "wait_for_heroes", true));
             var battleOptions = new BuilderBaseBattleOptions(
                 DropOrder: GetStringOrDefault(night, "drop_order", "BattleMachine|BattleCopter|BoxerGiant|DropShip|HogGlider|Bomber|SuperPekka|PowerPekka|BabyDragon|CannonCart|ElectrofireWizard|NightWitch|RagedBarbarian|BetaMinion|SneakyArcher"),
                 UseCustomDropOrder: GetBoolOrDefault(night, "custom_drop_order_enabled", false),
@@ -692,6 +694,7 @@ namespace CvAut
                 bool boosted = _builderBaseClockTower.TryBoost(token);
                 Console.WriteLine($"[BB-CS] phase=cycle status=pending step=clock_tower_boost success={boosted}");
             }
+            if (upgradeWall && !CheckStop(token))
             {
                 bool wallUpgraded = _builderBaseWallUpdater.TryUpgradeOne(token);
                 Console.WriteLine($"[BB-CS] phase=cycle status=pending step=wall_upgrade_done success={wallUpgraded}");
@@ -715,7 +718,7 @@ namespace CvAut
             {
                 int completedAttacks = 0;
                 int attempts = 0;
-                for (int attack = 1; !CheckStop(token); attack++)
+                for (int attack = 1; attack <= maxAttacksPerCycle && !CheckStop(token); attack++)
                 {
                     attempts++;
                     BuilderBaseReportSnapshot attackReport = _builderBaseReport.Read();
@@ -762,6 +765,10 @@ namespace CvAut
                         Console.WriteLine($"[BB-CS] phase=cycle status=fail step=post_attack_maintenance index={attack} reason=builder_base_recovery_failed");
                         break;
                     }
+                }
+                if (attempts >= maxAttacksPerCycle && !CheckStop(token))
+                {
+                    Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attack_stop reason=max_attacks_per_cycle limit={maxAttacksPerCycle}");
                 }
                 Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attacks_complete completed={completedAttacks} attempts={attempts}");
             }

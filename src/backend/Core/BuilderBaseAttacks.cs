@@ -246,7 +246,7 @@ namespace CvAut
             _adb.Tap(400, 450); // Drop troop on field
             if (Sleep(800, token)) return new(false, 0, 0, false);
 
-            bool surrendered = ReturnHomeDropTrophyBB(true, token);
+            bool surrendered = ReturnHomeDropTrophyBB(token);
             Console.WriteLine($"[BB-ATTACK] phase=drop_trophy status=complete surrendered={surrendered}");
             return new(surrendered, 0, 0, false);
         }
@@ -332,7 +332,7 @@ namespace CvAut
             if (!returned && result.ReturnedHome)
             {
                 Console.WriteLine("[BB-ATTACK] phase=attack status=pending action=verify_return_home reason=result_handled_but_builder_base_not_detected");
-                returned = ReturnHomeDropTrophyBB(false, token);
+                returned = ReturnHomeDropTrophyBB(token);
             }
             Console.WriteLine($"[BB-ATTACK] phase=attack status={(returned ? "success" : "warning")} return_handled={result.ReturnedHome} returned_builder_base={returned} damage={result.Damage} stars={result.Stars} stage2={result.Stage2Entered}");
             return result with { ReturnedHome = returned };
@@ -503,7 +503,7 @@ namespace CvAut
                     int stars = ReadStars();
                     int finalDamage = Math.Max(lastDamage, ReadResultDamage());
                     Console.WriteLine($"[BB-ATTACK] phase=end_battle status=early_detected damage={finalDamage} stars={stars}");
-                    bool returnedHome = ReturnHomeDropTrophyBB(false, token);
+                    bool returnedHome = ReturnHomeDropTrophyBB(token);
                     return new(returnedHome, finalDamage, stars, stage2);
                 }
 
@@ -545,7 +545,7 @@ namespace CvAut
                 if (sameDamageTicks >= 25 && damage > 0)
                 {
                     Console.WriteLine($"[BB-ATTACK] phase=wait_end status=stalled action=surrender reason=same_damage_ticks damage={damage} ticks={sameDamageTicks}");
-                    bool surrendered = ReturnHomeDropTrophyBB(true, token);
+                    bool surrendered = ReturnHomeDropTrophyBB(token);
                     return new(surrendered, lastDamage, ReadStars(), stage2);
                 }
 
@@ -608,11 +608,11 @@ namespace CvAut
             if (token.IsCancellationRequested) return new(false, lastDamage, 0, stage2);
 
             Console.WriteLine("[BB-ATTACK] phase=wait_end status=timeout_or_stalled action=surrender_fallback");
-            bool returned = ReturnHomeDropTrophyBB(false, token);
+            bool returned = ReturnHomeDropTrophyBB(token);
             return new(returned, lastDamage, ReadStars(), stage2);
         }
 
-        private bool ReturnHomeDropTrophyBB(bool onlySurrender, CancellationToken token)
+        private bool ReturnHomeDropTrophyBB(CancellationToken token)
         {
             Console.WriteLine("[BB-ATTACK] phase=return_home status=start");
 
@@ -647,7 +647,6 @@ namespace CvAut
                 if (TapFirstVisible(SurrenderTemplates, 0.52, null, token, out string surrenderTemplate))
                 {
                     Console.WriteLine($"[BB-ATTACK] phase=return_home status=pending template=\"{surrenderTemplate}\" attempt={attempt}");
-                    if (onlySurrender) return true;
                     if (Sleep(1000, token)) return false;
                 }
 
@@ -725,14 +724,17 @@ namespace CvAut
 
         private const string DefaultDropOrderSequence = "BattleMachine|BattleCopter|BoxerGiant|DropShip|HogGlider|Bomber|SuperPekka|PowerPekka|BabyDragon|CannonCart|ElectrofireWizard|NightWitch|RagedBarbarian|BetaMinion|SneakyArcher";
 
-        private IEnumerable<BuilderBaseTroopSlot> OrderSlots(List<BuilderBaseTroopSlot> slots, BuilderBaseBattleOptions options)
+        internal static IEnumerable<BuilderBaseTroopSlot> OrderSlots(List<BuilderBaseTroopSlot> slots, BuilderBaseBattleOptions options)
         {
             var ordered = new List<BuilderBaseTroopSlot>();
 
             // Always drop Hero (Battle Machine / Battle Copter) FIRST
             ordered.AddRange(slots.Where(s => IsHeroSlot(s.Name) && !ordered.Contains(s)));
 
-            foreach (string raw in DefaultDropOrderSequence.Split(new[] { '|', ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            string sequence = options.UseCustomDropOrder && !string.IsNullOrWhiteSpace(options.DropOrder)
+                ? options.DropOrder
+                : DefaultDropOrderSequence;
+            foreach (string raw in sequence.Split(new[] { '|', ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
                 ordered.AddRange(slots.Where(s => NamesMatch(s.Name, raw) && !ordered.Contains(s)));
             }

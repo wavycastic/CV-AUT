@@ -92,15 +92,19 @@ namespace CvAut
         private List<BuilderBaseTroopSlot> RefineAttackBarSlotsWithBannerScan(Mat screenshot, List<BuilderBaseTroopSlot> slots, bool remaining, bool secondAttack)
         {
             const int slotCount = 9;
-            const double slotOffset = 75.5;
+            const double mbrSlotOffset = 75.5;
 
             var refined = new List<BuilderBaseTroopSlot>(slots);
             foreach (int startSlot in EstimateAttackBarStartSlots(screenshot, remaining, secondAttack))
             {
                 for (int i = 0; i < slotCount; i++)
                 {
-                    int slotX = (int)Math.Round(startSlot + (i * slotOffset));
-                    Rect roi = Rect.FromLTRB(slotX, 550, slotX + 72, 670 + ScreenHeight - 900);
+                    int slotX = (int)Math.Round(startSlot + i * mbrSlotOffset * ScaleX(screenshot));
+                    Rect roi = Rect.FromLTRB(
+                        slotX,
+                        ScaleY(screenshot, 550),
+                        slotX + (int)Math.Round(72 * ScaleX(screenshot)),
+                        ScaleY(screenshot, 670));
                     roi = ImageUtils.ClampRect(roi, screenshot.Width, screenshot.Height);
                     if (roi.Width <= 0 || roi.Height <= 0) continue;
 
@@ -220,11 +224,8 @@ namespace CvAut
             int rememberedScaledStart = (int)Math.Round(rememberedMbrStart * (screenshot.Width / 860.0));
             Console.WriteLine($"[BB-ATTACK] phase=attack_bar status=slot_memory remaining={remaining} second_attack={secondAttack} detected_left={detectedLeft} detected_right={detectedRight} mbr_start={mbrStart} remembered={rememberedMbrStart} scaled_start={scaledStart} remembered_scaled={rememberedScaledStart}");
 
-            yield return 100;
             yield return rememberedScaledStart;
-            yield return rememberedMbrStart;
-            yield return scaledStart;
-            yield return mbrStart;
+            if (scaledStart != rememberedScaledStart) yield return scaledStart;
         }
 
         private int CountTemplatesInRoi(Mat screenshot, Rect roi)
