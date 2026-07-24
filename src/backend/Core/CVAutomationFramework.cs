@@ -719,6 +719,7 @@ namespace CvAut
                 int completedAttacks = 0;
                 int attempts = 0;
                 int consecutiveFailures = 0;
+                int consecutiveExhaustedReports = 0;
                 const int maxConsecutiveFailures = 3;
                 for (int attack = 1; attack <= maxAttacksPerCycle && !CheckStop(token); attack++)
                 {
@@ -732,8 +733,21 @@ namespace CvAut
                     {
                         if (ShouldStopBuilderBaseAttacks(farmMode, attackReport, trophyRangeEnabled, minTrophy, maxTrophy, haltOnGoldFull, haltOnElixirFull, out string stopReason))
                         {
-                            Console.WriteLine($"[BB-CS] phase=prepare_attack status=skip index={attack} reason={stopReason} loot_available={attackReport.LootAvailable} remaining_stars={attackReport.RemainingStars} max_stars={attackReport.MaxStars} trophy={attackReport.Trophy} min={minTrophy} max={maxTrophy} gold_storage_full={attackReport.GoldStorageFull} elixir_storage_full={attackReport.ElixirStorageFull}");
+                            if (stopReason == "loot_exhausted" || stopReason == "star_bonus_completed")
+                            {
+                                consecutiveExhaustedReports++;
+                                if (consecutiveExhaustedReports < 2)
+                                {
+                                    Console.WriteLine($"[BB-CS] phase=prepare_attack status=pending index={attack} reason={stopReason} debouncing={consecutiveExhaustedReports}/2");
+                                    continue;
+                                }
+                            }
+                            Console.WriteLine($"[BB-CS] phase=prepare_attack status=skip index={attack} reason={stopReason} attack_avail={attackReport.AttackAvailable} star_bonus_avail={attackReport.StarBonusAvailable} remaining_stars={attackReport.RemainingStars} max_stars={attackReport.MaxStars} trophy={attackReport.Trophy} min={minTrophy} max={maxTrophy} gold_storage_full={attackReport.GoldStorageFull} elixir_storage_full={attackReport.ElixirStorageFull}");
                             break;
+                        }
+                        else
+                        {
+                            consecutiveExhaustedReports = 0;
                         }
                     }
 
@@ -824,16 +838,18 @@ namespace CvAut
             }
 
             bool isDropTrophy = farmMode.Equals("drop_trophy", StringComparison.OrdinalIgnoreCase);
-            if (!isDropTrophy)
+            bool isTrophy = farmMode.Equals("trophy", StringComparison.OrdinalIgnoreCase) || farmMode.Equals("auto", StringComparison.OrdinalIgnoreCase);
+
+            if (!isDropTrophy && !isTrophy)
             {
                 if (farmMode.Equals("star_bonus", StringComparison.OrdinalIgnoreCase)
-                    && report.Reliable && report.MaxStars > 0 && report.RemainingStars == 0)
+                    && report.Reliable && report.StarBonusKnown && !report.StarBonusAvailable)
                 {
                     reason = "star_bonus_completed";
                     return true;
                 }
 
-                if (report.Reliable && !report.LootAvailable)
+                if (report.Reliable && report.AttackAvailabilityKnown && !report.AttackAvailable)
                 {
                     reason = "loot_exhausted";
                     return true;
