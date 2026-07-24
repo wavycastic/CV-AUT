@@ -1,20 +1,10 @@
-using System.Text.Json;
 using CvAut.Configuration;
 
 namespace CvAut;
 
-public interface IConfigService
+public interface IConfigService : IConfigSnapshotProvider
 {
-    JsonElement Config { get; }
-
-    AutomationConfigSnapshot Snapshot
-        => AutomationConfigSnapshotReader.Read(Config);
-
-    DeviceConnectionConfig DeviceConnection
-        => Snapshot.DeviceConnection;
-
-    RunSessionConfig RunSession
-        => Snapshot.RunSession;
-
-    void Reload();
+    AutomationConfigSnapshot Snapshot => Current;
+    DeviceConnectionConfig DeviceConnection => Current.DeviceConnection;
+    RunSessionConfig RunSession => Current.RunSession;
 }
