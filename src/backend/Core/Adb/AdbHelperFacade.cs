@@ -35,6 +35,12 @@ namespace CvAut.Adb
 
         public bool IsDeviceConnected() => _coordinator.IsConnected;
 
+        public bool EnsureConnectedOnline(int timeoutSeconds = 30)
+            => _coordinator.IsConnected;
+
+        public string GetDeviceState()
+            => _coordinator.IsConnected ? "device" : "unknown";
+
         public string ExecuteShell(string command) => _coordinator.ExecuteShell(command);
 
         public void Tap(int x, int y) => _coordinator.Tap(x, y);
@@ -48,8 +54,14 @@ namespace CvAut.Adb
         public void TapSequenceSafeFast(
             IEnumerable<Point> points,
             int batchSize = 4,
-            int batchDelayMs = 90,
-            CancellationToken token = default)
+            int batchDelayMs = 90)
+            => TapSequenceSafeFast(points, batchSize, batchDelayMs, CancellationToken.None);
+
+        public void TapSequenceSafeFast(
+            IEnumerable<Point> points,
+            int batchSize,
+            int batchDelayMs,
+            CancellationToken token)
         {
             ArgumentNullException.ThrowIfNull(points);
             if (batchSize <= 0) throw new ArgumentOutOfRangeException(nameof(batchSize));
