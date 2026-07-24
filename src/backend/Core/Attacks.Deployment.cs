@@ -1,15 +1,22 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using CvAut.AttackPipelines;
+using OpenCvSharp;
 
 namespace CvAut
 {
     internal partial class Attacks : IAttackStageOperations
     {
         private AttackPipeline? _attackPipeline;
+        private IAttackCoordinateProvider? _attackCoordinateProvider;
 
         private AttackPipeline Pipeline
             => _attackPipeline ??= new AttackPipeline(this);
+
+        private IAttackCoordinateProvider CoordinateProvider
+            => _attackCoordinateProvider ??= new DelegateAttackCoordinateProvider(
+                ResolvePipelineCoordinates);
 
         public bool RunPipeline(
             string attackStrategy = "Dragon_Attack",
@@ -46,6 +53,12 @@ namespace CvAut
             if (_deployCoords.ContainsKey("siege_machine"))
                 _requiredTabs.Add("siege_machine");
 
+            AttackCoordinateSet coordinates = CoordinateProvider.GetCoordinates(
+                _attackDirection,
+                context.NormalizedStrategy);
+            if (coordinates.PrimaryTroops.Count == 0)
+                return AttackStageResult.Fail("primary_coordinates_unavailable");
+
             Console.WriteLine(
                 $"[ATTACK-CS] phase=prepare status=start strategy=\"{context.RequestedStrategy}\" " +
                 $"normalized_strategy=\"{context.NormalizedStrategy}\" side=\"{_side.ToUpperInvariant()}\" " +
@@ -56,45 +69,18 @@ namespace CvAut
 
         AttackStageResult IAttackStageOperations.DeployTroops(AttackContext context)
         {
-            if (context.IsCancellationRequested)
-                return AttackStageResult.Cancelled();
-
-            string primaryTroop = context.NormalizedStrategy == "ElectroDragon_Attack"
-                ? "e_drag"
-                : "dragon";
-
-            DeployTroops(primaryTroop, context.CancellationToken);
-            if (context.IsCancellationRequested) return AttackStageResult.Cancelled();
-
-            DeployIfPresent("ice_minion", context.CancellationToken);
-            DeployIfPresent("ice_golem", context.CancellationToken);
-            DeployIfPresent("azure_dragon", context.CancellationToken);
-            DeployConfiguredEventTroops(context.UseEventTroops, context.CancellationToken);
-            if (context.IsCancellationRequested) return AttackStageResult.Cancelled();
-
-            DeployTroops("balloon", context.CancellationToken);
-            if (context.IsCancellationRequested) return AttackStageResult.Cancelled();
-
-            DeployTroops("siege_machine", context.CancellationToken);
-            return context.IsCancellationRequested
-                ? AttackStageResult.Cancelled()
-                : AttackStageResult.Success();
+            ITroopDeploymentStrategy strategy = new DelegateTroopDeploymentStrategy(
+                context.NormalizedStrategy,
+                ExecuteTroopStage);
+            return strategy.Deploy(context);
         }
 
         AttackStageResult IAttackStageOperations.DeploySpells(AttackContext context)
         {
-            if (context.IsCancellationRequested)
-                return AttackStageResult.Cancelled();
-
-            if (InterruptibleSleep(SpellPhaseDelayMs, context.CancellationToken))
-                return AttackStageResult.Cancelled();
-
-            DeploySpells("rage_initial", context.CancellationToken);
-            DeploySpells("freeze", context.CancellationToken);
-            DeploySpells("rage_remaining", context.CancellationToken);
-            return context.IsCancellationRequested
-                ? AttackStageResult.Cancelled()
-                : AttackStageResult.Success();
+            ISpellDeploymentStrategy strategy = new DelegateSpellDeploymentStrategy(
+                "rage_freeze_rage",
+                ExecuteSpellStage);
+            return strategy.Deploy(context);
         }
 
         AttackStageResult IAttackStageOperations.ActivateHeroes(AttackContext context)
@@ -124,22 +110,81 @@ namespace CvAut
             if (context.IsCancellationRequested)
                 return AttackStageResult.Cancelled();
 
-            string primaryTroop = context.NormalizedStrategy == "ElectroDragon_Attack"
-                ? "e_drag"
-                : "dragon";
+            string primaryTroop = PrimaryTroopFor(context);
             EnsureTroopFullyDeployed(primaryTroop, context.CancellationToken);
             return context.IsCancellationRequested
                 ? AttackStageResult.Cancelled()
                 : AttackStageResult.Success();
         }
 
+        private AttackStageResult ExecuteTroopStage(AttackContext context)
+        {
+            string primaryTroop = PrimaryTroopFor(context);
+            DeployTroops(primaryTroop, context.CancellationToken);
+            if (context.IsCancellationRequested) return AttackStageResult.Cancelled();
+
+            DeployIfPresent("ice_minion", context.CancellationToken);
+            DeployIfPresent("ice_golem", context.CancellationToken);
+            DeployIfPresent("azure_dragon", context.CancellationToken);
+            DeployConfiguredEventTroops(context.UseEventTroops, context.CancellationToken);
+            if (context.IsCancellationRequested) return AttackStageResult.Cancelled();
+
+            DeployTroops("balloon", context.CancellationToken);
+            if (context.IsCancellationRequested) return AttackStageResult.Cancelled();
+
+            DeployTroops("siege_machine", context.CancellationToken);
+            return context.IsCancellationRequested
+                ? AttackStageResult.Cancelled()
+                : AttackStageResult.Success();
+        }
+
+        private AttackStageResult ExecuteSpellStage(AttackContext context)
+        {
+            if (InterruptibleSleep(SpellPhaseDelayMs, context.CancellationToken))
+                return AttackStageResult.Cancelled();
+
+            DeploySpells("rage_initial", context.CancellationToken);
+            DeploySpells("freeze", context.CancellationToken);
+            DeploySpells("rage_remaining", context.CancellationToken);
+            return context.IsCancellationRequested
+                ? AttackStageResult.Cancelled()
+                : AttackStageResult.Success();
+        }
+
+        private AttackCoordinateSet ResolvePipelineCoordinates(
+            string direction,
+            string strategy)
+        {
+            _ = direction;
+            string primaryTroop = strategy == "ElectroDragon_Attack"
+                ? "e_drag"
+                : "dragon";
+            return new AttackCoordinateSet(
+                PrimaryTroops: CopyCoordinates(primaryTroop),
+                SupportTroops: CopyCoordinates("balloon"),
+                RageInitial: CopyCoordinates("rage_initial"),
+                Freeze: CopyCoordinates("freeze"),
+                RageRemaining: CopyCoordinates("rage_remaining"));
+        }
+
+        private IReadOnlyList<Point> CopyCoordinates(string key)
+            => _deployCoords.TryGetValue(key, out List<Point>? points)
+                ? points.ToArray()
+                : Array.Empty<Point>();
+
+        private static string PrimaryTroopFor(AttackContext context)
+            => context.NormalizedStrategy == "ElectroDragon_Attack"
+                ? "e_drag"
+                : "dragon";
+
         public bool DeployTroopsWithStrategy(string strategyName, CancellationToken token)
         {
             if (token.IsCancellationRequested) return false;
             Console.WriteLine($"[ATTACKS] phase=deploy_strategy status=start strategy={strategyName}");
-            var strategy = new StandardBarchStrategy();
-            strategy.Execute(_adb, _vision, token);
-            return !token.IsCancellationRequested;
+            var context = new AttackContext(strategyName, useEventTroops: false, token);
+            var strategy = new StandardBarchStrategy(_adb);
+            AttackStageResult result = strategy.Deploy(context);
+            return result.Status == AttackStageStatus.Succeeded;
         }
     }
 }

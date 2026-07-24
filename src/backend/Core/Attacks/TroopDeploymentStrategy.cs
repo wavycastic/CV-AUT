@@ -1,34 +1,44 @@
 using System;
 using System.Threading;
+using CvAut.AttackPipelines;
 
 namespace CvAut
 {
     /// <summary>
-    /// Định nghĩa giao diện và thuật toán thực thi chiến thuật thả quân tự động (Troop Deployment Strategy).
+    /// Compatibility strategy for the legacy BARCH entry point. New attack flows use
+    /// the same ITroopDeploymentStrategy contract as the staged pipeline.
     /// </summary>
-    internal interface ITroopDeploymentStrategy
+    internal sealed class StandardBarchStrategy : ITroopDeploymentStrategy
     {
-        string Name { get; }
-        void Execute(ADBHelper adb, VisionEngine vision, CancellationToken token);
-    }
+        private readonly IADBHelper _adb;
 
-    internal class StandardBarchStrategy : ITroopDeploymentStrategy
-    {
+        public StandardBarchStrategy(IADBHelper adb)
+        {
+            _adb = adb ?? throw new ArgumentNullException(nameof(adb));
+        }
+
         public string Name => "barch_standard";
 
-        public void Execute(ADBHelper adb, VisionEngine vision, CancellationToken token)
+        public AttackStageResult Deploy(AttackContext context)
         {
-            if (token.IsCancellationRequested) return;
+            CancellationToken token = context.CancellationToken;
+            if (token.IsCancellationRequested)
+                return AttackStageResult.Cancelled();
 
             Console.WriteLine("[ATTACK] phase=deploy strategy=barch status=executing");
-            // Thả quân Barbarian & Archer quanh ranh giới đỏ làng đối thủ
-            adb.Tap(200, 700); // Chọn slot Barbarian
-            Thread.Sleep(300);
-            adb.Swipe(200, 200, 1400, 200, 800); // Rải đường trên
+            _adb.Tap(200, 700);
+            if (token.WaitHandle.WaitOne(300))
+                return AttackStageResult.Cancelled();
+            _adb.Swipe(200, 200, 1400, 200, 800);
 
-            adb.Tap(300, 700); // Chọn slot Archer
-            Thread.Sleep(300);
-            adb.Swipe(200, 200, 1400, 200, 800); // Rải đường trên
+            _adb.Tap(300, 700);
+            if (token.WaitHandle.WaitOne(300))
+                return AttackStageResult.Cancelled();
+            _adb.Swipe(200, 200, 1400, 200, 800);
+
+            return token.IsCancellationRequested
+                ? AttackStageResult.Cancelled()
+                : AttackStageResult.Success();
         }
     }
 }
