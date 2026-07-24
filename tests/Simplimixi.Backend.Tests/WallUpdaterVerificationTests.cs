@@ -108,5 +108,37 @@ namespace CvAut.Backend.Tests
 
             Assert.Empty(locations);
         }
+
+        [Fact]
+        public void WallUpgradeDecider_ReturnsMissingWallCost_WhenCostIsZeroOrNegative()
+        {
+            var inputZero = new WallUpgradeDecisionInput(
+                WallCost: 0,
+                Gold: 10_000_000,
+                Elixir: 10_000_000,
+                GoldStartThreshold: 0,
+                ElixirStartThreshold: 0,
+                GoldReserve: 0,
+                ElixirReserve: 0,
+                BatchLimit: 1);
+
+            WallUpgradeDecision decisionZero = WallUpgradeDecider.Decide(inputZero);
+            Assert.Equal(WallUpgradeResource.None, decisionZero.Resource);
+            Assert.Equal("missing_wall_cost", decisionZero.SkipReason);
+
+            var inputNull = new WallUpgradeDecisionInput(
+                WallCost: null,
+                Gold: 10_000_000,
+                Elixir: 10_000_000,
+                GoldStartThreshold: 0,
+                ElixirStartThreshold: 0,
+                GoldReserve: 0,
+                ElixirReserve: 0,
+                BatchLimit: 1);
+
+            WallUpgradeDecision decisionNull = WallUpgradeDecider.Decide(inputNull);
+            Assert.Equal(WallUpgradeResource.None, decisionNull.Resource);
+            Assert.Equal("missing_wall_cost", decisionNull.SkipReason);
+        }
     }
 }
