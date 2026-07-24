@@ -130,7 +130,7 @@ internal sealed class FarmingService
 
     public bool IsActiveBattlePresent(Mat screenshot, out double endBattleScore)
     {
-        return BattleScreenDetector.IsActiveBattlePresent(_adb, _vision, screenshot, out endBattleScore);
+        return BattleScreenDetector.IsActiveBattlePresent(_vision, screenshot, out endBattleScore);
     }
 
     public bool TryFindContinueButton(Mat screenshot, out Point center, out double score)
