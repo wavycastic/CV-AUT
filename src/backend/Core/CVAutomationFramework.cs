@@ -719,37 +719,26 @@ namespace CvAut
                 int completedAttacks = 0;
                 int attempts = 0;
                 int consecutiveFailures = 0;
-                int consecutiveExhaustedReports = 0;
                 const int maxConsecutiveFailures = 3;
                 for (int attack = 1; attack <= maxAttacksPerCycle && !CheckStop(token); attack++)
                 {
-                    attempts++;
-                    BuilderBaseReportSnapshot attackReport = _builderBaseReport.Read();
+                    BuilderBaseReportSnapshot attackReport;
                     if (forceAttackForClanGames)
                     {
+                        attackReport = _builderBaseReport.Read();
                         Console.WriteLine($"[BB-CS] phase=prepare_attack status=force_clan_games index={attack} loot_available={attackReport.LootAvailable} remaining_stars={attackReport.RemainingStars} max_stars={attackReport.MaxStars} gold_storage_full={attackReport.GoldStorageFull} elixir_storage_full={attackReport.ElixirStorageFull}");
                     }
                     else
                     {
-                        if (ShouldStopBuilderBaseAttacks(farmMode, attackReport, trophyRangeEnabled, minTrophy, maxTrophy, haltOnGoldFull, haltOnElixirFull, out string stopReason))
+                        attackReport = ReadDebouncedReport(farmMode, trophyRangeEnabled, minTrophy, maxTrophy, haltOnGoldFull, haltOnElixirFull, token, out bool shouldStop, out string stopReason);
+                        if (shouldStop)
                         {
-                            if (stopReason == "loot_exhausted" || stopReason == "star_bonus_completed")
-                            {
-                                consecutiveExhaustedReports++;
-                                if (consecutiveExhaustedReports < 2)
-                                {
-                                    Console.WriteLine($"[BB-CS] phase=prepare_attack status=pending index={attack} reason={stopReason} debouncing={consecutiveExhaustedReports}/2");
-                                    continue;
-                                }
-                            }
                             Console.WriteLine($"[BB-CS] phase=prepare_attack status=skip index={attack} reason={stopReason} attack_avail={attackReport.AttackAvailable} star_bonus_avail={attackReport.StarBonusAvailable} remaining_stars={attackReport.RemainingStars} max_stars={attackReport.MaxStars} trophy={attackReport.Trophy} min={minTrophy} max={maxTrophy} gold_storage_full={attackReport.GoldStorageFull} elixir_storage_full={attackReport.ElixirStorageFull}");
                             break;
                         }
-                        else
-                        {
-                            consecutiveExhaustedReports = 0;
-                        }
                     }
+
+                    attempts++;
 
                     bool isDropTrophy = farmMode.Equals("drop_trophy", StringComparison.OrdinalIgnoreCase);
                     if (!isDropTrophy)
@@ -799,6 +788,81 @@ namespace CvAut
 
             _cycleCount++;
             Console.WriteLine($"[BB-CS] phase=cycle status=success village={_currentVillageIdx}");
+        }
+
+        internal BuilderBaseReportSnapshot ReadDebouncedReport(
+            string farmMode,
+            bool trophyRangeEnabled,
+            int minTrophy,
+            int maxTrophy,
+            bool haltOnGoldFull,
+            bool haltOnElixirFull,
+            CancellationToken token,
+            out bool shouldStop,
+            out string stopReason)
+        {
+            return ReadDebouncedReport(
+                () => _builderBaseReport.Read(),
+                farmMode,
+                trophyRangeEnabled,
+                minTrophy,
+                maxTrophy,
+                haltOnGoldFull,
+                haltOnElixirFull,
+                token,
+                (ms, t) => InterruptibleSleep(ms, t),
+                out shouldStop,
+                out stopReason);
+        }
+
+        internal static BuilderBaseReportSnapshot ReadDebouncedReport(
+            Func<BuilderBaseReportSnapshot> readReport,
+            string farmMode,
+            bool trophyRangeEnabled,
+            int minTrophy,
+            int maxTrophy,
+            bool haltOnGoldFull,
+            bool haltOnElixirFull,
+            CancellationToken token,
+            Func<int, CancellationToken, bool>? sleepFunc,
+            out bool shouldStop,
+            out string stopReason)
+        {
+            shouldStop = false;
+            stopReason = "none";
+            BuilderBaseReportSnapshot report = null!;
+
+            for (int check = 1; check <= 2; check++)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    return report ?? readReport();
+                }
+
+                report = readReport();
+
+                if (!ShouldStopBuilderBaseAttacks(farmMode, report, trophyRangeEnabled, minTrophy, maxTrophy, haltOnGoldFull, haltOnElixirFull, out stopReason))
+                {
+                    shouldStop = false;
+                    return report;
+                }
+
+                bool needsConfirmation = stopReason == "loot_exhausted" || stopReason == "star_bonus_completed";
+                if (!needsConfirmation || check == 2)
+                {
+                    shouldStop = true;
+                    return report;
+                }
+
+                Console.WriteLine($"[BB-CS] phase=prepare_attack status=pending reason={stopReason} debouncing={check}/2");
+                if (sleepFunc != null && sleepFunc(500, token))
+                {
+                    shouldStop = false;
+                    return report;
+                }
+            }
+
+            return report;
         }
 
         internal static bool ShouldStopBuilderBaseAttacks(

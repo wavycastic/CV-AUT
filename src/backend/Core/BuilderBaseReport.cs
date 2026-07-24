@@ -80,11 +80,12 @@ namespace CvAut
             int builderRaw = ReadNumber(screenshot, BuilderCountRoi, "builders", maxPlausible: 99);
             (int freeBuilders, int totalBuilders) = ParseBuilderCount(builderRaw);
             int builderHallLevel = ReadNumber(screenshot, BuilderHallLevelRoi, "builder_hall_level", maxPlausible: 20);
-            DetectLootAvailability(screenshot, out bool attackAvailable, out bool attackAvailabilityKnown, out bool starBonusKnown, out bool starBonusAvailable, out int remainingStars, out int maxStars);
+            DetectLootAvailability(screenshot, trophy, out bool attackAvailable, out bool attackAvailabilityKnown, out bool starBonusKnown, out bool starBonusAvailable, out int remainingStars, out int maxStars);
             bool goldStorageFull = DetectStorageFull(screenshot, FullGoldTemplates, "gold");
             bool elixirStorageFull = DetectStorageFull(screenshot, FullElixirTemplates, "elixir");
 
-            var report = new BuilderBaseReportSnapshot(gold, elixir, trophy, freeBuilders, totalBuilders, builderHallLevel, attackAvailable, attackAvailabilityKnown, starBonusKnown, starBonusAvailable, remainingStars, maxStars, goldStorageFull, elixirStorageFull, Reliable: true);
+            bool reliable = trophy > 0 || gold > 0 || elixir > 0 || totalBuilders > 0 || starBonusKnown || attackAvailable;
+            var report = new BuilderBaseReportSnapshot(gold, elixir, trophy, freeBuilders, totalBuilders, builderHallLevel, attackAvailable, attackAvailabilityKnown, starBonusKnown, starBonusAvailable, remainingStars, maxStars, goldStorageFull, elixirStorageFull, Reliable: reliable);
             Console.WriteLine($"[BB-REPORT] phase=report status=success gold={report.Gold} elixir={report.Elixir} trophy={report.Trophy} free_builders={report.FreeBuilders} total_builders={report.TotalBuilders} builder_hall_level={report.BuilderHallLevel} attack_available={report.AttackAvailable} star_bonus_known={report.StarBonusKnown} star_bonus_avail={report.StarBonusAvailable} remaining_stars={report.RemainingStars} max_stars={report.MaxStars} gold_storage_full={report.GoldStorageFull} elixir_storage_full={report.ElixirStorageFull}");
             return report;
         }
@@ -124,6 +125,7 @@ namespace CvAut
 
         private void DetectLootAvailability(
             Mat screenshot,
+            int trophy,
             out bool attackAvailable,
             out bool attackAvailabilityKnown,
             out bool starBonusKnown,
@@ -146,13 +148,13 @@ namespace CvAut
             starBonusKnown = maxStars > 0;
             starBonusAvailable = starBonusKnown && remainingStars > 0;
 
-            bool byStars = starBonusKnown && remainingStars <= maxStars;
+            bool byStars = starBonusAvailable;
             bool byButton = _vision.FindElement(screenshot, @"ui\attack_button", 0.55, LootAvailabilityRoi, out double score) != null
                 || _vision.FindElement(screenshot, @"ui\icon_attack", 0.55, LootAvailabilityRoi, out score) != null
                 || _vision.FindElement(screenshot, @"ui\battle", 0.55, LootAvailabilityRoi, out score) != null;
 
             attackAvailable = byButton;
-            attackAvailabilityKnown = true;
+            attackAvailabilityKnown = byButton || starBonusKnown || trophy > 0;
             bool available = byStars || byButton;
             Console.WriteLine($"[BB-REPORT] phase=loot status={(available ? "success" : "skip")} available={available} by_stars={byStars} by_button={byButton} star_bonus_known={starBonusKnown} star_bonus_avail={starBonusAvailable}");
         }

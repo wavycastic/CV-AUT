@@ -124,8 +124,121 @@ namespace CvAut.Backend.Tests
             bool stop = CVAutomationFramework.ShouldStopBuilderBaseAttacks("trophy", report, true, 1000, 3000, false, false, out string reason);
 
             Assert.True(stop);
-            Assert.True(stop);
             Assert.Equal("trophy_reached_max", reason);
+        }
+
+        [Fact]
+        public void ReadDebouncedReport_ExhaustedThenAvailable_DoesNotStop()
+        {
+            var exhausted = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, false, true, false, false, 0, 0, false, false, true);
+            var available = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, true, true, false, false, 0, 0, false, false, true);
+
+            int readCount = 0;
+            int sleepCount = 0;
+
+            BuilderBaseReportSnapshot result = CVAutomationFramework.ReadDebouncedReport(
+                () => ++readCount == 1 ? exhausted : available,
+                "gold",
+                false, 1000, 5000, false, false,
+                System.Threading.CancellationToken.None,
+                (ms, t) => { sleepCount++; return false; },
+                out bool shouldStop,
+                out string reason);
+
+            Assert.Equal(2, readCount);
+            Assert.Equal(1, sleepCount);
+            Assert.False(shouldStop);
+            Assert.Equal("none", reason);
+            Assert.True(result.AttackAvailable);
+        }
+
+        [Fact]
+        public void ReadDebouncedReport_TwoConsecutiveExhausted_StopsWithReason()
+        {
+            var exhausted = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, false, true, false, false, 0, 0, false, false, true);
+
+            int readCount = 0;
+            int sleepCount = 0;
+
+            BuilderBaseReportSnapshot result = CVAutomationFramework.ReadDebouncedReport(
+                () => { readCount++; return exhausted; },
+                "gold",
+                false, 1000, 5000, false, false,
+                System.Threading.CancellationToken.None,
+                (ms, t) => { sleepCount++; return false; },
+                out bool shouldStop,
+                out string reason);
+
+            Assert.Equal(2, readCount);
+            Assert.Equal(1, sleepCount);
+            Assert.True(shouldStop);
+            Assert.Equal("loot_exhausted", reason);
+        }
+
+        [Fact]
+        public void ReadDebouncedReport_StorageFull_StopsOnFirstReadWithoutDelay()
+        {
+            var fullStorage = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, true, true, false, false, 0, 0, true, false, true);
+
+            int readCount = 0;
+            int sleepCount = 0;
+
+            BuilderBaseReportSnapshot result = CVAutomationFramework.ReadDebouncedReport(
+                () => { readCount++; return fullStorage; },
+                "gold",
+                false, 1000, 5000, true, false,
+                System.Threading.CancellationToken.None,
+                (ms, t) => { sleepCount++; return false; },
+                out bool shouldStop,
+                out string reason);
+
+            Assert.Equal(1, readCount);
+            Assert.Equal(0, sleepCount);
+            Assert.True(shouldStop);
+            Assert.Equal("storage_full", reason);
+        }
+
+        [Fact]
+        public void ReadDebouncedReport_UnreliableReport_DoesNotStop()
+        {
+            var unreliable = new BuilderBaseReportSnapshot(0, 0, 0, 0, 0, 0, false, false, false, false, 0, 0, false, false, false);
+
+            int readCount = 0;
+            int sleepCount = 0;
+
+            BuilderBaseReportSnapshot result = CVAutomationFramework.ReadDebouncedReport(
+                () => { readCount++; return unreliable; },
+                "gold",
+                false, 1000, 5000, false, false,
+                System.Threading.CancellationToken.None,
+                (ms, t) => { sleepCount++; return false; },
+                out bool shouldStop,
+                out string reason);
+
+            Assert.Equal(1, readCount);
+            Assert.Equal(0, sleepCount);
+            Assert.False(shouldStop);
+            Assert.Equal("none", reason);
+        }
+
+        [Fact]
+        public void ReadDebouncedReport_CancellationDuringSleep_AbortsWithoutStopping()
+        {
+            var exhausted = new BuilderBaseReportSnapshot(100, 100, 2000, 1, 2, 9, false, true, false, false, 0, 0, false, false, true);
+
+            int readCount = 0;
+
+            BuilderBaseReportSnapshot result = CVAutomationFramework.ReadDebouncedReport(
+                () => { readCount++; return exhausted; },
+                "gold",
+                false, 1000, 5000, false, false,
+                System.Threading.CancellationToken.None,
+                (ms, t) => true,
+                out bool shouldStop,
+                out string reason);
+
+            Assert.Equal(1, readCount);
+            Assert.False(shouldStop);
         }
 
         private static BuilderBaseTroopSlot Slot(string name, int index)
