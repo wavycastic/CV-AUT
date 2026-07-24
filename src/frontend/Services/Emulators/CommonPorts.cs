@@ -13,5 +13,15 @@ namespace CvAut.Services.Emulators
             5556, 5554, 5555, 5557, 5558, 5559, 5560,
             21503, 21513, 21523, 21533, 21543,
         };
+
+        public static readonly int[] Memu =
+        {
+            21503, 21513, 21523, 21533, 21543, 5555,
+        };
+
+        public static readonly int[] BlueStacks =
+        {
+            5555, 5556, 5557, 5558, 5559, 5560,
+        };
     }
 }

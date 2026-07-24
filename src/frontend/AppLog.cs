@@ -65,7 +65,8 @@ namespace CvAut
                 string logDir = Path.Combine(repoRoot, "logs");
                 Directory.CreateDirectory(logDir);
 
-                string logPath = Path.Combine(logDir, $"dotnet_run_{DateTime.Now:yyyyMMdd_HHmmss_fff}.log");
+                string fileName = GetNextLogFileName(logDir, DateTime.Now);
+                string logPath = Path.Combine(logDir, fileName);
                 _fileWriter = new StreamWriter(new FileStream(logPath, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
                 {
                     AutoFlush = true
@@ -79,6 +80,23 @@ namespace CvAut
                 original.WriteLine($"[APP_LOG] phase=startup status=fail reason=\"{ex.Message}\"");
                 return original;
             }
+        }
+
+        public static string GetNextLogFileName(string logDir, DateTime now)
+        {
+            string prefix = $"{now:dd-MM-yy_HH}h{now:mm}_";
+            int index = 1;
+            while (index <= 999)
+            {
+                string candidate = $"{prefix}{index:D3}.log";
+                string fullPath = Path.Combine(logDir, candidate);
+                if (!File.Exists(fullPath))
+                {
+                    return candidate;
+                }
+                index++;
+            }
+            return $"{prefix}{index:D3}_{now:fff}.log";
         }
 
         private static string FindRepoRoot()

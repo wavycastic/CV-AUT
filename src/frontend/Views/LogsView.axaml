@@ -16,9 +16,15 @@
         <conv:LogLevelToBrushConverter x:Key="LevelToBrush" />
     </UserControl.Resources>
 
-    <Grid Background="{DynamicResource AppBackgroundBrush}" RowDefinitions="*,Auto" Margin="16" RowSpacing="12">
-        <!-- Row 0: The Log Console -->
-        <Border Grid.Row="0" CornerRadius="{DynamicResource RadiusMd}" ClipToBounds="True" BorderThickness="1"
+    <Grid Background="{DynamicResource AppBackgroundBrush}" RowDefinitions="Auto,*,Auto" Margin="16" RowSpacing="10">
+        <!-- Row 0: Mode Switcher Header -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <RadioButton Content="Nhật ký hoạt động (User)" IsChecked="{Binding IsUserMode}" GroupName="LogModeGroup" Classes="accent" Height="30" Padding="12,4"/>
+            <RadioButton Content="Nhật ký kỹ thuật (Dev)" IsChecked="{Binding !IsUserMode}" GroupName="LogModeGroup" Classes="accent" Height="30" Padding="12,4"/>
+        </StackPanel>
+
+        <!-- Row 1: The Log Console -->
+        <Border Grid.Row="1" CornerRadius="{DynamicResource RadiusMd}" ClipToBounds="True" BorderThickness="1"
                 Background="{DynamicResource AppConsoleBgBrush}" BorderBrush="{DynamicResource AppBorderBrush}" Padding="12,10">
             <Grid>
                 <TextBlock Text="Không có log phù hợp" Classes="muted"
@@ -36,13 +42,19 @@
                     </ListBox.Styles>
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="models:LogEntry">
-                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
-                                <!-- Timestamp (Clean, muted gray-blue) -->
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                                <!-- Timestamp -->
                                 <TextBlock Grid.Column="0" Text="{Binding TimeText}" 
                                            FontSize="12" Foreground="#80A0A0A0" VerticalAlignment="Top" />
+
+                                <!-- Icon or Severity -->
+                                <TextBlock Grid.Column="1" Text="{Binding Icon}" 
+                                           FontSize="13" FontWeight="Bold"
+                                           Foreground="{Binding Level, Converter={StaticResource LevelToBrush}}" 
+                                           VerticalAlignment="Top" Width="18" TextAlignment="Center"/>
                                 
-                                <!-- Message (Sleek text using default App font, colored by severity for WRN/ERR) -->
-                                <TextBlock Grid.Column="1" Text="{Binding Summary}" 
+                                <!-- Message / Summary -->
+                                <TextBlock Grid.Column="2" Text="{Binding Summary}" 
                                            FontSize="12.5" 
                                            LineHeight="18"
                                            Foreground="{Binding Level, Converter={StaticResource LevelToBrush}}" 
@@ -54,8 +66,10 @@
             </Grid>
         </Border>
 
-        <!-- Row 1: Bottom Control Area -->
-        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+        <!-- Row 2: Bottom Control Area -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+            <!-- Left: Status -->
+            <TextBlock Grid.Column="0" Text="{Binding Status}" Foreground="#80A0A0A0" FontSize="12" VerticalAlignment="Center"/>
             <!-- Right: Copy Button -->
             <Button Grid.Column="1" Content="Sao chép nhật ký" Command="{Binding CopyCommand}" Height="32" Padding="16,0" VerticalAlignment="Center" />
         </Grid>

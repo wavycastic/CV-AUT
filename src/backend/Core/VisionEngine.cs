@@ -14,10 +14,27 @@ namespace CvAut
     /// - Thực hiện nhận diện chữ số nhị phân (Light OCR) bằng thuật toán so khớp chỉ số IoU (Intersection over Union)
     ///   với ma trận nhị phân 12x16 của font chữ Supercell Magic chuyên dụng cho game Clash of Clans.
     /// </summary>
-    internal class VisionEngine : IDisposable
+    internal class VisionEngine : IVisionEngine, IDisposable
     {
         // Thư mục chứa các mẫu hình ảnh template PNG
         private readonly string _templatesDir;
+
+        public string TemplatesPath => _templatesDir;
+
+        public (int Gold, int Elixir, int DarkElixir) ExtractScoutedLoot(Mat screenshot) => IsTarget.ExtractResources(screenshot, this);
+
+        public Point? FindElement(Mat screenshot, string templateName, double threshold, Rect roi, out double maxVal)
+            => FindElement(screenshot, templateName, threshold, (Rect?)roi, out maxVal);
+
+        public bool ContainsElement(Mat screenshot, string templateName, double threshold, Rect roi)
+            => FindElement(screenshot, templateName, threshold, (Rect?)roi, out _) != null;
+
+        public int OcrReadNumber(Mat croppedImage)
+        {
+            if (TryExtractNumericalMetrics(croppedImage, new Rect(0, 0, croppedImage.Width, croppedImage.Height), out int val, out _))
+                return val;
+            return 0;
+        }
 
         // Từ điển lưu trữ ma trận OpenCV (Mat) cho 11 chữ số nhị phân làm mẫu (0-9 và mẫu số 5 thay thế offline)
         private readonly Dictionary<int, Mat> _templates = new();
@@ -172,7 +189,7 @@ namespace CvAut
 
             if (!TemplateAssetLoader.Exists(_templatesDir, templateName))
             {
-                Console.WriteLine($"[VISION] phase=template_match status=fail reason=missing_file details=\"{templateName}\"");
+                Console.WriteLine($"[TRACE][VISION] phase=template_match action=match_candidate status=skipped reason=candidate_missing details=\"{templateName}\"");
                 return null;
             }
 
@@ -244,6 +261,85 @@ namespace CvAut
                 return true;
             }
 
+            return false;
+        }
+
+        public bool TryFindTemplateRegion(Mat source, string templateFileName, Rect sourceRoi, Rect templateRoi, double threshold, out Point center, out double score)
+        {
+            center = default; score = 0;
+            if (source.Empty()) return false;
+            string fullPath = Path.Combine(_templatesDir, templateFileName);
+            if (!File.Exists(fullPath)) return false;
+
+            using Mat template = Cv2.ImRead(fullPath, ImreadModes.Grayscale);
+            if (template.Empty()) return false;
+
+            Rect safeSourceRoi = ImageUtils.ClampRect(sourceRoi, source.Width, source.Height);
+            if (safeSourceRoi.Width < 1 || safeSourceRoi.Height < 1) return false;
+            using Mat sourceCrop = new Mat(source, safeSourceRoi);
+            using Mat gray = new Mat();
+            if (sourceCrop.Channels() > 1) Cv2.CvtColor(sourceCrop, gray, ColorConversionCodes.BGR2GRAY);
+            else sourceCrop.CopyTo(gray);
+
+            Rect safeTemplateRoi = ImageUtils.ClampRect(templateRoi, gray.Width, gray.Height);
+            if (safeTemplateRoi.Width < template.Width || safeTemplateRoi.Height < template.Height) return false;
+            using Mat searchArea = new Mat(gray, safeTemplateRoi);
+            using Mat res = new Mat();
+            Cv2.MatchTemplate(searchArea, template, res, TemplateMatchModes.CCoeffNormed);
+            Cv2.MinMaxLoc(res, out _, out double maxVal, out _, out Point maxLoc);
+            score = maxVal;
+
+            if (maxVal >= threshold)
+            {
+                center = new Point(safeSourceRoi.X + safeTemplateRoi.X + maxLoc.X + template.Width / 2, safeSourceRoi.Y + safeTemplateRoi.Y + maxLoc.Y + template.Height / 2);
+                return true;
+            }
+            return false;
+        }
+
+        public bool TryFindTemplateRegionMultiScale(Mat source, string templateFileName, Rect roi, double threshold, out Point center, out double score)
+        {
+            center = default; score = 0;
+            if (source.Empty()) return false;
+            string fullPath = Path.Combine(_templatesDir, templateFileName);
+            if (!File.Exists(fullPath)) return false;
+
+            using Mat template = Cv2.ImRead(fullPath, ImreadModes.Grayscale);
+            if (template.Empty()) return false;
+
+            Rect safeRoi = ImageUtils.ClampRect(roi, source.Width, source.Height);
+            if (safeRoi.Width < 1 || safeRoi.Height < 1) return false;
+            using Mat crop = new Mat(source, safeRoi);
+            using Mat gray = new Mat();
+            if (crop.Channels() > 1) Cv2.CvtColor(crop, gray, ColorConversionCodes.BGR2GRAY);
+            else crop.CopyTo(gray);
+
+            double maxScore = 0; Point bestLoc = default; bool found = false;
+            double[] scales = { 1.0, 0.9, 0.8, 1.1 };
+            foreach (double scale in scales)
+            {
+                Size scaledSize = new((int)(template.Width * scale), (int)(template.Height * scale));
+                if (scaledSize.Width < 4 || scaledSize.Height < 4) continue;
+                if (scaledSize.Width > gray.Width || scaledSize.Height > gray.Height) continue;
+
+                using Mat scaledTemplate = new Mat();
+                Cv2.Resize(template, scaledTemplate, scaledSize, 0, 0, InterpolationFlags.Area);
+                using Mat res = new Mat();
+                Cv2.MatchTemplate(gray, scaledTemplate, res, TemplateMatchModes.CCoeffNormed);
+                Cv2.MinMaxLoc(res, out _, out double val, out _, out Point loc);
+
+                if (val > maxScore)
+                {
+                    maxScore = val; bestLoc = loc; found = true;
+                }
+            }
+
+            score = maxScore;
+            if (found && maxScore >= threshold)
+            {
+                center = new Point(safeRoi.X + bestLoc.X + template.Width / 2, safeRoi.Y + bestLoc.Y + template.Height / 2);
+                return true;
+            }
             return false;
         }
 

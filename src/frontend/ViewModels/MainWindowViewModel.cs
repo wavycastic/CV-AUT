@@ -72,9 +72,9 @@ namespace CvAut.ViewModels
             Sidebar = new SidebarViewModel();
             Sidebar.Seed(new[]
             {
-                new NavItem("Bảng điều khiển", "ViewDashboard", dashboard),
-                new NavItem("Nâng cao", "Tune", advanced),
-                new NavItem("Nhật ký", "ScriptText", logs),
+                new NavItem("Thiết bị", "MonitorDashboard", dashboard),
+                new NavItem("Nâng cao", "Cogs", advanced),
+                new NavItem("Nhật ký", "Terminal", logs),
             });
 
             // Inject commands into Dashboard
@@ -183,6 +183,7 @@ namespace CvAut.ViewModels
                 Dispatcher.UIThread.Post(() =>
                 {
                     TopBar.RefreshSummary();
+                    TopBar.UpdateStatusFromDevices(Devices);
                     TopBar.RefreshAggregate(Devices);
                     NotifyFleetCommands();
                 });

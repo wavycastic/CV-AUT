@@ -34,13 +34,6 @@ namespace CvAut
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(config.RequestTroopsMessage))
-            {
-                string escaped = config.RequestTroopsMessage.Replace("'", "");
-                _adb.ExecuteShell($"input text '{escaped.Replace(" ", "%s")}'");
-                InterruptibleSleep(300, token);
-            }
-
             TapFirstVisibleTemplate(new[] { @"ui\request_button", "request_button" }, 0.70, null, out _, tap: true);
             Console.WriteLine($"[REQUEST-CS] phase=request_troops status=success template=\"{matched}\"");
         }

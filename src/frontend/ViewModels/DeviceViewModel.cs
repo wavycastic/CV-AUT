@@ -125,6 +125,58 @@ namespace CvAut.ViewModels
             _ => "Gray"
         };
 
+        /// <summary>
+        /// Clean subtitle string for device list items. Prevents trailing dots and duplicate vendor names.
+        /// </summary>
+        public string SubTitleText
+        {
+            get
+            {
+                string source = Device.Source ?? string.Empty;
+                string serial = Device.Serial ?? string.Empty;
+                int port = Device.Port;
+
+                string endpoint = !string.IsNullOrWhiteSpace(serial)
+                    ? serial
+                    : (port > 0 ? $"Port {port}" : string.Empty);
+
+                if (string.IsNullOrWhiteSpace(endpoint))
+                {
+                    return !string.IsNullOrWhiteSpace(source) ? source : "ADB Cục bộ";
+                }
+
+                if (!string.IsNullOrWhiteSpace(source) && 
+                    !source.Equals(DisplayName, StringComparison.OrdinalIgnoreCase) &&
+                    !source.Equals(endpoint, StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"{source} • {endpoint}";
+                }
+
+                return endpoint;
+            }
+        }
+
+        public string StatusBadgeText => Status switch
+        {
+            BotStatus.Running => "Đang chạy",
+            BotStatus.Starting => "Đang bật",
+            BotStatus.Paused => "Tạm dừng",
+            BotStatus.Stopping => "Đang tắt",
+            BotStatus.Error => "Lỗi",
+            BotStatus.Stopped => "Đã dừng",
+            _ => Device.Status == DeviceStatus.Ready ? "Sẵn sàng" : "Ngoại tuyến"
+        };
+
+        public string StatusBadgeColor => Status switch
+        {
+            BotStatus.Running => "#4caf50",
+            BotStatus.Starting => "#2196f3",
+            BotStatus.Paused => "#ff9800",
+            BotStatus.Error => "#f44336",
+            BotStatus.Stopping => "#9e9e9e",
+            _ => Device.Status == DeviceStatus.Ready ? "#4caf50" : "#757575"
+        };
+
         public bool ShowStartButton => Status is BotStatus.Idle or BotStatus.Stopped or BotStatus.Error;
         public bool ShowStopButton => !ShowStartButton;
 
@@ -240,7 +292,7 @@ namespace CvAut.ViewModels
                 {
                     // Phase 3: each device gets its own config file whose device_connection points at
                     // this device, so concurrent sessions never share a host/port or clobber each other.
-                    string configPath = _configStore.PrepareDeviceConfig(Device.ProfileKey, Device.Host, Device.Port);
+                    string configPath = _configStore.PrepareDeviceConfig(Device.ProfileKey, Device.Host, Device.Port, Device.EmulatorType, Device.EmulatorPath, Device.EmulatorInstance);
                     ApplySelectedPlayModeTo(configPath);
                     IDeviceSession session = _startHandler(Device, configPath);
                     AttachSession(session);
@@ -354,7 +406,7 @@ namespace CvAut.ViewModels
             try
             {
                 var info = await _discovery.GetDisplayInfoAsync(Device);
-                if (info.ResolutionOk && info.DpiOk)
+                if (info.Width <= 0 || info.Height <= 0 || (info.ResolutionOk && info.DpiOk))
                 {
                     DisplayWarning = string.Empty;
                     return;

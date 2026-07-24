@@ -1,0 +1,171 @@
+using System;
+using OpenCvSharp;
+
+namespace CvAut
+{
+    internal sealed record BuilderBaseReportSnapshot(
+        int Gold,
+        int Elixir,
+        int Trophy,
+        int FreeBuilders,
+        int TotalBuilders,
+        int BuilderHallLevel,
+        bool LootAvailable,
+        int RemainingStars,
+        int MaxStars,
+        bool GoldStorageFull,
+        bool ElixirStorageFull);
+
+    /// <summary>
+    /// Đọc thông tin Builder Base không gây tác động game. Các ROI bám theo MBR,
+    /// scale lên layout chuẩn 1600x900 của dự án.
+    /// </summary>
+    internal sealed class BuilderBaseReport
+    {
+        private readonly ADBHelper _adb;
+        private readonly VisionEngine _vision;
+        private readonly BuilderBaseNavigator _navigator;
+
+        private static readonly Rect TrophyRoi = new(92, 92, 135, 42);
+        private static readonly Rect GoldRoi = new(1290, 24, 230, 42);
+        private static readonly Rect ElixirRoi = new(1290, 86, 230, 42);
+        private static readonly Rect BuilderCountRoi = new(700, 18, 100, 40);
+        private static readonly Rect BuilderHallLevelRoi = new(610, 70, 150, 80);
+        private static readonly Rect LootAvailabilityRoi = new(50, 610, 145, 90);
+        private static readonly Rect TopStorageRoi = Rect.FromLTRB(980, 0, 1600, 170);
+
+        private static readonly string[] FullGoldTemplates =
+        {
+            @"resources\full_gold_builder"
+        };
+
+        private static readonly string[] FullElixirTemplates =
+        {
+            @"resources\full_elixir_builder"
+        };
+
+        public BuilderBaseReport(ADBHelper adb, VisionEngine vision, BuilderBaseNavigator navigator)
+        {
+            _adb = adb;
+            _vision = vision;
+            _navigator = navigator;
+        }
+
+        public BuilderBaseReportSnapshot Read()
+        {
+            Console.WriteLine("[BB-REPORT] phase=report status=start");
+            if (!_navigator.IsOnBuilderBase())
+            {
+                Console.WriteLine("[BB-REPORT] phase=report status=skip reason=not_on_builder_base");
+                return Unknown();
+            }
+
+            using Mat? screenshot = _adb.TakeScreenshot();
+            if (screenshot == null || screenshot.Empty())
+            {
+                Console.WriteLine("[BB-REPORT] phase=report status=fail reason=screenshot_failed");
+                return Unknown();
+            }
+
+            int trophy = ReadNumber(screenshot, TrophyRoi, "trophy", maxPlausible: 10000);
+            int gold = ReadNumber(screenshot, GoldRoi, "gold", maxPlausible: 100_000_000);
+            int elixir = ReadNumber(screenshot, ElixirRoi, "elixir", maxPlausible: 100_000_000);
+            int builderRaw = ReadNumber(screenshot, BuilderCountRoi, "builders", maxPlausible: 99);
+            (int freeBuilders, int totalBuilders) = ParseBuilderCount(builderRaw);
+            int builderHallLevel = ReadNumber(screenshot, BuilderHallLevelRoi, "builder_hall_level", maxPlausible: 20);
+            bool lootAvailable = DetectLootAvailability(screenshot, out int remainingStars, out int maxStars);
+            bool goldStorageFull = DetectStorageFull(screenshot, FullGoldTemplates, "gold");
+            bool elixirStorageFull = DetectStorageFull(screenshot, FullElixirTemplates, "elixir");
+
+            var report = new BuilderBaseReportSnapshot(gold, elixir, trophy, freeBuilders, totalBuilders, builderHallLevel, lootAvailable, remainingStars, maxStars, goldStorageFull, elixirStorageFull);
+            Console.WriteLine($"[BB-REPORT] phase=report status=success gold={report.Gold} elixir={report.Elixir} trophy={report.Trophy} free_builders={report.FreeBuilders} total_builders={report.TotalBuilders} builder_hall_level={report.BuilderHallLevel} loot_available={report.LootAvailable} remaining_stars={report.RemainingStars} max_stars={report.MaxStars} gold_storage_full={report.GoldStorageFull} elixir_storage_full={report.ElixirStorageFull}");
+            return report;
+        }
+
+        private int ReadNumber(Mat screenshot, Rect roi, string label, int maxPlausible)
+        {
+            Rect safe = ImageUtils.ClampRect(roi, screenshot.Width, screenshot.Height);
+            if (safe.Width <= 0 || safe.Height <= 0) return 0;
+
+            if (!_vision.TryExtractNumericalMetrics(screenshot, safe, out int value, out double confidence, useRgbThresh: true)
+                && !_vision.TryExtractNumericalMetrics(screenshot, safe, out value, out confidence))
+            {
+                Console.WriteLine($"[BB-REPORT] phase=ocr status=skip item={label} reason=unreadable");
+                return 0;
+            }
+
+            if (value < 0 || value > maxPlausible)
+            {
+                Console.WriteLine($"[BB-REPORT] phase=ocr status=skip item={label} value={value} confidence={confidence:F2} reason=implausible");
+                return 0;
+            }
+
+            Console.WriteLine($"[BB-REPORT] phase=ocr status=success item={label} value={value} confidence={confidence:F2}");
+            return value;
+        }
+
+        private static (int Free, int Total) ParseBuilderCount(int raw)
+        {
+            if (raw <= 0) return (0, 0);
+            if (raw < 10) return (raw, 0);
+
+            int free = raw / 10;
+            int total = raw % 10;
+            if (free > total && total > 0) return (0, 0);
+            return (free, total);
+        }
+
+        private bool DetectLootAvailability(Mat screenshot, out int remainingStars, out int maxStars)
+        {
+            remainingStars = 0;
+            maxStars = 0;
+
+            Rect starsRoi = ImageUtils.ClampRect(new Rect(40, 568, 92, 24), screenshot.Width, screenshot.Height);
+            if (starsRoi.Width > 0 && starsRoi.Height > 0
+                && (_vision.TryExtractNumericalMetrics(screenshot, starsRoi, out int starsRaw, out double confidence, useRgbThresh: true)
+                    || _vision.TryExtractNumericalMetrics(screenshot, starsRoi, out starsRaw, out confidence)))
+            {
+                (remainingStars, maxStars) = ParseStarPair(starsRaw);
+                Console.WriteLine($"[BB-REPORT] phase=loot status=stars raw={starsRaw} remaining={remainingStars} max={maxStars} confidence={confidence:F2}");
+            }
+
+            bool byStars = maxStars > 0 && remainingStars <= maxStars;
+            bool byButton = _vision.FindElement(screenshot, @"ui\attack_button", 0.55, LootAvailabilityRoi, out double score) != null
+                || _vision.FindElement(screenshot, @"ui\icon_attack", 0.55, LootAvailabilityRoi, out score) != null
+                || _vision.FindElement(screenshot, @"ui\battle", 0.55, LootAvailabilityRoi, out score) != null;
+            bool available = byStars || byButton;
+            Console.WriteLine($"[BB-REPORT] phase=loot status={(available ? "success" : "skip")} available={available} by_stars={byStars} by_button={byButton}");
+            return available;
+        }
+
+        private static (int Remaining, int Max) ParseStarPair(int raw)
+        {
+            if (raw <= 0) return (0, 0);
+            if (raw < 10) return (raw, 0);
+            int max = raw % 10;
+            int remaining = raw / 10;
+            if (max <= 0 || remaining > 99) return (0, 0);
+            return (remaining, max);
+        }
+
+        private bool DetectStorageFull(Mat screenshot, string[] templates, string resource)
+        {
+            foreach (string template in templates)
+            {
+                Point? center = _vision.FindElement(screenshot, template, 0.72, TopStorageRoi, out double score);
+                if (center == null) continue;
+
+                Console.WriteLine($"[BB-REPORT] phase=storage_full status=success resource={resource} template=\"{template}\" score={score:F2} center=({center.Value.X},{center.Value.Y})");
+                return true;
+            }
+
+            Console.WriteLine($"[BB-REPORT] phase=storage_full status=skip resource={resource}");
+            return false;
+        }
+
+        private static BuilderBaseReportSnapshot Unknown()
+        {
+            return new BuilderBaseReportSnapshot(0, 0, 0, 0, 0, 0, false, 0, 0, false, false);
+        }
+    }
+}

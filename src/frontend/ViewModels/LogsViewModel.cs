@@ -22,6 +22,7 @@ namespace CvAut.ViewModels
 
         public Thickness GridMargin => IsDialogMode ? new Thickness(0) : new Thickness(24);
 
+        [ObservableProperty] private bool _isUserMode = true;
         [ObservableProperty] private string _title = "Nhật ký";
         [ObservableProperty] private DeviceViewModel? _selectedDevice;
         [ObservableProperty] private LogLevel? _levelFilter;
@@ -142,8 +143,8 @@ namespace CvAut.ViewModels
 
             string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AutoClashOfClan20206", "logs");
             Directory.CreateDirectory(root);
-            string deviceId = SanitizeFileName(SelectedDevice?.DeviceId ?? "device");
-            string path = Path.Combine(root, $"{deviceId}_{DateTimeOffset.Now:yyyyMMdd_HHmmss}.log");
+            string fileName = AppLog.GetNextLogFileName(root, DateTime.Now);
+            string path = Path.Combine(root, fileName);
             File.WriteAllText(path, text, Encoding.UTF8);
             Status = "Đã xuất file: " + path;
         }
@@ -202,8 +203,18 @@ namespace CvAut.ViewModels
             return builder.ToString();
         }
 
+        partial void OnIsUserModeChanged(bool value)
+        {
+            Refresh();
+        }
+
         private bool Matches(LogEntry entry)
         {
+            if (IsUserMode && !entry.IsUserRelevant)
+            {
+                return false;
+            }
+
             if (LevelFilter is not null && entry.Level != LevelFilter)
             {
                 return false;

@@ -53,7 +53,11 @@ namespace CvAut
                 Console.WriteLine("[SCOUT-CS ERROR] phase=screenshot status=fail details=\"scout\"");
                 return (0, 0, 0);
             }
+            return ExtractResources(screenshot, vision);
+        }
 
+        public static (int Gold, int Elixir, int DarkElixir) ExtractResources(Mat screenshot, VisionEngine vision)
+        {
             int hImg = screenshot.Height;
             int wImg = screenshot.Width;
             var results = new Dictionary<string, int>();

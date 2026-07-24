@@ -514,14 +514,24 @@ namespace CvAut
                 UseShellExecute = true
             };
 
-            // BlueStacks HD-Player selects the target instance via "--instance <key>".
-            // Only pass it for BlueStacks; other players use their own launch scheme.
-            if (!string.IsNullOrWhiteSpace(instanceName)
-                && string.Equals(emulatorType, "BlueStacks", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(instanceName))
             {
-                startInfo.ArgumentList.Add("--instance");
-                startInfo.ArgumentList.Add(instanceName);
-                Console.WriteLine($"[ADB] phase=boot status=pending action=start_emulator details=\"instance={instanceName}\"");
+                if (string.Equals(emulatorType, "BlueStacks", StringComparison.OrdinalIgnoreCase))
+                {
+                    startInfo.ArgumentList.Add("--instance");
+                    startInfo.ArgumentList.Add(instanceName);
+                    Console.WriteLine($"[ADB] phase=boot status=pending action=start_emulator type=BlueStacks details=\"instance={instanceName}\"");
+                }
+                else if (string.Equals(emulatorType, "LDPlayer", StringComparison.OrdinalIgnoreCase))
+                {
+                    startInfo.ArgumentList.Add(int.TryParse(instanceName, out int idx) ? $"index={idx}" : $"name={instanceName}");
+                    Console.WriteLine($"[ADB] phase=boot status=pending action=start_emulator type=LDPlayer details=\"instance={instanceName}\"");
+                }
+                else if (string.Equals(emulatorType, "MEmu", StringComparison.OrdinalIgnoreCase))
+                {
+                    startInfo.ArgumentList.Add(int.TryParse(instanceName, out int idx) ? $"index={idx}" : $"name={instanceName}");
+                    Console.WriteLine($"[ADB] phase=boot status=pending action=start_emulator type=MEmu details=\"instance={instanceName}\"");
+                }
             }
 
             Process.Start(startInfo);

@@ -26,7 +26,7 @@ namespace CvAut.ViewModels
     public partial class DashboardViewModel : ViewModelBase
     {
         [ObservableProperty]
-        private string _title = "Bảng điều khiển";
+        private string _title = "Thiết bị";
 
         [NotifyPropertyChangedFor(nameof(ShowActivePanel))]
         [NotifyPropertyChangedFor(nameof(ShowSelectionPane))]
@@ -100,6 +100,7 @@ namespace CvAut.ViewModels
         [NotifyPropertyChangedFor(nameof(ShowEmptyNotDetected))]
         [NotifyPropertyChangedFor(nameof(ShowEmptyNoDevices))]
         [NotifyPropertyChangedFor(nameof(IsRunning))]
+        [NotifyPropertyChangedFor(nameof(IsStopped))]
         [NotifyPropertyChangedFor(nameof(IsPaused))]
         [NotifyPropertyChangedFor(nameof(HasError))]
         [NotifyPropertyChangedFor(nameof(StatusText))]
@@ -180,8 +181,14 @@ namespace CvAut.ViewModels
         /// <summary>Empty-state panel shown after a Detect that returned nothing.</summary>
         public bool ShowEmptyNoDevices => State == DashboardDeviceState.NoDevices;
 
-        /// <summary>True while the active device's bot is running.</summary>
-        public bool IsRunning => State == DashboardDeviceState.Running;
+        private bool _hasBeenStopped;
+
+        /// <summary>True while the active device's bot or any selected device is running.</summary>
+        public bool IsRunning => State == DashboardDeviceState.Running ||
+            (Devices != null && Devices.Any(d => d.IsSelected && (d.Status == BotStatus.Running || d.Status == BotStatus.Starting)));
+
+        /// <summary>True only after the bot was started and is now stopped (not on initial launch).</summary>
+        public bool IsStopped => _hasBeenStopped && !IsRunning;
 
         /// <summary>True while the active device's bot is paused.</summary>
         public bool IsPaused => State == DashboardDeviceState.Paused;
@@ -212,6 +219,7 @@ namespace CvAut.ViewModels
 
         private readonly SettingsViewModel _settingsViewModel;
         private readonly IConfigStore _configStore;
+        private DeviceViewModel? _trackedDevice;
 
         public SettingsViewModel SettingsViewModel => _settingsViewModel;
 
@@ -222,11 +230,34 @@ namespace CvAut.ViewModels
             // The config dialog renders SettingsViewModel inside MainWindow's overlay (outside the
             // DashboardView visual tree), so its Save/Cancel buttons cannot reach DashboardView via
             // a parent binding. Forward the VM-level events into the existing save/cancel commands.
-            _settingsViewModel.InstanceSaveRequested += () => SaveDeviceConfigCommand.Execute(null);
-            _settingsViewModel.InstanceCancelRequested += () => CancelDeviceConfigCommand.Execute(null);
-            _configStore = configStore;
-            LoadSettings();
-        }
+                _settingsViewModel.InstanceSaveRequested += () => SaveDeviceConfigCommand.Execute(null);
+                _settingsViewModel.InstanceCancelRequested += () => CancelDeviceConfigCommand.Execute(null);
+                _configStore = configStore;
+                LoadSettings();
+            }
+
+            partial void OnSelectedDeviceForConfigChanged(DeviceViewModel? value)
+            {
+                if (_trackedDevice is not null)
+                {
+                    _trackedDevice.PropertyChanged -= OnTrackedDevicePropertyChanged;
+                }
+
+                _trackedDevice = value;
+
+                if (_trackedDevice is not null)
+                {
+                    _trackedDevice.PropertyChanged += OnTrackedDevicePropertyChanged;
+                }
+            }
+
+            private void OnTrackedDevicePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+            {
+                if (e.PropertyName == nameof(DeviceViewModel.SelectedPlayMode) && _trackedDevice is not null)
+                {
+                    _settingsViewModel.SelectedPlayMode = _trackedDevice.SelectedPlayMode;
+                }
+            }
 
         public DashboardViewModel() : this(new SettingsViewModel(), new ConfigStore())
         {
@@ -333,10 +364,80 @@ namespace CvAut.ViewModels
         }
 
         /// <summary>Attaches the shell-owned device collection so the UI can bind it.</summary>
-        public void AttachDevices(ObservableCollection<DeviceViewModel> devices) => Devices = devices;
+        public void AttachDevices(ObservableCollection<DeviceViewModel> devices)
+        {
+            if (Devices != null)
+            {
+                Devices.CollectionChanged -= OnDevicesCollectionChanged;
+                foreach (var dev in Devices)
+                {
+                    dev.PropertyChanged -= OnDevicePropertyChanged;
+                }
+            }
+
+            Devices = devices;
+
+            if (Devices != null)
+            {
+                Devices.CollectionChanged += OnDevicesCollectionChanged;
+                foreach (var dev in Devices)
+                {
+                    dev.PropertyChanged += OnDevicePropertyChanged;
+                }
+            }
+
+            OnPropertyChanged(nameof(IsRunning));
+            OnPropertyChanged(nameof(IsStopped));
+        }
+
+        private void OnDevicesCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (DeviceViewModel item in e.OldItems)
+                {
+                    item.PropertyChanged -= OnDevicePropertyChanged;
+                }
+            }
+            if (e.NewItems != null)
+            {
+                foreach (DeviceViewModel item in e.NewItems)
+                {
+                    item.PropertyChanged += OnDevicePropertyChanged;
+                }
+            }
+
+            NotifyDevicesChanged();
+        }
+
+        private void OnDevicePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(DeviceViewModel.Status) || e.PropertyName == nameof(DeviceViewModel.IsSelected))
+            {
+                if (sender is DeviceViewModel dev)
+                {
+                    if (dev.Status is BotStatus.Running or BotStatus.Starting)
+                    {
+                        _hasBeenStopped = false;
+                    }
+                    else if (dev.Status is BotStatus.Stopped or BotStatus.Stopping)
+                    {
+                        _hasBeenStopped = true;
+                    }
+                }
+
+                OnPropertyChanged(nameof(IsRunning));
+                OnPropertyChanged(nameof(IsStopped));
+            }
+        }
 
         /// <summary>Re-evaluate device-count-dependent visibility (call after a Detect pass).</summary>
-        public void NotifyDevicesChanged() => OnPropertyChanged(nameof(ShowGridPane));
+        public void NotifyDevicesChanged()
+        {
+            OnPropertyChanged(nameof(ShowGridPane));
+            OnPropertyChanged(nameof(IsRunning));
+            OnPropertyChanged(nameof(IsStopped));
+        }
 
         [RelayCommand]
         private void StartAll()
@@ -346,11 +447,16 @@ namespace CvAut.ViewModels
                 return;
             }
 
+            _hasBeenStopped = false;
+
             foreach (var device in Devices)
             {
                 if (device.IsSelected && device.CanStart)
                     device.StartCommand.Execute(null);
             }
+
+            OnPropertyChanged(nameof(IsRunning));
+            OnPropertyChanged(nameof(IsStopped));
         }
 
         [RelayCommand]
@@ -361,11 +467,16 @@ namespace CvAut.ViewModels
                 return;
             }
 
+            _hasBeenStopped = true;
+
             foreach (var device in Devices)
             {
                 if (device.IsSelected && device.CanStop)
                     device.StopCommand.Execute(null);
             }
+
+            OnPropertyChanged(nameof(IsRunning));
+            OnPropertyChanged(nameof(IsStopped));
         }
 
         private static string BuildDeviceLogText(DeviceViewModel device)

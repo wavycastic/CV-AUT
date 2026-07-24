@@ -132,25 +132,18 @@ namespace CvAut.Tests
             var store = NewIsolatedStore();
             JsonObject config = store.LoadActiveConfig();
             var night = Assert.IsType<JsonObject>(config["night_village"]);
-            Assert.Equal("1", night["attack_count"]!.ToString());
+            Assert.Equal("auto", night["farm_mode"]!.ToString());
             Assert.Equal("true", night["enable_attack"]!.ToString().ToLowerInvariant());
             Assert.Equal("false", night["boost_clock_tower"]!.ToString().ToLowerInvariant());
             Assert.Equal("true", night["army_management"]!.ToString().ToLowerInvariant());
             Assert.Equal("auto", night["army_formation"]!.ToString());
-            Assert.Equal("fixed", night["attack_count_mode"]!.ToString());
-            Assert.Equal("true", night["enable_stage2"]!.ToString().ToLowerInvariant());
 
             var vm = new NightVillageViewModel(store)
             {
-                AttackCount = 3,
-                EnableAttack = true,
+                FarmMode = "drop_trophy",
                 BoostClockTower = true,
                 UpgradeWall = true,
-                FillArmy = true,
                 ArmyFormation = "power_pekka",
-                WaitForHeroes = true,
-                HeroWaitSeconds = 120,
-                AttackCountMode = "trophy",
                 CustomDropOrderEnabled = true,
                 DropOrder = "BattleMachine|Bomber|PowerPekka",
                 NextTroopDelayMs = 700,
@@ -159,13 +152,12 @@ namespace CvAut.Tests
             vm.ApplyTo(config);
 
             night = Assert.IsType<JsonObject>(config["night_village"]);
-            Assert.Equal("3", night["attack_count"]!.ToString());
+            Assert.Equal("drop_trophy", night["farm_mode"]!.ToString());
             Assert.Equal("true", night["boost_clock_tower"]!.ToString().ToLowerInvariant());
             Assert.Equal("true", night["upgrade_wall"]!.ToString().ToLowerInvariant());
             Assert.Equal("true", night["fill_army"]!.ToString().ToLowerInvariant());
             Assert.Equal("power_pekka", night["army_formation"]!.ToString());
-            Assert.Equal("120", night["hero_wait_seconds"]!.ToString());
-            Assert.Equal("trophy", night["attack_count_mode"]!.ToString());
+            
             Assert.Equal("true", night["custom_drop_order_enabled"]!.ToString().ToLowerInvariant());
             Assert.Equal("BattleMachine|Bomber|PowerPekka", night["drop_order"]!.ToString());
             Assert.Equal("700", night["next_troop_delay_ms"]!.ToString());
@@ -237,6 +229,28 @@ namespace CvAut.Tests
             Assert.True(d.ShowActivePanel);
             Assert.False(d.ShowSelectionPane);
             Assert.False(d.ShowGridPane);
+        }
+
+        [Fact]
+        public void StartStopState_ReflectsBotRunningAndStoppedStatus()
+        {
+            var d = NewDashboard();
+            var dev = Dev(5556);
+            d.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { dev });
+
+            // Initially on fresh launch: neither running nor stopped
+            Assert.False(d.IsRunning);
+            Assert.False(d.IsStopped);
+
+            // Set state to running
+            dev.Status = CvAut.Models.BotStatus.Running;
+            Assert.True(d.IsRunning);
+            Assert.False(d.IsStopped);
+
+            // Stop bot: now IsStopped becomes true
+            dev.Status = CvAut.Models.BotStatus.Stopped;
+            Assert.False(d.IsRunning);
+            Assert.True(d.IsStopped);
         }
 
         [Fact]
@@ -527,6 +541,71 @@ namespace CvAut.Tests
             Assert.True(loaded.Enabled);
             Assert.Equal("https://discord.com/api/webhooks/1/abc", loaded.WebhookUrl);
             Assert.True(loaded.NotifyOnStopped);
+        }
+    }
+
+    public class LogLevelAndVisibilityContractTests
+    {
+        [Fact]
+        public void LogLevel_LegacyNumericValuesArePreserved()
+        {
+            Assert.Equal(-1, (int)LogLevel.Trace);
+            Assert.Equal(0, (int)LogLevel.Debug);
+            Assert.Equal(1, (int)LogLevel.Info);
+            Assert.Equal(2, (int)LogLevel.Warning);
+            Assert.Equal(3, (int)LogLevel.Error);
+            Assert.Equal(4, (int)LogLevel.Critical);
+        }
+
+        [Fact]
+        public void LogEntry_IconMapping_MatchesContract()
+        {
+            Assert.Equal("🔍", new LogEntry("test trace", LogLevel.Trace).Icon);
+            Assert.Equal("🐞", new LogEntry("test debug", LogLevel.Debug).Icon);
+            Assert.Equal("🛑", new LogEntry("test critical", LogLevel.Critical).Icon);
+            Assert.Equal("✕", new LogEntry("test error", LogLevel.Error).Icon);
+        }
+
+        [Fact]
+        public void UserVisibility_DoesNotDependOnMessageText()
+        {
+            var infoEntry = new LogEntry("Bắt đầu worker_loop", LogLevel.Info);
+            Assert.True(infoEntry.IsUserRelevant);
+
+            var debugEntry = new LogEntry("General info message", LogLevel.Debug);
+            Assert.False(debugEntry.IsUserRelevant);
+
+            Assert.False(new LogEntry("trace log", LogLevel.Trace).IsUserRelevant);
+            Assert.True(new LogEntry("warning log", LogLevel.Warning).IsUserRelevant);
+            Assert.True(new LogEntry("error log", LogLevel.Error).IsUserRelevant);
+            Assert.True(new LogEntry("critical log", LogLevel.Critical).IsUserRelevant);
+        }
+
+        [Fact]
+        public void UpdateStatusFromDevices_UpdatesTitleAndStatusText()
+        {
+            var topBar = new TopBarViewModel();
+            var dev = new DeviceViewModel(new Device("127.0.0.1", 5556, "Mock", "Mock", DeviceStatus.Ready));
+
+            // Initial launch: HasStatus is false (no "Bot đã dừng" shown initially)
+            topBar.UpdateStatusFromDevices(new[] { dev });
+            Assert.False(topBar.HasStatus);
+            Assert.Equal("SimpliMixi Console", topBar.WindowTitle);
+
+            // Bot starts running: HasStatus becomes true, status text and color update
+            dev.Status = BotStatus.Running;
+            topBar.UpdateStatusFromDevices(new[] { dev });
+            Assert.True(topBar.HasStatus);
+            Assert.Equal("Bot đang chạy", topBar.StatusText);
+            Assert.Contains("Bot đang chạy", topBar.WindowTitle);
+            Assert.Equal("#22c55e", topBar.StatusColor);
+
+            // Bot stops: HasStatus remains true, showing Bot đã dừng
+            dev.Status = BotStatus.Stopped;
+            topBar.UpdateStatusFromDevices(new[] { dev });
+            Assert.True(topBar.HasStatus);
+            Assert.Equal("Bot đã dừng", topBar.StatusText);
+            Assert.Contains("Bot đã dừng", topBar.WindowTitle);
         }
     }
 }

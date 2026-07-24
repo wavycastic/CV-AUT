@@ -7,46 +7,141 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     x:Class="CvAut.Views.Settings.NightVillageView"
-    x:DataType="vm:NightVillageViewModel"
->
+    x:DataType="vm:NightVillageViewModel">
     <Design.DataContext><vm:NightVillageViewModel /></Design.DataContext>
 
-    <ScrollViewer Background="Transparent" Padding="10">
-        <StackPanel Spacing="8">
+    <ScrollViewer Background="Transparent" Padding="10" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="8" Margin="0,0,0,50">
 
+            <!-- Card 1: Attack & Army Configuration -->
             <Border Classes="Card" Padding="12,10">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Cấu hình đi chợ Làng Đêm" Classes="subhead" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <materialIcons:MaterialIcon Kind="Sword" Width="16" Height="16" Foreground="{DynamicResource AppDangerBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Cấu hình tấn công &amp; Quân đội" Classes="subhead" VerticalAlignment="Center" />
+                    </StackPanel>
 
                     <StackPanel Spacing="6">
                         <StackPanel Spacing="3">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <materialIcons:MaterialIcon Kind="GamepadVariant" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
-                                <TextBlock Text="Chế độ Farm" Classes="label" VerticalAlignment="Center" />
-                            </StackPanel>
-                            <ComboBox ItemsSource="{Binding FarmModes}" SelectedItem="{Binding FarmMode}" HorizontalAlignment="Stretch" Height="32" />
+                            <TextBlock Text="Chế độ đánh Làng đêm" Classes="label" />
+                            <ComboBox ItemsSource="{Binding FarmModeOptions}" SelectedItem="{Binding SelectedFarmMode}" HorizontalAlignment="Stretch" Height="32" />
                         </StackPanel>
+
                         <StackPanel Spacing="3">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <materialIcons:MaterialIcon Kind="Trophy" Width="14" Height="14" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
-                                <TextBlock Text="Cúp tối thiểu" Classes="label" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
-                            </StackPanel>
-                            <NumericUpDown Value="{Binding MinCups}" Minimum="0" Maximum="10000" Height="32" FormatString="N0" />
+                            <TextBlock Text="Đội hình lính Làng đêm" Classes="label" />
+                            <ComboBox ItemsSource="{Binding ArmyFormationOptions}" SelectedItem="{Binding ArmyFormation}" HorizontalAlignment="Stretch" Height="32" />
                         </StackPanel>
-                        <StackPanel Spacing="3">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <materialIcons:MaterialIcon Kind="Trophy" Width="14" Height="14" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
-                                <TextBlock Text="Cúp tối đa" Classes="label" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+
+                        <Border Classes="Tile" Padding="8,6" IsVisible="{Binding IsTrophyMode}">
+                            <StackPanel Spacing="6">
+                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto">
+                                    <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,4,0">
+                                        <TextBlock Text="Cúp tối thiểu (Min)" Classes="label" />
+                                        <NumericUpDown Value="{Binding MinCups}" Minimum="0" Maximum="10000" FormatString="N0" Height="32" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="3" Margin="4,0,0,0">
+                                        <TextBlock Text="Cúp tối đa (Max)" Classes="label" />
+                                        <NumericUpDown Value="{Binding MaxCups}" Minimum="0" Maximum="10000" FormatString="N0" Height="32" />
+                                    </StackPanel>
+                                </Grid>
                             </StackPanel>
-                            <NumericUpDown Value="{Binding MaxCups}" Minimum="0" Maximum="10000" Height="32" FormatString="N0" />
-                        </StackPanel>
+                        </Border>
+
+                        <Border Classes="Tile" Padding="8,6" IsVisible="{Binding IsDropTrophyMode}">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Cúp dừng hạ (Max)" Classes="label" />
+                                <NumericUpDown Value="{Binding MaxCups}" Minimum="0" Maximum="10000" FormatString="N0" Height="32" HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Card 2: Wall Upgrade -->
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <materialIcons:MaterialIcon Kind="Wall" Width="16" Height="16" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Nâng tường Làng đêm" Classes="subhead" VerticalAlignment="Center" />
                     </StackPanel>
 
                     <Border Classes="Tile" Padding="8,6">
-                        <CheckBox Content="Tự động nâng tường làng đêm" IsChecked="{Binding UpgradeWall}" Height="24" />
+                        <CheckBox Content="Bật tự động nâng tường" IsChecked="{Binding UpgradeWall}" Height="24" />
                     </Border>
                 </StackPanel>
             </Border>
+
+            <!-- Card 3: Maintenance & Upgrades -->
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <materialIcons:MaterialIcon Kind="Wrench" Width="16" Height="16" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Bảo trì &amp; Nâng cấp công trình" Classes="subhead" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <Border Classes="Tile" Padding="8,6">
+                        <StackPanel Spacing="6">
+                            <CheckBox Content="Tự động kích hoạt Tháp đồng hồ (Clock Tower)" IsChecked="{Binding BoostClockTower}" Height="24" />
+
+                            <CheckBox Content="Tự động nâng cấp công trình theo đề xuất Thợ xây" IsChecked="{Binding SuggestedUpgrades}" Height="24" />
+                            <StackPanel Spacing="6" IsEnabled="{Binding SuggestedUpgrades}">
+                                <CheckBox Content="Đặt công trình mới" IsChecked="{Binding PlaceNewBuildings}" Height="24" />
+                                <CheckBox Content="Bỏ qua nâng Vàng (Ignore Gold)" IsChecked="{Binding IgnoreGoldUpgrades}" Height="24" />
+                                <CheckBox Content="Bỏ qua nâng Dầu (Ignore Elixir)" IsChecked="{Binding IgnoreElixirUpgrades}" Height="24" />
+                                <CheckBox Content="Bỏ qua nâng Nhà chính (Ignore Hall)" IsChecked="{Binding IgnoreHallUpgrades}" Height="24" />
+                                <CheckBox Content="Bỏ qua nâng Tường (Ignore Wall)" IsChecked="{Binding IgnoreWallUpgrades}" Height="24" />
+                            </StackPanel>
+                            
+                            <CheckBox Content="Tự động nâng cấp Máy chiến đấu (Battle Machine)" IsChecked="{Binding UpgradeBattleMachine}" Height="24" />
+                            <CheckBox Content="Tự động nâng cấp Trực thăng chiến đấu (Battle Copter)" IsChecked="{Binding UpgradeBattleCopter}" Height="24" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Star Laboratory -->
+                    <Border Classes="Tile" Padding="8,6">
+                        <StackPanel Spacing="6">
+                            <CheckBox Content="Tự động nghiên cứu Phòng thí nghiệm Sao (Star Lab)" IsChecked="{Binding StarLaboratory}" Height="24" />
+                            <StackPanel Spacing="3" IsEnabled="{Binding StarLaboratory}">
+                                <TextBlock Text="Lính ưu tiên nghiên cứu" Classes="label" />
+                                <ComboBox ItemsSource="{Binding StarLaboratoryTroopOptions}" SelectedItem="{Binding StarLaboratoryTroop}" HorizontalAlignment="Stretch" Height="32" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- Card 5: Resource & Trophy Limits -->
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <materialIcons:MaterialIcon Kind="ShieldLock" Width="16" Height="16" Foreground="{DynamicResource AppSuccessBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Giới hạn cúp &amp; Kho" Classes="subhead" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <Border Classes="Tile" Padding="8,6">
+                        <StackPanel Spacing="6">
+                            <CheckBox Content="Tạm dừng Bot khi kho Vàng Làng đêm đầy" IsChecked="{Binding HaltOnGoldFull}" Height="24" />
+                            <CheckBox Content="Tạm dừng Bot khi kho Dầu Làng đêm đầy" IsChecked="{Binding HaltOnElixirFull}" Height="24" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- Card 6: Clan Games -->
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <materialIcons:MaterialIcon Kind="TrophyOutline" Width="16" Height="16" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Trò chơi Hội (Clan Games)" Classes="subhead" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <Border Classes="Tile" Padding="8,6">
+                        <CheckBox Content="Bắt buộc tấn công cho Trò chơi Hội (Force Attack Clan Games)" IsChecked="{Binding ForceAttackForClanGames}" Height="24" />
+                    </Border>
+                </StackPanel>
+            </Border>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

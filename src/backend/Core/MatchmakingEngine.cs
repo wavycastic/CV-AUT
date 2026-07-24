@@ -1,74 +1,28 @@
-using System;
-using CvAut.Handlers;
+namespace CvAut;
 
-namespace CvAut
+internal sealed class MatchmakingEngine
 {
-    internal record ScoutedResources(int Gold, int Elixir, int DarkElixir);
-
-    internal enum TargetSelectionLogic
+    public bool ShouldAcceptTarget(ScoutedResources resources, FarmingTargetConfig config, out string reason)
     {
-        Total,
-        Individual,
-        DarkOnly
-    }
+        int total = resources.Gold + resources.Elixir;
+        bool goldOk = resources.Gold >= config.GoldThreshold;
+        bool elixirOk = resources.Elixir >= config.ElixirThreshold;
+        bool darkOk = config.DarkElixirThreshold <= 0 || resources.DarkElixir >= config.DarkElixirThreshold;
+        bool totalOk = total >= config.TotalResourceThreshold;
 
-    internal sealed record FarmingTargetConfig(
-        int GoldThreshold,
-        int ElixirThreshold,
-        int DarkElixirThreshold,
-        int TotalResourceThreshold,
-        TargetSelectionLogic Logic);
-
-    /// <summary>
-    /// Phân hệ Đánh giá Tìm Trận (MatchmakingEngine):
-    /// Thực hiện quét tài nguyên nhà đối thủ (OCR) và so sánh với chỉ số cấu hình yêu cầu.
-    /// </summary>
-    internal class MatchmakingEngine
-    {
-        public bool ShouldAcceptTarget(ScoutedResources resources, FarmingTargetConfig config, out string reason)
+        bool accepted = config.Logic switch
         {
-            reason = string.Empty;
-            int totalGoldElixir = resources.Gold + resources.Elixir;
+            TargetSelectionLogic.And => goldOk && elixirOk && darkOk,
+            TargetSelectionLogic.Or => goldOk || elixirOk || darkOk,
+            _ => totalOk && darkOk
+        };
 
-            switch (config.Logic)
-            {
-                case TargetSelectionLogic.DarkOnly:
-                    if (resources.DarkElixir >= config.DarkElixirThreshold)
-                    {
-                        reason = $"dark_elixir_satisfied ({resources.DarkElixir}>={config.DarkElixirThreshold})";
-                        return true;
-                    }
-                    reason = $"dark_elixir_insufficient ({resources.DarkElixir}<{config.DarkElixirThreshold})";
-                    return false;
-
-                case TargetSelectionLogic.Individual:
-                    bool goldOk = resources.Gold >= config.GoldThreshold;
-                    bool elixirOk = resources.Elixir >= config.ElixirThreshold;
-                    bool darkOk = resources.DarkElixir >= config.DarkElixirThreshold;
-
-                    if (goldOk && elixirOk && darkOk)
-                    {
-                        reason = $"individual_all_satisfied (G:{resources.Gold} E:{resources.Elixir} DE:{resources.DarkElixir})";
-                        return true;
-                    }
-                    reason = $"individual_not_met (G:{goldOk} E:{elixirOk} DE:{darkOk})";
-                    return false;
-
-                case TargetSelectionLogic.Total:
-                default:
-                    if (totalGoldElixir >= config.TotalResourceThreshold)
-                    {
-                        reason = $"total_resource_satisfied ({totalGoldElixir}>={config.TotalResourceThreshold})";
-                        return true;
-                    }
-                    if (config.DarkElixirThreshold > 0 && resources.DarkElixir >= config.DarkElixirThreshold)
-                    {
-                        reason = $"dark_elixir_override ({resources.DarkElixir}>={config.DarkElixirThreshold})";
-                        return true;
-                    }
-                    reason = $"total_insufficient ({totalGoldElixir}<{config.TotalResourceThreshold})";
-                    return false;
-            }
-        }
+        reason = config.Logic switch
+        {
+            TargetSelectionLogic.And => $"and gold_ok={goldOk} elixir_ok={elixirOk} dark_ok={darkOk}",
+            TargetSelectionLogic.Or => $"or gold_ok={goldOk} elixir_ok={elixirOk} dark_ok={darkOk}",
+            _ => $"total_resource_satisfied total_ok={totalOk} dark_ok={darkOk}"
+        };
+        return accepted;
     }
 }

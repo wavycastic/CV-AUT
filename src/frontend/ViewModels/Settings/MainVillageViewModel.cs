@@ -24,7 +24,7 @@ namespace CvAut.ViewModels.Settings
         [ObservableProperty] private int _totalResourceThreshold;
         [ObservableProperty] private string _targetLogic = "total";
         [ObservableProperty] private bool _requestTroops;
-        [ObservableProperty] private string _requestTroopsMessage = "Rồng + rage";
+        
         [ObservableProperty] private bool _upgradeWall;
         [ObservableProperty] private int _wallLevel;
         [ObservableProperty] private int _wallGoldThreshold;
@@ -80,7 +80,7 @@ namespace CvAut.ViewModels.Settings
             config["use_dragon"] = UseDragon;
             config["use_electro_dragon"] = UseElectroDragon;
             config["request_troops"] = RequestTroops;
-            config["request_troops_message"] = RequestTroopsMessage;
+            
             config["upgrade_wall"] = UpgradeWall;
             config["wall_level"] = WallLevel;
             config["wall_gold_threshold"] = WallGoldThreshold;
@@ -133,7 +133,7 @@ namespace CvAut.ViewModels.Settings
                     _ => "Tổng tài nguyên"
                 };
                 RequestTroops = ConfigStore.TryGetBool(_config["request_troops"], false);
-                RequestTroopsMessage = ConfigStore.TryGetString(_config["request_troops_message"], "Rồng + rage");
+                
                 UpgradeWall = ConfigStore.TryGetBool(_config["upgrade_wall"], false);
                 WallLevel = ConfigStore.TryGetInt(_config["wall_level"], 14);
                 WallGoldThreshold = ConfigStore.TryGetInt(_config["wall_gold_threshold"], 5000000);

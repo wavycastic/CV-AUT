@@ -104,22 +104,45 @@ namespace CvAut
                 using var adb = new ADBHelper(host, port, serial);
                 string size = adb.ExecuteShell("wm size");
                 string density = adb.ExecuteShell("wm density");
+
+                if (IsAdbErrorString(size)) size = string.Empty;
+                if (IsAdbErrorString(density)) density = string.Empty;
+
                 int width = 0;
                 int height = 0;
                 int dpi = 0;
 
-                Match sizeMatch = MatchPreferredDisplayValue(size ?? string.Empty, @"(\d+)x(\d+)");
+                Match sizeMatch = MatchPreferredDisplayValue(size, @"(\d+)x(\d+)");
                 if (sizeMatch.Success)
                 {
                     int.TryParse(sizeMatch.Groups[1].Value, out width);
                     int.TryParse(sizeMatch.Groups[2].Value, out height);
                 }
 
-                Match densityMatch = MatchPreferredDisplayValue(density ?? string.Empty, @"(\d+)");
+                Match densityMatch = MatchPreferredDisplayValue(density, @"Physical density:\s*(\d+)|Override density:\s*(\d+)|(\d+)");
                 if (densityMatch.Success)
                 {
-                    int.TryParse(densityMatch.Groups[1].Value, out dpi);
+                    for (int g = 1; g < densityMatch.Groups.Count; g++)
+                    {
+                        if (densityMatch.Groups[g].Success && int.TryParse(densityMatch.Groups[g].Value, out int parsedDpi))
+                        {
+                            dpi = parsedDpi;
+                            break;
+                        }
+                    }
                 }
+
+                if (width <= 0 || height <= 0)
+                {
+                    using Mat? shot = adb.TakeScreenshot();
+                    if (shot != null && !shot.Empty())
+                    {
+                        width = shot.Width;
+                        height = shot.Height;
+                    }
+                }
+
+                if (dpi > 1000) dpi = 0;
 
                 string raw = $"{size?.Trim()} | {density?.Trim()}";
                 return (width, height, dpi, raw);
@@ -131,9 +154,17 @@ namespace CvAut
             }
         }
 
+        private static bool IsAdbErrorString(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return true;
+            return raw.Contains("error:", StringComparison.OrdinalIgnoreCase) ||
+                   raw.Contains("device offline", StringComparison.OrdinalIgnoreCase) ||
+                   raw.Contains("not found", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static Match MatchPreferredDisplayValue(string raw, string pattern)
         {
-            if (string.IsNullOrWhiteSpace(raw))
+            if (string.IsNullOrWhiteSpace(raw) || IsAdbErrorString(raw))
             {
                 return Match.Empty;
             }

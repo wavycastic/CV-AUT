@@ -102,9 +102,7 @@ namespace CvAut
         }
 
         private static bool InterruptibleSleep(int milliseconds, CancellationToken token)
-        {
-            return token.WaitHandle.WaitOne(milliseconds);
-        }
+            => ThreadingUtil.InterruptibleSleep(milliseconds, token);
 
         /// <summary>
         /// Thực hiện luyện quân nhanh (Quick Train) thông qua giao diện Đội hình mẫu đã lưu sẵn của game.

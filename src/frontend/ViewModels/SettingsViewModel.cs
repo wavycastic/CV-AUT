@@ -64,6 +64,7 @@ namespace CvAut.ViewModels
             SelectedTab = Tabs[0];
             OnPropertyChanged(nameof(HasTabs));
             RefreshProfiles();
+            SyncPlayModeFromConfig();
             LoadNotificationSettings();
         }
 
@@ -78,10 +79,10 @@ namespace CvAut.ViewModels
                 return;
             }
 
-            RebuildInstanceModeTabs(value);
+            RebuildTabsByPlayMode(value);
         }
 
-        private void RebuildInstanceModeTabs(string playMode)
+        private void RebuildTabsByPlayMode(string playMode)
         {
             Tabs.Clear();
             SettingsTab selectedModeTab = CreateTabForPlayMode(playMode);
@@ -118,6 +119,7 @@ namespace CvAut.ViewModels
             _clanGames.Reload();
             _clanCapital.Reload();
             RefreshProfiles();
+            SyncPlayModeFromConfig();
             Status = "Đã tải cấu hình " + ProfileName;
         }
 
@@ -190,6 +192,26 @@ namespace CvAut.ViewModels
             NotifyStatus = s.IsActionable ? "Đã lưu — thông báo bật." : (s.Enabled ? "Đã lưu — cần URL webhook https hợp lệ." : "Đã lưu — thông báo tắt.");
         }
 
+        private void SyncPlayModeFromConfig()
+        {
+            try
+            {
+                var config = _configStore.LoadActiveConfig();
+                if (config.TryGetPropertyValue("play_mode", out var val) && val is not null)
+                {
+                    SelectedPlayMode = PlayMode.ToDisplay(val.ToString());
+                }
+                else
+                {
+                    SelectedPlayMode = PlayMode.MainVillageLabel;
+                }
+            }
+            catch
+            {
+                SelectedPlayMode = PlayMode.MainVillageLabel;
+            }
+        }
+
         private void RefreshProfiles()
         {
             _syncingProfiles = true;
@@ -239,8 +261,8 @@ namespace CvAut.ViewModels
             _clanCapital.Reload();
             RefreshProfiles();
 
-            SelectedPlayMode = PlayMode.ToDisplay(playMode);
-            RebuildInstanceModeTabs(SelectedPlayMode);
+            SelectedPlayMode = string.IsNullOrEmpty(playMode) ? PlayMode.MainVillageLabel : playMode;
+            RebuildTabsByPlayMode(SelectedPlayMode);
 
             Status = "Đã tải cấu hình " + name;
         }
