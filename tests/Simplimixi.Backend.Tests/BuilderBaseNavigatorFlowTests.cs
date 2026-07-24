@@ -85,13 +85,40 @@ namespace CvAut.Backend.Tests
             Assert.Contains("village\\Page\\MainVillage\\MainVillage_100_90", io.MatchedTemplates);
         }
 
+        [Fact]
+        public void SwitchToOttoVillage_RequiresOttoStageMarker()
+        {
+            var io = new FakeVillageSwitchIO(VillageState.BuilderBase);
+            var navigator = new BuilderBaseNavigator(io, NoSleep);
+
+            bool result = navigator.SwitchToOttoVillage(CancellationToken.None);
+
+            Assert.True(result);
+            Assert.Equal(VillageState.Otto, io.State);
+            Assert.Contains("village\\Page\\BuilderBase\\MachineEye_0_90", io.MatchedTemplates);
+        }
+
+        [Fact]
+        public void SwitchToOttoVillage_FailsWhenTunnelTapDoesNotChangeStage()
+        {
+            var io = new FakeVillageSwitchIO(VillageState.BuilderBase) { IgnoreStageTap = true };
+            var navigator = new BuilderBaseNavigator(io, NoSleep);
+
+            bool result = navigator.SwitchToOttoVillage(CancellationToken.None);
+
+            Assert.False(result);
+            Assert.Equal(VillageState.BuilderBase, io.State);
+        }
+
         private static bool NoSleep(int milliseconds, CancellationToken token) => token.IsCancellationRequested;
 
         private enum PendingTap
         {
             None,
             ToBuilder,
-            ToMain
+            ToMain,
+            ToOtto,
+            ToBuilderStage1
         }
 
         private sealed class FakeVillageSwitchIO : IVillageSwitchIO
@@ -110,6 +137,7 @@ namespace CvAut.Backend.Tests
             public int PinchCount { get; private set; }
             public bool DisableBuilderFallbackIcons { get; init; }
             public bool DisableMainPrimaryUi { get; init; }
+            public bool IgnoreStageTap { get; init; }
             public List<Point> Taps { get; } = new();
             public List<Rect?> Rois { get; } = new();
             public List<string> MatchedTemplates { get; } = new();
@@ -159,12 +187,30 @@ namespace CvAut.Backend.Tests
                     return new Point(420, 660);
                 }
 
-                if ((templateName.EndsWith("BuilderEye_0_90", StringComparison.OrdinalIgnoreCase)
-                    || templateName.EndsWith("MachineEye_0_90", StringComparison.OrdinalIgnoreCase))
+                if (templateName.EndsWith("BuilderEye_0_90", StringComparison.OrdinalIgnoreCase)
                     && State == VillageState.BuilderBase)
                 {
                     MatchedTemplates.Add(templateName);
                     return new Point(420, 660);
+                }
+
+                if (templateName.EndsWith("MachineEye_0_90", StringComparison.OrdinalIgnoreCase)
+                    && State == VillageState.Otto)
+                {
+                    MatchedTemplates.Add(templateName);
+                    return new Point(420, 660);
+                }
+
+                if (templateName.EndsWith("otto_tunnel", StringComparison.OrdinalIgnoreCase))
+                {
+                    _pendingTap = PendingTap.ToOtto;
+                    return new Point(210, 170);
+                }
+
+                if (templateName.EndsWith("builder_tunnel", StringComparison.OrdinalIgnoreCase))
+                {
+                    _pendingTap = PendingTap.ToBuilderStage1;
+                    return new Point(210, 170);
                 }
 
                 if ((templateName.EndsWith("builder_available", StringComparison.OrdinalIgnoreCase)
@@ -199,6 +245,14 @@ namespace CvAut.Backend.Tests
                 {
                     State = VillageState.MainVillage;
                 }
+                else if (_pendingTap == PendingTap.ToOtto && !IgnoreStageTap)
+                {
+                    State = VillageState.Otto;
+                }
+                else if (_pendingTap == PendingTap.ToBuilderStage1 && !IgnoreStageTap)
+                {
+                    State = VillageState.BuilderBase;
+                }
 
                 _pendingTap = PendingTap.None;
             }
@@ -213,6 +267,7 @@ namespace CvAut.Backend.Tests
     internal enum VillageState
     {
         MainVillage,
-        BuilderBase
+        BuilderBase,
+        Otto
     }
 }
