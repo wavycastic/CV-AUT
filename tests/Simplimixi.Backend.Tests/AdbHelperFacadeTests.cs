@@ -44,6 +44,8 @@ namespace CvAut.Backend.Tests
 
             facade.TapSequenceSafeFast(
                 new[] { new Point(1, 1) },
+                batchSize: 4,
+                batchDelayMs: 90,
                 token: cancellation.Token);
 
             Assert.Empty(shell.Commands);
