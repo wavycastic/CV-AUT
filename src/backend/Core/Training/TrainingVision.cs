@@ -15,6 +15,9 @@ internal sealed class TrainingVision
         _root = root;
     }
 
+    public bool TemplateExists(string subdirectory, string name)
+        => TemplateAssetLoader.Exists(_root, Path.Combine(subdirectory, name));
+
     public bool TryMatch(
         string subdirectory,
         string name,
