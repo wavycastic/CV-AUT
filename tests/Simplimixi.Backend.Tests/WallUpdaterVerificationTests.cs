@@ -125,20 +125,57 @@ namespace CvAut.Backend.Tests
             WallUpgradeDecision decisionZero = WallUpgradeDecider.Decide(inputZero);
             Assert.Equal(WallUpgradeResource.None, decisionZero.Resource);
             Assert.Equal("missing_wall_cost", decisionZero.SkipReason);
+        }
 
-            var inputNull = new WallUpgradeDecisionInput(
-                WallCost: null,
-                Gold: 10_000_000,
-                Elixir: 10_000_000,
-                GoldStartThreshold: 0,
-                ElixirStartThreshold: 0,
-                GoldReserve: 0,
-                ElixirReserve: 0,
-                BatchLimit: 1);
+        [Fact]
+        public void ValidateWallCosts_FailsWhenCostsAreUnreadable()
+        {
+            var result = WallUpdater.ValidateWallCosts(0, 0);
 
-            WallUpgradeDecision decisionNull = WallUpgradeDecider.Decide(inputNull);
-            Assert.Equal(WallUpgradeResource.None, decisionNull.Resource);
-            Assert.Equal("missing_wall_cost", decisionNull.SkipReason);
+            Assert.False(result.IsValid);
+            Assert.Equal("wall_cost_unreadable", result.Reason);
+            Assert.Equal(0, result.Cost);
+        }
+
+        [Fact]
+        public void ValidateWallCosts_FailsWhenCostRatioExceedsMaxTolerance()
+        {
+            // 2M vs 3M -> ratio 1.5 > 1.15 -> mismatch
+            var result = WallUpdater.ValidateWallCosts(2_000_000, 3_000_000);
+
+            Assert.False(result.IsValid);
+            Assert.Equal("wall_cost_mismatch", result.Reason);
+            Assert.Equal(0, result.Cost);
+        }
+
+        [Fact]
+        public void ValidateWallCosts_PicksConservativeMaxCost_WhenCostsAreConsistent()
+        {
+            // 1.0M vs 1.1M -> ratio 1.1 <= 1.15 -> ok, picks 1.1M conservatively
+            var result = WallUpdater.ValidateWallCosts(1_000_000, 1_100_000);
+
+            Assert.True(result.IsValid);
+            Assert.Equal("ok", result.Reason);
+            Assert.Equal(1_100_000, result.Cost);
+        }
+
+        [Fact]
+        public void IsResourceDeltaVerified_VerifiesDeltaWithinTolerance()
+        {
+            long before = 10_000_000;
+            long expectedSpend = 2_000_000; // 2 walls @ 1M each
+
+            // Exact spend: after = 8M -> verified
+            Assert.True(WallUpdater.IsResourceDeltaVerified(before, 8_000_000, expectedSpend));
+
+            // Within 10% tolerance (spend = 1.95M): after = 8,050,000 -> verified
+            Assert.True(WallUpdater.IsResourceDeltaVerified(before, 8_050_000, expectedSpend));
+
+            // Outside tolerance (spend = 1.0M): after = 9,000,000 -> mismatch
+            Assert.False(WallUpdater.IsResourceDeltaVerified(before, 9_000_000, expectedSpend));
+
+            // Unreadable resource (after = 0) -> unreadable
+            Assert.False(WallUpdater.IsResourceDeltaVerified(before, 0, expectedSpend));
         }
     }
 }
