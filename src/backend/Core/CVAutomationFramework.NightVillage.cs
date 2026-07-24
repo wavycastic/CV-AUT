@@ -2,6 +2,7 @@ using System;
 using System.Text.Json;
 using System.Threading;
 using OpenCvSharp;
+using static CvAut.ConfigManager;
 
 namespace CvAut
 {

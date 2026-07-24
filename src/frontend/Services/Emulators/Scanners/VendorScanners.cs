@@ -317,23 +317,112 @@ namespace CvAut.Services.Emulators.Scanners
         {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microvirt", "MEmu"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microvirt", "MEmu"),
+            @"D:\Program Files\Microvirt\MEmu",
         };
 
         public MemuScanner()
             : base("MEmu",
                    InstallRoots,
-                   CommonPorts.All,
+                   CommonPorts.Memu,
                    new[] { "MEmu.exe", "MEmuConsole.exe" })
         {
         }
 
         public override IEnumerable<DeviceCandidate> Scan(CancellationToken cancellationToken = default)
         {
+            List<MemuVmInfo> vms = GetMemuVms();
+            if (vms.Count > 0)
+            {
+                string? exePath = InstallRoots
+                    .Select(root => Path.Combine(root, "MEmu.exe"))
+                    .FirstOrDefault(File.Exists);
+
+                foreach (MemuVmInfo vm in vms)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    string displayName = string.IsNullOrWhiteSpace(vm.Title) ? $"MEmu {vm.Port}" : vm.Title;
+                    yield return new DeviceCandidate(
+                        "127.0.0.1",
+                        vm.Port,
+                        displayName,
+                        "MEmu",
+                        null,
+                        DeviceStatus.Installed,
+                        "MEmu",
+                        exePath,
+                        vm.Index.ToString(CultureInfo.InvariantCulture));
+                }
+                yield break;
+            }
+
+            // Fallback if memuc listvms is not available: only emit candidates from base scan
             foreach (DeviceCandidate candidate in base.Scan(cancellationToken))
             {
                 string? instance = TryResolveMemuInstance(candidate.Port);
                 yield return candidate with { EmulatorInstance = instance };
             }
+        }
+
+        private sealed record MemuVmInfo(int Index, string Title, int Port);
+
+        private static List<MemuVmInfo> GetMemuVms()
+        {
+            var result = new List<MemuVmInfo>();
+            string? memucPath = InstallRoots
+                .Select(root => Path.Combine(root, "memuc.exe"))
+                .FirstOrDefault(File.Exists);
+
+            if (memucPath is null)
+            {
+                return result;
+            }
+
+            try
+            {
+                using var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = memucPath,
+                    Arguments = "listvms",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                });
+
+                if (process is null) return result;
+
+                if (!process.WaitForExit(3000))
+                {
+                    try { process.Kill(entireProcessTree: true); } catch { /* best effort */ }
+                    return result;
+                }
+
+                string output = process.StandardOutput.ReadToEnd();
+                foreach (string rawLine in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string line = rawLine.Trim();
+                    string[] parts = line.Split(',', StringSplitOptions.TrimEntries);
+                    if (parts.Length < 2) continue;
+
+                    if (int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int index))
+                    {
+                        string title = parts[1];
+                        int port = 21503 + index * 10;
+                        if (parts.Length >= 7 && int.TryParse(parts[6], NumberStyles.Integer, CultureInfo.InvariantCulture, out int customPort) && customPort > 0)
+                        {
+                            port = customPort;
+                        }
+
+                        result.Add(new MemuVmInfo(index, title, port));
+                    }
+                }
+            }
+            catch
+            {
+                /* best effort fallback */
+            }
+
+            return result;
         }
 
         private static string? TryResolveMemuInstance(int port)

@@ -21,7 +21,7 @@ namespace CvAut
     /// - Điều khiển thu phóng nâng cao qua UIAutomator2 Server bằng giao thức JSON-RPC (PinchIn).
     /// - Chụp ảnh màn hình giả lập tốc độ cao bằng exec-out screencap, kèm cơ chế chống ảnh lỗi/trống.
     /// </summary>
-    public class ADBHelper : IDisposable
+    public class ADBHelper : IADBHelper
     {
         private bool _disposed;
         private readonly string _deviceAddress;
@@ -37,9 +37,7 @@ namespace CvAut
         private Process? _uiautomatorProcess;
 
         private static bool InterruptibleSleep(int milliseconds, CancellationToken token = default)
-        {
-            return token.WaitHandle.WaitOne(milliseconds);
-        }
+            => ThreadingUtil.InterruptibleSleep(milliseconds, token);
 
         private static void LogBotInput(string action, string status, string details)
         {
@@ -56,7 +54,18 @@ namespace CvAut
 
         public Func<bool>? BeforeInputAction { get; set; }
 
+        /// <summary>
+        /// Bộ đo nhịp frame — đo thời gian capture thực tế và tính hệ số giãn delay động.
+        /// Các module timing-critical (Attacks, BuilderBaseAttacks) dùng FramePacer.AdjustDelay()
+        /// để tự động giãn delay khi giả lập bị lag/drop frame.
+        /// </summary>
+        public FramePacer FramePacer { get; } = new();
+
         public string DeviceAddress => _deviceAddress;
+        public string Host => _host;
+        public int Port => _port;
+        public bool IsDeviceConnected() => GetDeviceState() == "device";
+        public void PinchIn(int centerX = 800, int centerY = 450) => PinchInZoomOut();
 
         /// <summary>
         /// Khởi tạo đối tượng kết nối ADB tới giả lập Android.
@@ -414,7 +423,9 @@ namespace CvAut
                 {
                     TapSequence(batch);
                     batch.Clear();
-                    if (token.WaitHandle.WaitOne(batchDelayMs))
+                    // Điều chỉnh delay giữa các batch theo tải giả lập hiện tại
+                    int adaptedDelayMs = FramePacer.AdjustDelay(batchDelayMs);
+                    if (token.WaitHandle.WaitOne(adaptedDelayMs))
                     {
                         return;
                     }
@@ -854,13 +865,15 @@ namespace CvAut
             const int maxRetries = 3;
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
+                // Đo thời gian capture thực tế để cập nhật FramePacer
+                var captureSw = FramePacer.StartCaptureMeasurement();
                 try
                 {
                     // Chụp định dạng PNG và gửi trực tiếp dạng nhị phân qua stdout tránh lưu tệp trung gian làm xước ổ cứng
                     var processInfo = new ProcessStartInfo
                     {
                         FileName = _adbExePath,
-                        Arguments = $"-s {_deviceAddress} exec-out screencap -p",
+                        Arguments = $"-s {_deviceAddress} exec-out screencap",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
@@ -903,9 +916,9 @@ namespace CvAut
                         continue;
                     }
 
-                    // Giải mã bytes nhị phân PNG thành đối tượng Mat màu
-                    using Mat decoded = Cv2.ImDecode(imageBytes, ImreadModes.Color);
-                    if (decoded.Empty())
+                    // Giải mã mảng bytes nhị phân (hỗ trợ cả Raw RGBA và PNG) thành đối tượng Mat màu
+                    using Mat? decoded = Adb.AdbScreenCapturer.DecodeImageBytes(imageBytes);
+                    if (decoded == null || decoded.Empty())
                     {
                         Console.WriteLine($"[ADB WARNING] phase=screenshot status=retry reason=\"decode_fail\" attempt={attempt}");
                         InterruptibleSleep(1000);
@@ -924,6 +937,9 @@ namespace CvAut
                         continue;
                     }
 
+                    // Ghi nhận thời gian capture thành công vào FramePacer
+                    captureSw.Stop();
+                    FramePacer.RecordCapture(captureSw.ElapsedMilliseconds);
                     return decoded.Clone();
                 }
                 catch (Exception ex)

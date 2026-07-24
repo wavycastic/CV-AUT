@@ -15,26 +15,39 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="VerticalAlignment" Value="Stretch" />
-            <Setter Property="Padding" Value="8,0" />
-            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Foreground" Duration="0:0:0.15" />
+                </Transitions>
+            </Setter>
         </Style>
         <Style Selector="Button.nav-btn /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.15" />
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button.nav-btn:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
         </Style>
         <Style Selector="Button.nav-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+            <Setter Property="Background" Value="#12ffffff" />
+            <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
         <Style Selector="Button.nav-btn:pressed /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
-        </Style>
-        <Style Selector="Button.nav-btn:focus-visible">
-            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="#20ffffff" />
         </Style>
         <Style Selector="Button.nav-btn.active">
             <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
@@ -42,17 +55,23 @@
         </Style>
         <Style Selector="Button.nav-btn.active /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
         </Style>
-        <Style Selector="Button.nav-btn.active materialIcons|MaterialIcon">
+        <Style Selector="Button.nav-btn.active:pointerover">
             <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+        </Style>
+        <Style Selector="Button.nav-btn.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
         </Style>
     </UserControl.Styles>
 
-    <Border Height="60"
+    <Border Height="54"
             Background="{DynamicResource AppSurfaceBrush}"
             BorderBrush="{DynamicResource AppBorderBrush}"
-            BorderThickness="0,1,0,0">
-        <Border Width="420" Height="44" Padding="4" CornerRadius="10"
+            BorderThickness="0,1,0,0"
+            VerticalAlignment="Bottom">
+        <Border Width="380" Height="40" Padding="3" CornerRadius="8"
                 HorizontalAlignment="Center" VerticalAlignment="Center"
                 Background="{DynamicResource AppSurfaceAltBrush}"
                 BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
@@ -70,10 +89,10 @@
                                 Classes.active="{Binding IsActive}">
                             <StackPanel Orientation="Horizontal" Spacing="8"
                                         HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <materialIcons:MaterialIcon Kind="{Binding IconKind}" Width="17" Height="17"
+                                <materialIcons:MaterialIcon Kind="{Binding IconKind}" Width="16" Height="16"
                                                             VerticalAlignment="Center"
                                                             Foreground="{Binding $parent[Button].Foreground}" />
-                                <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock Text="{Binding Title}" FontSize="11"
                                            VerticalAlignment="Center"
                                            Foreground="{Binding $parent[Button].Foreground}" />
                             </StackPanel>

@@ -6,10 +6,12 @@ namespace CvAut.Models
 {
     public enum LogLevel
     {
-        Debug,
-        Info,
-        Warning,
-        Error,
+        Trace = -1,
+        Debug = 0,
+        Info = 1,
+        Warning = 2,
+        Error = 3,
+        Critical = 4
     }
 
     /// <summary>
@@ -47,10 +49,12 @@ namespace CvAut.Models
 
         public string LevelText => Level switch
         {
+            LogLevel.Trace => "TRC",
             LogLevel.Debug => "DBG",
             LogLevel.Info => "INF",
             LogLevel.Warning => "WRN",
             LogLevel.Error => "ERR",
+            LogLevel.Critical => "CRT",
             _ => Level.ToString().ToUpperInvariant(),
         };
 
@@ -67,6 +71,75 @@ namespace CvAut.Models
         public string? Step { get; }
 
         public IReadOnlyDictionary<string, string> Fields { get; }
+
+        public string Icon => Level switch
+        {
+            LogLevel.Critical => "🛑",
+            LogLevel.Error => "✕",
+            LogLevel.Warning => GetIconForWarning(),
+            LogLevel.Info => GetIconForInfo(),
+            LogLevel.Debug => "🐞",
+            LogLevel.Trace => "🔍",
+            _ => "ℹ"
+        };
+
+        private string GetIconForWarning()
+        {
+            string stat = (Status ?? "").ToLowerInvariant();
+            if (stat == "skipped" || stat == "bỏ qua" || stat == "skip") return "⏭";
+            return "⚠";
+        }
+
+        private string GetIconForInfo()
+        {
+            string stat = (Status ?? "").ToLowerInvariant();
+            string act = (Action ?? "").ToLowerInvariant();
+
+            if (stat == "succeeded" || stat == "thành công" || stat == "success" || stat == "ok" || stat == "hoàn tất") return "✓";
+            if (stat == "skipped" || stat == "bỏ qua" || stat == "skip") return "⏭";
+            if (stat == "started" || stat == "bắt đầu" || stat == "start") return "●";
+            if (stat == "stopped" || stat == "đã dừng" || stat == "stop" || stat == "cancelled") return "■";
+            if (stat == "failed" || stat == "thất bại" || stat == "fail") return "✕";
+            if (stat == "retrying" || stat == "thử lại" || stat == "retry") return "⚠";
+
+            return "ℹ";
+        }
+
+        /// <summary>
+        /// Xác định xem dòng log này có phù hợp để hiển thị ở Chế độ User hay không.
+        /// Quy tắc chuẩn: Tự động ẩn toàn bộ Trace và Debug. Chỉ hiển thị từ Info trở lên (Info, Warning, Error, Critical).
+        /// Hoàn toàn không phụ thuộc nội dung văn bản Message.
+        /// </summary>
+        public bool IsUserRelevant => Level >= LogLevel.Info;
+
+        /// <summary>
+        /// Nhật ký dành cho Dev (Structured Text).
+        /// </summary>
+        public string DevStructuredText
+        {
+            get
+            {
+                if (Fields.Count == 0) return Message;
+                var sb = new StringBuilder();
+                sb.Append($"[{Module}] ");
+                if (!string.IsNullOrWhiteSpace(Action)) sb.Append($"{Action} ");
+                if (!string.IsNullOrWhiteSpace(Status)) sb.Append($"status={Status} ");
+                if (!string.IsNullOrWhiteSpace(Reason)) sb.Append($"reason={Reason} ");
+
+                foreach (var kv in Fields)
+                {
+                    if (kv.Key.Equals("phase", StringComparison.OrdinalIgnoreCase) ||
+                        kv.Key.Equals("status", StringComparison.OrdinalIgnoreCase) ||
+                        kv.Key.Equals("action", StringComparison.OrdinalIgnoreCase) ||
+                        kv.Key.Equals("reason", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    sb.Append($"{kv.Key}={kv.Value} ");
+                }
+                return sb.ToString().TrimEnd();
+            }
+        }
 
         /// <summary>
         /// Human-focused summary assembled from the structured key=value fields used by the backend.

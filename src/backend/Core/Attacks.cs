@@ -38,11 +38,11 @@ namespace CvAut
     }
 
     /// <summary>
-    /// Phân hệ Tấn công (Attacks):
-    /// - Quản lý tọa độ rải quân mặc định theo cánh trái/phải đối xứng.
-    /// - Dò tìm các thẻ quân, phép, tướng hiện có trên giao diện chiến trận dưới đáy màn hình.
-    /// - Thực hiện kịch bản rải quân (tạp biến ngẫu nhiên chống chống-bot), rải phép đóng băng/cuồng nộ.
-    /// - Quét số lượng lính còn dư để tiến hành rải bù.
+    /// Attacks — logic điều khiển trận đánh:
+    /// - Quản lý tọa độ rải quân mặc định theo cánh trái/phải đối xứng & bottom.
+    /// - Dò tìm thẻ quân, phép, tướng trên DeployBar đáy màn hình.
+    /// - Thực hiện kịch bản rải quân (thêm nhiễu ngẫu nhiên chống bot), rải phép đóng băng/cuồng nộ.
+    /// - Quét số lính còn dư để rải bù.
     /// </summary>
     internal partial class Attacks
     {
@@ -204,9 +204,7 @@ namespace CvAut
         private static bool IsStopRequested(CancellationToken token) => token.IsCancellationRequested;
 
         private static bool InterruptibleSleep(int milliseconds, CancellationToken token)
-        {
-            return token.WaitHandle.WaitOne(milliseconds);
-        }
+            => ThreadingUtil.InterruptibleSleep(milliseconds, token);
 
         /// <summary>
         /// Khởi tạo đối tượng Attacks điều khiển trận đánh.
@@ -248,7 +246,7 @@ namespace CvAut
         }
 
         /// <summary>
-        /// Khởi tạo các mẫu rải quân. Nếu chọn tấn công cánh PHẢI, tự động quy đổi đối xứng tọa độ (mirror) theo chiều ngang của màn hình 1600px.
+        /// Khởi tạo mẫu rải quân theo hướng tấn công: PHẢI (mirror X 1600px), DƯỚI (dùng bottom coords), TRÁI (default).
         /// </summary>
         private void InitializePatterns()
         {
@@ -552,7 +550,7 @@ namespace CvAut
             }
 
             _adb.Tap(troopTab.X, troopTab.Y);
-            if (InterruptibleSleep(TroopTabSelectDelayMs, token)) return;
+            if (InterruptibleSleep(_adb.FramePacer.AdjustDelay(TroopTabSelectDelayMs), token)) return;
 
             int tapLimit = Math.Max(0, limit);
             var quickTaps = new List<Point>(tapLimit);
@@ -603,7 +601,7 @@ namespace CvAut
             Console.WriteLine($"[ATTACK-CS] phase=deploy status=start item={troopKey} tab=({tab.X},{tab.Y}) tap_count={coords.Count}");
             Stopwatch sw = Stopwatch.StartNew();
             _adb.Tap(tab.X, tab.Y);
-            if (InterruptibleSleep(TroopTabSelectDelayMs, token)) return;
+            if (InterruptibleSleep(_adb.FramePacer.AdjustDelay(TroopTabSelectDelayMs), token)) return;
 
             var taps = new List<Point>(coords.Count);
             foreach (var pt in coords)
@@ -654,7 +652,7 @@ namespace CvAut
                     }
 
                     _adb.Tap(tab.X, tab.Y);
-                    if (InterruptibleSleep(TroopTabSelectDelayMs, token)) return;
+                    if (InterruptibleSleep(_adb.FramePacer.AdjustDelay(TroopTabSelectDelayMs), token)) return;
                     var fallbackTaps = new List<Point>(fallbackTapCount);
                     int fallbackStartOffset = ((pass - 1) * 4) % fallbackCoords.Count;
                     for (int i = 0; i < fallbackTapCount; i++)
@@ -674,7 +672,7 @@ namespace CvAut
 
                 Console.WriteLine($"[ATTACK-CS WARNING] phase=validate_remaining status=fallback item={troopKey} remaining={remaining} confidence={confidence:F2}");
                 _adb.Tap(tab.X, tab.Y);
-                if (InterruptibleSleep(TroopTabSelectDelayMs, token)) return;
+                if (InterruptibleSleep(_adb.FramePacer.AdjustDelay(TroopTabSelectDelayMs), token)) return;
 
                 int tapCount = Math.Min(remaining + 2, fallbackCoords.Count);
                 var taps = new List<Point>(tapCount);
@@ -782,10 +780,10 @@ namespace CvAut
                 {
                     _heroAbilityTabs[hero.Name] = tab;
                     _adb.Tap(tab.X, tab.Y);
-                    if (InterruptibleSleep(72, token)) return;
+                    if (InterruptibleSleep(_adb.FramePacer.AdjustDelay(72), token)) return;
                     Point jittered = JitterCoord(hero.Coord);
                     _adb.Tap(jittered.X, jittered.Y);
-                    if (InterruptibleSleep(72, token)) return;
+                    if (InterruptibleSleep(_adb.FramePacer.AdjustDelay(72), token)) return;
                 }
             }
 

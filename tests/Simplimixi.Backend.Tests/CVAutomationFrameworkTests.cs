@@ -67,7 +67,7 @@ namespace CvAut.Backend.Tests
         {
             var engine = new MatchmakingEngine();
             var config = new FarmingTargetConfig(500000, 500000, 1000, 1000000, TargetSelectionLogic.Total);
-            var resources = new ScoutedResources(600000, 500000, 500);
+            var resources = new ScoutedResources(600000, 500000, 1000);
 
             bool accepted = engine.ShouldAcceptTarget(resources, config, out string reason);
 

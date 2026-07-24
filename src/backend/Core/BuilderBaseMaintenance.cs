@@ -11,12 +11,10 @@ using Point = OpenCvSharp.Point;
 namespace CvAut
 {
     internal sealed record BuilderBaseMaintenanceOptions(
-        bool CleanYard,
         bool SuggestedUpgrades,
         bool StarLaboratory,
         bool UpgradeBattleMachine,
         bool UpgradeBattleCopter,
-        bool BobUpgrades,
         bool PlaceNewBuildings,
         bool IgnoreGoldUpgrades,
         bool IgnoreElixirUpgrades,
@@ -42,7 +40,6 @@ namespace CvAut
         private const double ObjectThreshold = 0.62;
         private const double ButtonThreshold = 0.62;
         private const double RowThreshold = 0.58;
-        private const int MinObstacleElixir = 50_000;
 
         private static readonly Rect MapRoi = Rect.FromLTRB(160, 75, 1440, 800);
         private static readonly Rect ActionButtonRoi = Rect.FromLTRB(360, 470, 1240, 850);
@@ -56,7 +53,7 @@ namespace CvAut
         private static readonly Rect BuildingInfoLevelRoi = Rect.FromLTRB(300, 430, 620, 535);
         private static readonly Rect HeroMapRoi = Rect.FromLTRB(120, 80, 1460, 790);
 
-        private static readonly string[] RemoveObstacleButtons = { @"ui\remove_obstacle", @"resources\remove_obstacle", @"buttons\remove_obstacle" };
+        
         private static readonly string[] BuilderHeadTemplates = { @"ui\master_builder_head", @"ui\builder_available", @"ui\builder_head" };
         private static readonly string[] UpgradeActionTemplates = { @"ui\open_upgrade", @"ui\open_upgrade2", @"ui\icon_up", @"icons\upgrade_more" };
         private static readonly string[] UpgradeConfirmGold = { @"builder_base\upgrade\gold", @"ui\upgrade_gold", @"resources\gold" };
@@ -70,16 +67,7 @@ namespace CvAut
         private static readonly string[] BattleMachineTemplates = { @"heroes\battle_machine", @"heroes\battle_machine2", @"builder_base\battle_machine" };
         private static readonly string[] BattleCopterTemplates = { @"heroes\battle_copter", @"builder_base\battle_copter" };
         private static readonly string[] BuilderHallTemplates = { @"builder_base\builder_hall", @"buildings\builder_hall" };
-        private static readonly string[] BobBuildingTemplates = { @"builder_base\bob_control", @"builder_base\double_cannon", @"builder_base\archer_tower", @"builder_base\multi_mortar", @"builder_base\cannon" };
-        private static readonly BuilderBaseUpgradeTarget[] BobUpgradeTargets =
-        {
-            new("bob_control", new[] { @"builder_base\bob_control" }, true, true),
-            new("double_cannon", new[] { @"builder_base\double_cannon" }, true, false, RequiredLevel: 4, CostThousandsByLevel: new[] { 20, 50, 80, 300, 900, 1400, 2200, 3200, 4200, 5200 }),
-            new("archer_tower", new[] { @"builder_base\archer_tower" }, true, false, RequiredLevel: 6, CostThousandsByLevel: new[] { 12, 30, 60, 250, 800, 1200, 2000, 2800, 3600, 4600 }),
-            new("multi_mortar", new[] { @"builder_base\multi_mortar" }, true, false, RequiredLevel: 8, CostThousandsByLevel: new[] { 600, 700, 800, 1000, 1200, 1600, 2500, 3500, 4500, 5500 }),
-            new("cannon", new[] { @"builder_base\cannon" }, true, false, CostThousandsByLevel: new[] { 10, 20, 50, 200, 600, 1000, 1800, 2500, 3300, 4500 }),
-            new("builder_hall", new[] { @"builder_base\builder_hall", @"buildings\builder_hall" }, true, false, true)
-        };
+        
         private static readonly StarLabTroopInfo[] StarLabTroops =
         {
             new(1, "raged_barbarian", "Raged Barbarian", new Point(114, 341), new[] { "raged_barbarian", "barbarian", "ragedbarbarian" }),
@@ -109,68 +97,18 @@ namespace CvAut
             if (!_navigator.IsOnBuilderBase())
             {
                 Console.WriteLine("[BB-MAINT] phase=maintenance status=skip reason=not_on_builder_base");
-                return new BuilderBaseMaintenanceResult(0, 0, 0, 0, 0);
+                return new BuilderBaseMaintenanceResult(0, 0, 0);
             }
 
-            int obstacles = 0, upgrades = 0, research = 0, hero = 0, bob = 0;
-            if (options.CleanYard) obstacles = CleanYard(report, token);
+            int upgrades = 0, research = 0, hero = 0;
             if (options.SuggestedUpgrades) upgrades = SuggestedUpgrades(options, report, token);
             if (options.StarLaboratory) research = TryStartStarLaboratoryResearch(options, report, token) ? 1 : 0;
             if (options.UpgradeBattleMachine) hero += TryUpgradeHero("battle_machine", BattleMachineTemplates, report, token) ? 1 : 0;
             if (options.UpgradeBattleCopter) hero += TryUpgradeHero("battle_copter", BattleCopterTemplates, report, token) ? 1 : 0;
-            if (options.BobUpgrades) bob = TryBobUpgrades(report, options.VillageIdx, token) ? 1 : 0;
-            return new BuilderBaseMaintenanceResult(obstacles, upgrades, research, hero, bob);
+            return new BuilderBaseMaintenanceResult(upgrades, research, hero);
         }
 
-        private int CleanYard(BuilderBaseReportSnapshot report, CancellationToken token)
-        {
-            if (report.Elixir > 0 && report.Elixir < MinObstacleElixir)
-            {
-                Console.WriteLine("[BB-MAINT] phase=clean_yard status=skip reason=low_elixir");
-                return 0;
-            }
-
-            string[] obstacleTemplates = EnumerateTemplateNames(@"builder_base\obstacles", @"resources\obstacles", @"obstacles\builder_base").ToArray();
-            if (obstacleTemplates.Length == 0)
-            {
-                Console.WriteLine("[BB-MAINT] phase=clean_yard status=skip reason=missing_obstacle_templates");
-                return 0;
-            }
-
-            int removed = CleanYardSingleStage(obstacleTemplates, token);
-
-            // Dọn dẹp tiếp chướng ngại vật ở Stage 2 (Làng Otto)
-            if (_navigator.SwitchToOttoVillage(token))
-            {
-                removed += CleanYardSingleStage(obstacleTemplates, token);
-                _navigator.SwitchToBuilderBaseStage1(token);
-            }
-
-            Console.WriteLine($"[BB-MAINT] phase=clean_yard status=done total_removed={removed}");
-            return removed;
-        }
-
-        private int CleanYardSingleStage(string[] obstacleTemplates, CancellationToken token)
-        {
-            int removed = 0;
-            for (int pass = 1; pass <= 8 && !token.IsCancellationRequested; pass++)
-            {
-                if (!TryFindAny(obstacleTemplates, ObjectThreshold, MapRoi, out Point obstacle, out string template, out double score)) break;
-                Console.WriteLine($"[BB-MAINT] phase=clean_yard status=found template=\"{template}\" score={score:F2} x={obstacle.X} y={obstacle.Y}");
-                _adb.Tap(obstacle.X, obstacle.Y);
-                if (Sleep(650, token)) break;
-                if (!TapFirstExisting(RemoveObstacleButtons, ButtonThreshold, ActionButtonRoi, token, "clean_yard_remove"))
-                {
-                    Console.WriteLine("[BB-MAINT] phase=clean_yard status=skip reason=remove_button_not_found");
-                    SafeDismiss(token);
-                    continue;
-                }
-                removed++;
-                Sleep(1100, token);
-                SafeDismiss(token);
-            }
-            return removed;
-        }
+        
 
         private int SuggestedUpgrades(BuilderBaseMaintenanceOptions options, BuilderBaseReportSnapshot report, CancellationToken token)
         {
@@ -187,7 +125,7 @@ namespace CvAut
             {
                 using Mat? screenshot = _adb.TakeScreenshot();
                 if (screenshot == null || screenshot.Empty()) break;
-                if (FindAnyInMat(screenshot, NoResourceTemplates, RowThreshold, SuggestedRowsRoi)) break;
+                if (TemplateSearch.IsAnyVisible(screenshot, FindElementWithExistenceCheck, NoResourceTemplates, RowThreshold, SuggestedRowsRoi)) break;
 
                 SuggestedUpgradeCandidate? candidate = FindSuggestedUpgradeCandidate(screenshot, options, report);
                 if (candidate == null) break;
@@ -226,7 +164,7 @@ namespace CvAut
 
             if (options.IgnoreHallUpgrades)
             {
-                if (IsAnyTemplateVisible(screenshot, BuilderHallTemplates, RowThreshold, SuggestedRowsRoi))
+                if (TemplateSearch.IsAnyVisible(screenshot, FindElementWithExistenceCheck, BuilderHallTemplates, RowThreshold, SuggestedRowsRoi))
                 {
                     Console.WriteLine("[BB-MAINT] phase=suggested_upgrades status=skip reason=builder_hall_ignored");
                     rowGroups.RemoveAll(g => g.Resource == "new_building");
@@ -237,7 +175,7 @@ namespace CvAut
             foreach ((string resource, string[] templates) in rowGroups)
             {
                 if (templates.Length == 0) continue;
-                Point? center = FindFirstInMat(screenshot, templates, RowThreshold, SuggestedRowsRoi, out string template, out double score);
+                Point? center = TemplateSearch.FindFirst(screenshot, FindElementWithExistenceCheck, templates, RowThreshold, SuggestedRowsRoi, out string template, out double score);
                 if (center == null) continue;
                 int cost = ReadSuggestedUpgradeCost(screenshot, center.Value, resource);
                 candidates.Add(new SuggestedUpgradeCandidate(resource, template, center.Value, score, cost));
@@ -325,7 +263,7 @@ namespace CvAut
                 return false;
             }
 
-            if (FindAnyInMat(screenshot, ResearchBusyTemplates, RowThreshold, ResearchTimerRoi))
+            if (TemplateSearch.IsAnyVisible(screenshot, FindElementWithExistenceCheck, ResearchBusyTemplates, RowThreshold, ResearchTimerRoi))
             {
                 SaveStarLabDebugScreenshot(options, "busy_timer");
                 int timer = ReadStarLabTimeMinutes(ResearchTimerRoi, "busy_timer");
@@ -335,7 +273,7 @@ namespace CvAut
                 return false;
             }
 
-            if (FindAnyInMat(screenshot, ResearchMaxTemplates, RowThreshold, ResearchRowsRoi))
+            if (TemplateSearch.IsAnyVisible(screenshot, FindElementWithExistenceCheck, ResearchMaxTemplates, RowThreshold, ResearchRowsRoi))
             {
                 Console.WriteLine("[BB-MAINT] phase=star_laboratory status=skip reason=max_or_unavailable");
                 SafeDismiss(token);
@@ -605,161 +543,7 @@ namespace CvAut
             return upgraded;
         }
 
-        private bool TryBobUpgrades(BuilderBaseReportSnapshot report, int villageIdx, CancellationToken token)
-        {
-            if (report.FreeBuilders == 0) return false;
-            foreach (BuilderBaseUpgradeTarget target in BobUpgradeTargets)
-            {
-                if (target.IsHall && report.BuilderHallLevel > 0)
-                {
-                    Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=skip target={target.Name} reason=hall_upgrade_deferred level={report.BuilderHallLevel}");
-                    continue;
-                }
-
-                Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=scan target={target.Name} allow_gold={target.AllowGold} allow_elixir={target.AllowElixir} is_hall={target.IsHall}");
-                // Đầu tiên tìm ở Làng Đêm Stage 1
-                bool found = LocateAndTapBobTarget(target, villageIdx, isOtto: false, token);
-                bool isOtto = false;
-
-                // Nếu không tìm thấy, thử tìm ở Stage 2 (Làng Otto)
-                if (!found)
-                {
-                    Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=search target={target.Name} scope=otto_village");
-                    if (_navigator.SwitchToOttoVillage(token))
-                    {
-                        isOtto = true;
-                        found = LocateAndTapBobTarget(target, villageIdx, isOtto: true, token);
-                    }
-                }
-
-                bool confirmed = false;
-                if (found)
-                {
-                    Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=found target={target.Name} scope={(isOtto ? "otto" : "builder_base")}");
-                    Sleep(900, token);
-                    int level = ReadNumberFromCurrentScreen(BuildingInfoLevelRoi, 20);
-                    if (level > 0)
-                    {
-                        Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=level_read target={target.Name} level={level}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=level_read target={target.Name} reason=ocr_unreadable");
-                    }
-
-                    if (target.RequiredLevel > 0 && level >= target.RequiredLevel)
-                    {
-                        Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=skip target={target.Name} reason=required_level_reached level={level} required={target.RequiredLevel}");
-                    }
-                    else if (target.IsHall && level > 0)
-                    {
-                        Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=skip target={target.Name} reason=hall_level_seen level={level}");
-                    }
-                    else if (!HasEnoughGoldForBobTarget(target, level, report.Gold, out int requiredGold))
-                    {
-                        Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=skip target={target.Name} reason=not_enough_gold level={level} required_gold={requiredGold} current_gold={report.Gold}");
-                    }
-                    else
-                    {
-                        bool opened = TapFirstExisting(UpgradeActionTemplates, ButtonThreshold, ActionButtonRoi, token, $"bob_{target.Name}_upgrade");
-                        confirmed = opened && TapFirstExisting(GetConfirmTemplates(target, report), ButtonThreshold, ActionButtonRoi, token, $"bob_{target.Name}_confirm");
-                    }
-
-                    SafeDismiss(token);
-                }
-                else
-                {
-                    Console.WriteLine($"[BB-MAINT] phase=bob_upgrades status=skip target={target.Name} reason=target_not_located");
-                }
-
-                if (isOtto)
-                {
-                    _navigator.SwitchToBuilderBaseStage1(token);
-                }
-
-                Console.WriteLine($"[BB-MAINT] phase=bob_upgrades target={target.Name} status={(confirmed ? "success" : "skip")}");
-                if (confirmed) return true;
-            }
-
-            Console.WriteLine("[BB-MAINT] phase=bob_upgrades status=skip reason=no_target_upgraded");
-            return false;
-        }
-
-        private static bool HasEnoughGoldForBobTarget(BuilderBaseUpgradeTarget target, int level, int currentGold, out int requiredGold)
-        {
-            requiredGold = 0;
-            if (!target.AllowGold || target.CostThousandsByLevel == null || target.CostThousandsByLevel.Length == 0 || level <= 0) return true;
-
-            int index = Math.Clamp(level, 0, target.CostThousandsByLevel.Length - 1);
-            requiredGold = target.CostThousandsByLevel[index] * 1000;
-            return currentGold >= requiredGold;
-        }
-
-        private bool LocateAndTapBobTarget(BuilderBaseUpgradeTarget target, int villageIdx, bool isOtto, CancellationToken token)
-        {
-            BobTargetState stored = LoadBobTargetRuntime(villageIdx, target.Name);
-            string expectedStage = isOtto ? "otto" : "builder_base";
-            if (stored.X > 0 && stored.Y > 0 && stored.Stage.Equals(expectedStage, StringComparison.OrdinalIgnoreCase))
-            {
-                Console.WriteLine($"[BB-MAINT] phase=bob_target_locate status=try_saved target={target.Name} scope={expectedStage} x={stored.X} y={stored.Y}");
-                _adb.Tap(stored.X, stored.Y);
-                return true;
-            }
-
-            if (!TryFindAny(target.Templates, ButtonThreshold, MapRoi, out Point center, out string matched, out double score)) return false;
-
-            Console.WriteLine($"[BB-MAINT] phase=bob_target_locate status=success target={target.Name} scope={(isOtto ? "otto" : "builder_base")} template=\"{matched}\" score={score:F2} x={center.X} y={center.Y}");
-            SaveBobTargetRuntime(villageIdx, target.Name, center, isOtto, matched, score);
-            _adb.Tap(center.X, center.Y);
-            return true;
-        }
-
-        private static BobTargetState LoadBobTargetRuntime(int villageIdx, string targetName)
-        {
-            try
-            {
-                string path = GetVillageProfilePath(villageIdx);
-                if (!File.Exists(path)) return new BobTargetState(-1, -1, string.Empty);
-                JsonNode? root = JsonNode.Parse(File.ReadAllText(path));
-                JsonObject? target = root?["builder_base"]?["bob_targets"]?[targetName] as JsonObject;
-                if (target == null) return new BobTargetState(-1, -1, string.Empty);
-                return new BobTargetState((int?)target["x"] ?? -1, (int?)target["y"] ?? -1, (string?)target["stage"] ?? string.Empty);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[BB-MAINT] phase=bob_target_state status=fail action=load target={targetName} reason=\"{ex.Message}\"");
-                return new BobTargetState(-1, -1, string.Empty);
-            }
-        }
-
-        private static void SaveBobTargetRuntime(int villageIdx, string targetName, Point center, bool isOtto, string template, double score)
-        {
-            try
-            {
-                string path = GetVillageProfilePath(villageIdx);
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                JsonObject root = File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? new JsonObject() : new JsonObject();
-                JsonObject builderBase = root["builder_base"] as JsonObject ?? new JsonObject();
-                root["builder_base"] = builderBase;
-                JsonObject bobTargets = builderBase["bob_targets"] as JsonObject ?? new JsonObject();
-                builderBase["bob_targets"] = bobTargets;
-                bobTargets[targetName] = new JsonObject
-                {
-                    ["x"] = center.X,
-                    ["y"] = center.Y,
-                    ["stage"] = isOtto ? "otto" : "builder_base",
-                    ["template"] = template,
-                    ["score"] = score,
-                    ["last_checked_utc"] = DateTime.UtcNow.ToString("O")
-                };
-                File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-                Console.WriteLine($"[BB-MAINT] phase=bob_target_state status=saved target={targetName} path=\"{path}\"");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[BB-MAINT] phase=bob_target_state status=fail action=save target={targetName} reason=\"{ex.Message}\"");
-            }
-        }
+        
 
         private bool LocateAndOpenStarLaboratory(int villageIdx, CancellationToken token)
         {
@@ -774,7 +558,9 @@ namespace CvAut
                 SafeDismiss(token);
             }
 
-            if (!TryFindAny(StarLabTemplates, ButtonThreshold, LaboratoryRoi, out Point center, out string matched, out double score))
+            using Mat? slSs = _adb.TakeScreenshot();
+            if (slSs == null || slSs.Empty()) return false;
+            if (!TemplateSearch.TryFindFirst(slSs, FindElementWithExistenceCheck, StarLabTemplates, ButtonThreshold, LaboratoryRoi, out string matched, out double score, out Point center))
             {
                 return false;
             }
@@ -920,48 +706,34 @@ namespace CvAut
                     yield return Path.Combine(subdir, name);
         }
 
+        private Point? FindElementWithExistenceCheck(Mat screenshot, string template, double threshold, Rect? roi, out double score)
+        {
+            score = 0;
+            if (!TemplateAssetLoader.Exists(_templatesPath, template)) return null;
+            return _vision.FindElement(screenshot, template, threshold, roi, out score);
+        }
+
         private bool TapFirstExisting(string[] templates, double threshold, Rect? roi, CancellationToken token, string phase)
         {
-            if (!TryFindAny(templates, threshold, roi, out Point center, out string matched, out double score)) return false;
+            using Mat? screenshot = _adb.TakeScreenshot();
+            if (screenshot == null || screenshot.Empty()) return false;
+
+            if (!TemplateSearch.TryFindFirst(screenshot, FindElementWithExistenceCheck, templates, threshold, roi, out string matched, out double score, out Point center))
+                return false;
+
             Console.WriteLine($"[BB-MAINT] phase={phase} status=found template=\"{matched}\" score={score:F2} x={center.X} y={center.Y}");
             _adb.Tap(center.X, center.Y);
             return true;
         }
-
-        private bool TryFindAny(string[] templates, double threshold, Rect? roi, out Point center, out string matched, out double score)
-        {
-            center = default; matched = string.Empty; score = 0;
-            using Mat? screenshot = _adb.TakeScreenshot();
-            if (screenshot == null || screenshot.Empty()) return false;
-            Point? found = FindFirstInMat(screenshot, templates, threshold, roi, out matched, out score);
-            if (found == null) return false;
-            center = found.Value;
-            return true;
-        }
-
-        private Point? FindFirstInMat(Mat screenshot, string[] templates, double threshold, Rect? roi, out string matched, out double score)
-        {
-            matched = string.Empty; score = 0;
-            foreach (string template in templates.Where(t => !string.IsNullOrWhiteSpace(t) && TemplateAssetLoader.Exists(_templatesPath, t)))
-            {
-                Point? center = _vision.FindElement(screenshot, template, threshold, roi, out double s);
-                if (center == null) continue;
-                matched = template; score = s; return center;
-            }
-            return null;
-        }
-
-        private bool FindAnyInMat(Mat screenshot, string[] templates, double threshold, Rect? roi) => FindFirstInMat(screenshot, templates, threshold, roi, out _, out _) != null;
-        private bool IsAnyTemplateVisible(Mat screenshot, string[] templates, double threshold, Rect? roi) => FindAnyInMat(screenshot, templates, threshold, roi);
         private static bool IsGoldTemplate(string template) => template.IndexOf("gold", StringComparison.OrdinalIgnoreCase) >= 0;
         private static bool IsElixirTemplate(string template) => template.IndexOf("elixir", StringComparison.OrdinalIgnoreCase) >= 0;
         private void SafeDismiss(CancellationToken token) { if (!token.IsCancellationRequested) { _adb.Tap(140, 606); Sleep(350, token); } }
         private static bool Sleep(int milliseconds, CancellationToken token) => token.WaitHandle.WaitOne(milliseconds);
     }
 
-    internal sealed record BuilderBaseMaintenanceResult(int ObstaclesRemoved, int SuggestedUpgrades, int ResearchStarted, int HeroUpgrades, int BobUpgrades);
+    internal sealed record BuilderBaseMaintenanceResult(int SuggestedUpgrades, int ResearchStarted, int HeroUpgrades);
 
     internal sealed record BuilderBaseUpgradeTarget(string Name, string[] Templates, bool AllowGold, bool AllowElixir, bool IsHall = false, int RequiredLevel = 0, int[]? CostThousandsByLevel = null);
 
-    internal sealed record BobTargetState(int X, int Y, string Stage);
+    
 }

@@ -16,8 +16,14 @@ namespace CvAut.ViewModels
         [ObservableProperty] private int _runningCount;
         [ObservableProperty] private int _pausedCount;
         [ObservableProperty] private bool _isAnyRunning;
+        [ObservableProperty] private bool _hasStatus;
+        [ObservableProperty] private string _statusText = string.Empty;
+        [ObservableProperty] private string _statusColor = "#ef4444";
+        [ObservableProperty] private string _statusBorderColor = "#80ef4444";
+        [ObservableProperty] private string _windowTitle = "SimpliMixi Console";
         [ObservableProperty] private string _activeProfileName = "Default";
         [ObservableProperty] private BotProfile? _selectedProfile;
+        private bool _hasEverStarted;
 
         // Fleet aggregate (grid mode / multi-device summary).
         [NotifyPropertyChangedFor(nameof(HasErrors))]
@@ -96,16 +102,117 @@ namespace CvAut.ViewModels
 
         public void RefreshSummary()
         {
-            int running = 0, paused = 0;
+            int running = 0, paused = 0, starting = 0;
             foreach (IDeviceSession s in _sessions.Sessions)
             {
                 if (s.Status is BotStatus.Running) running++;
+                else if (s.Status is BotStatus.Starting) starting++;
                 else if (s.Status is BotStatus.Paused) paused++;
             }
 
-            RunningCount = running;
+            int activeCount = running + starting;
+            RunningCount = activeCount;
             PausedCount = paused;
-            IsAnyRunning = running > 0 || paused > 0;
+            IsAnyRunning = activeCount > 0 || paused > 0;
+
+            if (activeCount > 0)
+            {
+                _hasEverStarted = true;
+                HasStatus = true;
+                StatusText = activeCount == 1 ? "Bot đang chạy" : $"Bot đang chạy ({activeCount})";
+                StatusColor = "#22c55e";
+                StatusBorderColor = "#8022c55e";
+                WindowTitle = $"SimpliMixi Console - {StatusText}";
+            }
+            else if (paused > 0)
+            {
+                _hasEverStarted = true;
+                HasStatus = true;
+                StatusText = "Đang tạm dừng";
+                StatusColor = "#f59e0b";
+                StatusBorderColor = "#80f59e0b";
+                WindowTitle = $"SimpliMixi Console - {StatusText}";
+            }
+            else if (_hasEverStarted)
+            {
+                HasStatus = true;
+                StatusText = "Bot đã dừng";
+                StatusColor = "#ef4444";
+                StatusBorderColor = "#80ef4444";
+                WindowTitle = $"SimpliMixi Console - {StatusText}";
+            }
+            else
+            {
+                HasStatus = false;
+                StatusText = string.Empty;
+                WindowTitle = "SimpliMixi Console";
+            }
+        }
+
+        public void UpdateStatusFromDevices(System.Collections.Generic.IEnumerable<DeviceViewModel>? devices)
+        {
+            int running = 0, starting = 0, paused = 0, error = 0, stopped = 0;
+
+            if (devices != null)
+            {
+                foreach (DeviceViewModel d in devices)
+                {
+                    if (d.Status is BotStatus.Running) running++;
+                    else if (d.Status is BotStatus.Starting) starting++;
+                    else if (d.Status is BotStatus.Paused) paused++;
+                    else if (d.Status is BotStatus.Error) error++;
+                    else if (d.Status is BotStatus.Stopped or BotStatus.Stopping) stopped++;
+                }
+            }
+
+            int activeCount = running + starting;
+            if (activeCount > 0)
+            {
+                _hasEverStarted = true;
+                HasStatus = true;
+                StatusText = activeCount == 1 ? "Bot đang chạy" : $"Bot đang chạy ({activeCount})";
+                StatusColor = "#22c55e";
+                StatusBorderColor = "#8022c55e";
+                IsAnyRunning = true;
+            }
+            else if (paused > 0)
+            {
+                _hasEverStarted = true;
+                HasStatus = true;
+                StatusText = "Đang tạm dừng";
+                StatusColor = "#f59e0b";
+                StatusBorderColor = "#80f59e0b";
+                IsAnyRunning = true;
+            }
+            else if (error > 0)
+            {
+                HasStatus = true;
+                StatusText = "Có lỗi xảy ra";
+                StatusColor = "#ef4444";
+                StatusBorderColor = "#80ef4444";
+                IsAnyRunning = false;
+            }
+            else if (_hasEverStarted || stopped > 0)
+            {
+                HasStatus = true;
+                StatusText = "Bot đã dừng";
+                StatusColor = "#ef4444";
+                StatusBorderColor = "#80ef4444";
+                IsAnyRunning = false;
+            }
+            else
+            {
+                HasStatus = false;
+                StatusText = string.Empty;
+                StatusColor = "#ef4444";
+                StatusBorderColor = "#80ef4444";
+                IsAnyRunning = false;
+            }
+
+            RunningCount = activeCount;
+            PausedCount = paused;
+            ErrorCount = error;
+            WindowTitle = HasStatus ? $"SimpliMixi Console - {StatusText}" : "SimpliMixi Console";
         }
 
         /// <summary>Rolls up loot + error counts across all device panels for the fleet summary.</summary>

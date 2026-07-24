@@ -167,7 +167,7 @@ namespace CvAut.Views
             var saveBtn = new Button
             {
                 Classes = { "accent" },
-                Content = "Lưu lại",
+                Content = "Lưu",
                 Command = vm.SettingsViewModel.InstanceSaveCommand,
                 Height = 30,
                 Padding = new Thickness(14, 0),
@@ -177,7 +177,7 @@ namespace CvAut.Views
 
             var cancelBtn = new Button
             {
-                Content = "Hủy bỏ",
+                Content = "Đóng",
                 Command = vm.SettingsViewModel.InstanceCancelCommand,
                 Height = 30,
                 Padding = new Thickness(14, 0),

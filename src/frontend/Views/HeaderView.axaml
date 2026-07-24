@@ -18,7 +18,7 @@
              WindowDecorationProperties.ElementRole="TitleBar">
         <!-- Accent underline -->
         <Grid ColumnDefinitions="*,Auto,Auto">
-            <!-- Left side: App Logo and Title -->
+            <!-- Left side: App Logo, Title, and Bot Status Indicator -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Border Width="24" Height="24" CornerRadius="{DynamicResource RadiusSm}" Background="{DynamicResource AppAccentBrush}">
                     <materialIcons:MaterialIcon Kind="Robot" Width="14" Height="14"
@@ -26,6 +26,22 @@
                                                 Foreground="{DynamicResource AppAccentTextBrush}" />
                 </Border>
                 <TextBlock Text="SimpliMixi" Classes="statNum" VerticalAlignment="Center" />
+
+                <!-- Title bar status text indicator -->
+                <Border CornerRadius="10"
+                        Background="#12ffffff"
+                        BorderBrush="{Binding StatusBorderColor}"
+                        BorderThickness="1"
+                        Padding="8,2"
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding HasStatus}"
+                        Classes.pulse-running="{Binding IsAnyRunning}">
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                        <Ellipse Width="6" Height="6" Fill="{Binding StatusColor}" VerticalAlignment="Center" Classes.pulse-running="{Binding IsAnyRunning}"/>
+                        <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding StatusColor}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- Right side: Actions (License & Profile selector) -->

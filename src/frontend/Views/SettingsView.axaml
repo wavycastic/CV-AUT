@@ -29,7 +29,7 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="8" Background="{DynamicResource AppBackgroundBrush}">
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="8" Background="{DynamicResource AppBackgroundBrush}">
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,14" IsVisible="{Binding !IsInstanceMode}">
             <StackPanel Spacing="4">
                 <StackPanel Orientation="Horizontal" Spacing="10">
@@ -102,23 +102,8 @@
             </StackPanel>
         </Border>
 
-        <!-- Instance mode play mode selector: one device config edits exactly one play mode at a time. -->
-        <Border Grid.Row="3" Classes="Card" Padding="12" Margin="0,0,0,14" IsVisible="{Binding IsInstanceMode}">
-            <StackPanel Spacing="6">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <materialIcons:MaterialIcon Kind="GamepadVariant" Width="18" Height="18"
-                                                Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
-                    <TextBlock Text="Chế độ đánh" Classes="label" VerticalAlignment="Center" />
-                </StackPanel>
-                <ComboBox ItemsSource="{Binding PlayModes}"
-                          SelectedItem="{Binding SelectedPlayMode}"
-                          HorizontalAlignment="Stretch" />
-                <TextBlock Text="Chỉ cấu hình chế độ được chọn cho thiết bị này." Classes="muted" />
-            </StackPanel>
-        </Border>
-
         <!-- Layout 1: Normal mode (two columns with sidebar) -->
-        <Grid Grid.Row="4" ColumnDefinitions="Auto,*" IsVisible="{Binding !IsInstanceMode}">
+        <Grid Grid.Row="3" ColumnDefinitions="Auto,*" IsVisible="{Binding !IsInstanceMode}">
             <Border Grid.Column="0" Width="170" Margin="0,0,10,0" Classes="Card" Padding="8">
                 <StackPanel Spacing="10">
                     <TextBlock Text="DANH MỤC" Classes="section" Margin="6,4,0,0" />
@@ -147,25 +132,20 @@
             <ContentControl Grid.Column="1" Content="{Binding SelectedTab.Page}" />
         </Grid>
 
-        <!-- Layout 2: Instance mode (direct vertical stacked sub-pages with section titles) -->
-        <ScrollViewer Grid.Row="4" IsVisible="{Binding IsInstanceMode}">
-            <ItemsControl ItemsSource="{Binding Tabs}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:SettingsTab">
-                        <StackPanel Spacing="6" Margin="0,0,0,16">
-                            <!-- Section Title Header -->
-                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="4,0,0,4">
-                                <materialIcons:MaterialIcon Kind="{Binding IconKind}" Width="16" Height="16"
-                                                            Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Title}" Classes="section" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource AppAccentBrush}" />
-                            </StackPanel>
-                            
-                            <!-- Page Content -->
-                            <ContentControl Content="{Binding Page}" />
-                        </StackPanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+        <!-- Layout 2: Instance mode (single page with section title, constrained height) -->
+        <Grid Grid.Row="3" IsVisible="{Binding IsInstanceMode}" Margin="4,0,0,0"
+              VerticalAlignment="Stretch">
+            <Grid RowDefinitions="Auto,*">
+                <!-- Section Title Header -->
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <materialIcons:MaterialIcon Kind="{Binding SelectedTab.IconKind}" Width="16" Height="16"
+                                                Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding SelectedTab.Title}" Classes="section" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource AppAccentBrush}" />
+                </StackPanel>
+                
+                <!-- Page Content (constrained to remaining height → inner ScrollViewer works) -->
+                <ContentControl Grid.Row="1" Content="{Binding SelectedTab.Page}" />
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

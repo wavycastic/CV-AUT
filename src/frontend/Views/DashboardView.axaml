@@ -101,11 +101,10 @@
             1. Vertical View (Single Device Mode) - device list above, detail below.
         -->
         <Grid IsVisible="{Binding !IsGridMode}">
-            <Grid RowDefinitions="Auto,*" IsVisible="{Binding !ShowActivePanel}">
-            
-            <!-- Top: Connected Devices -->
-            <StackPanel Grid.Row="0" Spacing="10" Margin="14,12">
-                <Border Background="{DynamicResource AppSurfaceBrush}"
+            <Grid RowDefinitions="Auto,*" Margin="14,12" IsVisible="{Binding !ShowActivePanel}">
+                <!-- Top: Connected Devices -->
+                <Border Grid.Row="0" Margin="0,0,0,10"
+                        Background="{DynamicResource AppSurfaceBrush}"
                         BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
                         CornerRadius="{DynamicResource RadiusMd}" Padding="12">
                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
@@ -132,165 +131,213 @@
                                 Padding="0" ToolTip.Tip="Quét lại thiết bị" CornerRadius="8"
                                 Width="32" Height="32" VerticalAlignment="Center">
                             <materialIcons:MaterialIcon Kind="Refresh" Width="15" Height="15"
+                                                        Classes.scan-spinner="{Binding IsDetecting}"
                                                         Foreground="{DynamicResource AppTextSecondaryBrush}"/>
                         </Button>
                     </Grid>
                 </Border>
 
                 <!-- Devices items list -->
-                <Border Background="{DynamicResource AppSurfaceBrush}"
+                <Border Grid.Row="1"
+                        Background="{DynamicResource AppSurfaceBrush}"
                         BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
                         CornerRadius="{DynamicResource RadiusMd}" Padding="10">
-                    <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
-                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                    <Grid RowDefinitions="Auto,*">
+                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
                             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <materialIcons:MaterialIcon Kind="Apps" Width="15" Height="15"
                                                             Foreground="{DynamicResource AppAccentBrush}"/>
                                 <TextBlock Text="Instance tìm thấy" Classes="labelStrong" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <Border Grid.Column="1" Padding="8,3" CornerRadius="10"
-                                    Background="{DynamicResource AppSurfaceAltBrush}"
-                                    BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
-                                <TextBlock Text="{Binding DeviceSummaryText}" Classes="caption"/>
+                            <Border Grid.Column="1" Height="28" CornerRadius="8"
+                                    Background="{DynamicResource AppConsoleBrush}"
+                                    BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Grid ColumnDefinitions="Auto,Auto,Auto">
+                                    <!-- Start -->
+                                    <Button Grid.Column="0"
+                                            Classes="seg-start"
+                                            Classes.active-start="{Binding IsRunning}"
+                                            Command="{Binding StartAllCommand}"
+                                            Height="26" CornerRadius="0"
+                                            Padding="10,0"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Center"
+                                            VerticalContentAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                            <materialIcons:MaterialIcon Kind="Play" Width="12" Height="12" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Khởi chạy" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <!-- Vertical divider -->
+                                    <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource AppBorderStrongBrush}" />
+
+                                    <!-- Stop -->
+                                    <Button Grid.Column="2"
+                                            Classes="seg-end"
+                                            Classes.active-stop="{Binding IsStopped}"
+                                            Command="{Binding StopAllCommand}"
+                                            Height="26" CornerRadius="0"
+                                            Padding="10,0"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Center"
+                                            VerticalContentAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                            <materialIcons:MaterialIcon Kind="Stop" Width="12" Height="12" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Dừng" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
                             </Border>
                         </Grid>
 
-                    <Grid Grid.Row="1">
-                        <!-- Device ListBox -->
-                        <ListBox Name="DeviceList" ItemsSource="{Binding Devices}"
-                                  Background="Transparent" BorderThickness="0" Padding="0"
-                                  MaxHeight="158"
-                                  IsVisible="{Binding DeviceCount}">
-                            <ListBox.Styles>
-                                <Style Selector="ListBoxItem">
-                                    <Setter Property="Padding" Value="10" />
-                                    <Setter Property="Margin" Value="0,0,0,6" />
-                                    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
-                                    <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
-                                    <Setter Property="BorderThickness" Value="1"/>
-                                    <Setter Property="BorderBrush" Value="{DynamicResource AppBorderColor}"/>
-                                    <Setter Property="Transitions">
-                                        <Transitions>
-                                            <BrushTransition Property="BorderBrush" Duration="0:0:0.2" />
-                                            <BrushTransition Property="Background" Duration="0:0:0.2" />
-                                        </Transitions>
-                                    </Setter>
-                                </Style>
-                                <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-                                    <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
-                                    <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
-                                </Style>
-                                <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
-                                    <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
-                                    <Setter Property="BorderBrush" Value="{DynamicResource AppBorderColor}" />
-                                </Style>
-                            </ListBox.Styles>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate DataType="vm:DeviceViewModel">
-                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" RowDefinitions="Auto,Auto" RowSpacing="2" VerticalAlignment="Center">
-                                        <!-- Emulator Icon -->
-                                        <Image Grid.RowSpan="2" Grid.Column="0" Source="{Binding EmulatorIcon}" Width="18" Height="18" 
-                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                        <!-- Device Name -->
-                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource AppTextPrimaryBrush}" VerticalAlignment="Center"/>
-                                        <!-- Serial & Connection type -->
-                                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                                            <TextBlock Text="{Binding Device.Source}" Classes="caption" FontSize="9" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
-                                            <TextBlock Text="•" Classes="caption" FontSize="9" Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                            <TextBlock Text="{Binding Device.Serial}" Classes="caption" FontSize="9" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="100"/>
-                                        </StackPanel>
-                                        <!-- Play Mode Dropdown -->
-                                        <ComboBox Grid.RowSpan="2" Grid.Column="2" ItemsSource="{Binding PlayModes}" SelectedItem="{Binding SelectedPlayMode}" Width="110" Height="26" FontSize="11" Padding="6,2" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                        <!-- Status Indicator dot -->
-                                        <StackPanel Grid.RowSpan="2" Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,10,0">
-                                            <Ellipse Width="8" Height="8" Fill="{Binding DisplayStatusColor}" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <!-- Action Buttons -->
-                                        <StackPanel Grid.RowSpan="2" Grid.Column="4" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                            <!-- Selection Toggle Button -->
-                                            <ToggleButton IsChecked="{Binding IsSelected}" 
-                                                          Background="Transparent"
-                                                          BorderThickness="0"
-                                                          Padding="0" Width="28" Height="28" 
-                                                          VerticalAlignment="Center" HorizontalAlignment="Center" 
-                                                          ToolTip.Tip="Chọn thiết bị">
-                                                <ToggleButton.Styles>
-                                                    <Style Selector="ToggleButton">
-                                                        <Setter Property="Content">
-                                                            <Template>
-                                                                <materialIcons:MaterialIcon Kind="CircleOutline" Width="15" Height="15" Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                                            </Template>
-                                                        </Setter>
-                                                    </Style>
-                                                    <Style Selector="ToggleButton /template/ ContentPresenter#PART_ContentPresenter">
-                                                        <Setter Property="Background" Value="Transparent"/>
-                                                        <Setter Property="BorderBrush" Value="Transparent"/>
-                                                        <Setter Property="BorderThickness" Value="0"/>
-                                                    </Style>
-                                                    <Style Selector="ToggleButton:checked">
-                                                        <Setter Property="Content">
-                                                            <Template>
-                                                                <materialIcons:MaterialIcon Kind="CheckCircle" Width="15" Height="15" Foreground="{DynamicResource AppAccentBrush}"/>
-                                                            </Template>
-                                                        </Setter>
-                                                    </Style>
-                                                    <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
-                                                        <Setter Property="Background" Value="Transparent"/>
-                                                        <Setter Property="BorderBrush" Value="Transparent"/>
-                                                        <Setter Property="BorderThickness" Value="0"/>
-                                                    </Style>
-                                                    <Style Selector="ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-                                                        <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}"/>
-                                                    </Style>
-                                                    <Style Selector="ToggleButton:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-                                                        <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}"/>
-                                                    </Style>
-                                                </ToggleButton.Styles>
-                                            </ToggleButton>
-                                            
-                                            <!-- Configure button -->
-                                            <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ConfigureDeviceCommand}" CommandParameter="{Binding}" Padding="0" Width="28" Height="28" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Cấu hình">
-                                                <materialIcons:MaterialIcon Kind="Cog" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
-                                            </Button>
+                        <Grid Grid.Row="1">
+                            <!-- Device ListBox -->
+                            <ListBox Name="DeviceList" ItemsSource="{Binding Devices}"
+                                     Background="Transparent" BorderThickness="0" Padding="0"
+                                     IsVisible="{Binding DeviceCount}">
+                                <ListBox.Styles>
+                                    <Style Selector="ListBoxItem">
+                                        <Setter Property="Padding" Value="10" />
+                                        <Setter Property="Margin" Value="0,0,0,6" />
+                                        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
+                                        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+                                    </Style>
+                                    <Style Selector="ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+                                        <Setter Property="Transitions">
+                                            <Transitions>
+                                                <BrushTransition Property="BorderBrush" Duration="0:0:0.2" />
+                                                <BrushTransition Property="Background" Duration="0:0:0.2" />
+                                            </Transitions>
+                                        </Setter>
+                                    </Style>
+                                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                        <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+                                    </Style>
+                                    <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+                                        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+                                    </Style>
+                                    <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                        <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+                                    </Style>
+                                    <!-- Action buttons inside ListBoxItem: smooth subtle hover without harsh white box -->
+                                    <Style Selector="ListBoxItem Button.ghost /template/ ContentPresenter#PART_ContentPresenter">
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="BorderBrush" Value="Transparent" />
+                                        <Setter Property="Transitions">
+                                            <Transitions>
+                                                <BrushTransition Property="Background" Duration="0:0:0.15" />
+                                            </Transitions>
+                                        </Setter>
+                                    </Style>
+                                    <Style Selector="ListBoxItem Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                        <Setter Property="Background" Value="#15ffffff" />
+                                    </Style>
+                                    <Style Selector="ListBoxItem Button.ghost:pointerover materialIcons|MaterialIcon">
+                                        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+                                    </Style>
+                                </ListBox.Styles>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:DeviceViewModel">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" RowDefinitions="Auto,Auto" RowSpacing="2" VerticalAlignment="Center">
+                                            <!-- Emulator Icon -->
+                                            <Image Grid.RowSpan="2" Grid.Column="0" Source="{Binding EmulatorIcon}" Width="18" Height="18" 
+                                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <!-- Device Name -->
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource AppTextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            <!-- Subtitle Info -->
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SubTitleText}" Classes="caption" FontSize="10" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            <!-- Play Mode Dropdown -->
+                                            <ComboBox Grid.RowSpan="2" Grid.Column="2" ItemsSource="{Binding PlayModes}" SelectedItem="{Binding SelectedPlayMode}" Width="98" Height="26" FontSize="11" Padding="5,2" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <!-- Status Pill Badge -->
+                                            <Border Grid.RowSpan="2" Grid.Column="3" CornerRadius="10" Background="#12ffffff" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" Padding="6,2" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                    <Ellipse Width="6" Height="6" Fill="{Binding StatusBadgeColor}" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding StatusBadgeText}" FontSize="10" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <!-- Action Buttons -->
+                                            <StackPanel Grid.RowSpan="2" Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                                <!-- Selection Toggle Button -->
+                                                <ToggleButton IsChecked="{Binding IsSelected}" 
+                                                              Background="Transparent"
+                                                              BorderThickness="0"
+                                                              Padding="0" Width="26" Height="26" 
+                                                              VerticalAlignment="Center" HorizontalAlignment="Center" 
+                                                              ToolTip.Tip="Chọn thiết bị">
+                                                    <ToggleButton.Styles>
+                                                        <Style Selector="ToggleButton">
+                                                            <Setter Property="Content">
+                                                                <Template>
+                                                                    <materialIcons:MaterialIcon Kind="CircleOutline" Width="15" Height="15" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                </Template>
+                                                            </Setter>
+                                                        </Style>
+                                                        <Style Selector="ToggleButton /template/ ContentPresenter#PART_ContentPresenter">
+                                                            <Setter Property="Background" Value="Transparent"/>
+                                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                                            <Setter Property="BorderThickness" Value="0"/>
+                                                        </Style>
+                                                        <Style Selector="ToggleButton:checked">
+                                                            <Setter Property="Content">
+                                                                <Template>
+                                                                    <materialIcons:MaterialIcon Kind="CheckCircle" Width="15" Height="15" Foreground="{DynamicResource AppAccentBrush}"/>
+                                                                </Template>
+                                                            </Setter>
+                                                        </Style>
+                                                        <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
+                                                            <Setter Property="Background" Value="Transparent"/>
+                                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                                            <Setter Property="BorderThickness" Value="0"/>
+                                                        </Style>
+                                                        <Style Selector="ToggleButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                                            <Setter Property="Background" Value="Transparent"/>
+                                                        </Style>
+                                                        <Style Selector="ToggleButton:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                                            <Setter Property="Background" Value="Transparent"/>
+                                                        </Style>
+                                                        <Style Selector="ToggleButton:pointerover materialIcons|MaterialIcon">
+                                                            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+                                                        </Style>
+                                                    </ToggleButton.Styles>
+                                                </ToggleButton>
+                                                
+                                                <!-- Configure button -->
+                                                <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ConfigureDeviceCommand}" CommandParameter="{Binding}" Padding="0" Width="26" Height="26" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Cấu hình">
+                                                    <materialIcons:MaterialIcon Kind="Cog" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
+                                                </Button>
 
-                                            <!-- Logs button -->
-                                            <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ShowDeviceLogsCommand}" CommandParameter="{Binding}" Padding="0" Width="28" Height="28" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Nhật ký">
-                                                <materialIcons:MaterialIcon Kind="ScriptText" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
-                                            </Button>
+                                                <!-- Logs button -->
+                                                <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ShowDeviceLogsCommand}" CommandParameter="{Binding}" Padding="0" Width="26" Height="26" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Nhật ký">
+                                                    <materialIcons:MaterialIcon Kind="ScriptText" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                                            <!-- Copy logs button -->
-                                            <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.CopyDeviceLogsCommand}" CommandParameter="{Binding}" Padding="0" Width="28" Height="28" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Copy log">
-                                                <materialIcons:MaterialIcon Kind="ContentCopy" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
-                                            </Button>
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </Grid>
+                            <!-- Empty state appears only after a scan returns no devices. -->
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding ShowEmptyNoDevices}" Spacing="16">
+                                <Border Width="72" Height="72" CornerRadius="36" Background="{DynamicResource AppSurfaceBrush}"
+                                        BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1">
+                                    <materialIcons:MaterialIcon Kind="CellphoneLinkOff" Width="30" Height="30" Foreground="{DynamicResource AppAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="KHÔNG TÌM THẤY THIẾT BỊ" FontWeight="Bold" FontSize="13" LetterSpacing="1.2" Foreground="{DynamicResource AppTextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Mở giả lập rồi bấm nút quét lại." Classes="caption" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
-            </StackPanel>
-            
-            <!-- Bottom: Active Device Panel / Placeholder / Configuration -->
-            <Grid Grid.Row="1" Background="{DynamicResource AppBackgroundBrush}">
-                <!-- Empty state appears only after a scan returns no devices. -->
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding ShowEmptyNoDevices}" Spacing="16">
-                    <Border Width="72" Height="72" CornerRadius="36" Background="{DynamicResource AppSurfaceBrush}"
-                            BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1">
-                        <materialIcons:MaterialIcon Kind="CellphoneLinkOff" Width="30" Height="30" Foreground="{DynamicResource AppAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="KHÔNG TÌM THẤY THIẾT BỊ" FontWeight="Bold" FontSize="13" LetterSpacing="1.2" Foreground="{DynamicResource AppTextPrimaryBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Mở giả lập rồi bấm nút quét lại." Classes="caption" HorizontalAlignment="Center"/>
-                    </StackPanel>
-                </StackPanel>
- 
-
-                </Grid>
             </Grid>
-
-            <!-- Active device view removed -->
         </Grid>
         
         <!--
@@ -338,7 +385,7 @@
                                 </Grid>
  
                                 <!-- Row 3: Stats -->
-                                <Border Background="{DynamicResource AppConsoleBgBrush}" BorderBrush="{DynamicResource AppBorderColor}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="10,8">
+                                <Border Background="{DynamicResource AppConsoleBgBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="10,8">
                                     <Grid ColumnDefinitions="*,*,*,*" VerticalAlignment="Center">
                                         <!-- Battles -->
                                         <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
@@ -401,45 +448,26 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <!-- Loading overlay renders last so it covers and blocks the dashboard while scanning. -->
+        <!-- Loading overlay with clear 3D layer separation and floating card container -->
         <Grid IsVisible="{Binding IsDetecting}"
-              Background="{DynamicResource AppScrimBrush}"
+              Background="#d80b0b10"
               HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-            <Border Width="260" Padding="24,22" CornerRadius="14"
+            <!-- Floating Card Panel -->
+            <Border Width="220" Padding="20,18" CornerRadius="16"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     Background="{DynamicResource AppSurfaceBrush}"
-                    BorderBrush="{DynamicResource AppAccentBorderBrush}" BorderThickness="1"
-                    BoxShadow="0 16 40 0 #80000000">
-                <StackPanel Spacing="14" HorizontalAlignment="Center">
-                    <Panel Width="68" Height="68">
-                        <Border Classes="scan-ring" Width="56" Height="56" CornerRadius="28"
-                                HorizontalAlignment="Center" VerticalAlignment="Center"
-                                BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1">
-                            <Border.RenderTransform><ScaleTransform /></Border.RenderTransform>
-                        </Border>
-                        <Border Width="52" Height="52" CornerRadius="26"
-                                HorizontalAlignment="Center" VerticalAlignment="Center"
-                                Background="{DynamicResource AppAccentSoftBrush}"
-                                BorderBrush="{DynamicResource AppAccentBorderBrush}" BorderThickness="1">
-                            <materialIcons:MaterialIcon Classes="scan-spinner" Kind="Radar" Width="25" Height="25"
-                                                        Foreground="{DynamicResource AppAccentBrush}"
-                                                        HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <materialIcons:MaterialIcon.RenderTransform><RotateTransform /></materialIcons:MaterialIcon.RenderTransform>
-                            </materialIcons:MaterialIcon>
-                        </Border>
-                    </Panel>
-                    <StackPanel Spacing="4" HorizontalAlignment="Center">
-                        <TextBlock Text="Đang quét giả lập" Classes="labelStrong"
-                                   FontSize="13" HorizontalAlignment="Center"/>
-                        <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
-                            <TextBlock Text="Đang dò thiết bị" Classes="caption" VerticalAlignment="Center"/>
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <Ellipse Classes="scan-dot" Width="4" Height="4" Fill="{DynamicResource AppAccentBrush}"/>
-                                <Ellipse Classes="scan-dot delay-one" Width="4" Height="4" Fill="{DynamicResource AppAccentBrush}"/>
-                                <Ellipse Classes="scan-dot delay-two" Width="4" Height="4" Fill="{DynamicResource AppAccentBrush}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </StackPanel>
+                    BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1"
+                    BoxShadow="0 16 48 0 #a0000000">
+                <StackPanel Spacing="12" HorizontalAlignment="Center">
+                    <!-- Minimalist Spinning Loading Icon -->
+                    <materialIcons:MaterialIcon Classes="scan-spinner" Kind="Loading" Width="32" Height="32"
+                                                Foreground="{DynamicResource AppAccentBrush}"
+                                                HorizontalAlignment="Center">
+                        <materialIcons:MaterialIcon.RenderTransform><RotateTransform /></materialIcons:MaterialIcon.RenderTransform>
+                    </materialIcons:MaterialIcon>
+
+                    <TextBlock Text="Đang quét giả lập..." FontWeight="Bold" FontSize="13"
+                               Foreground="{DynamicResource AppTextPrimaryBrush}" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Border>
         </Grid>

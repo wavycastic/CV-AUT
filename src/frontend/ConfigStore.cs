@@ -415,7 +415,7 @@ namespace CvAut
             root["attack_mode"] ??= "attack";
             root["use_electro_dragon"] ??= false;
             root["request_troops"] ??= false;
-            root["request_troops_message"] ??= "Rồng + rage";
+            
 
             JsonObject smart = GetOrCreateObject(root, "smart_surrender");
             smart["enabled"] ??= false;
@@ -428,25 +428,20 @@ namespace CvAut
             night["farm_mode"] ??= "auto";
             night["min_cups"] ??= 0;
             night["max_cups"] ??= 5000;
-            night["attack_count"] ??= 1;
-            night["attack_count_mode"] ??= "fixed";
-            night["stop_when_loot_unavailable"] ??= true;
             night["enable_attack"] ??= true;
             night["boost_clock_tower"] ??= false;
             night["upgrade_wall"] ??= false;
             night["army_management"] ??= true;
             night["fill_army"] ??= true;
             night["army_formation"] ??= "auto";
-            night["wait_for_heroes"] ??= true;
             night["hero_wait_seconds"] ??= 90;
             night["custom_drop_order_enabled"] ??= false;
-            night["drop_order"] ??= "BattleMachine|Bomber|PowerPekka|BabyDragon|CannonCart|NightWitch|RagedBarbarian";
+            night["drop_order"] ??= "BattleMachine|BattleCopter|BoxerGiant|DropShip|HogGlider|Bomber|SuperPekka|PowerPekka|BabyDragon|CannonCart|ElectrofireWizard|NightWitch|RagedBarbarian|BetaMinion|SneakyArcher";
             night["next_troop_delay_ms"] ??= 600;
             night["same_troop_delay_ms"] ??= 180;
             night["handle_bomber"] ??= true;
-            night["loop_hero_ability"] ??= true;
-            night["enable_stage2"] ??= true;
-            night["clean_yard"] ??= false;
+            
+            
             night["suggested_upgrades"] ??= false;
             night["place_new_buildings"] ??= false;
             night["ignore_gold_upgrades"] ??= false;
@@ -457,7 +452,7 @@ namespace CvAut
             night["star_laboratory_troop"] ??= "auto";
             night["upgrade_battle_machine"] ??= false;
             night["upgrade_battle_copter"] ??= false;
-            night["bob_upgrades"] ??= false;
+            
 
             JsonObject clanGames = GetOrCreateObject(root, "clan_games");
             clanGames["village"] ??= "main_village";
