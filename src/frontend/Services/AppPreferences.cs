@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Nodes;
 using CvAut.Configuration;
 using CvAut.Models;
@@ -82,10 +83,6 @@ namespace CvAut.Services
         string PrepareDevice(Device device, VillagePlayMode playMode);
     }
 
-    /// <summary>
-    /// Frontend JSON boundary. View models can work with typed profile values while
-    /// JsonObject remains confined to this adapter and the legacy ConfigStore persistence.
-    /// </summary>
     public sealed class ProfileConfigSnapshotProvider : IProfileConfigSnapshotProvider
     {
         private readonly IConfigStore _store;
@@ -99,11 +96,12 @@ namespace CvAut.Services
         {
             JsonObject root = _store.LoadActiveConfig();
             JsonObject device = ConfigStore.GetOrCreateObject(root, "device_connection");
+            string serial = ConfigStore.TryGetString(device["serial"], string.Empty);
             return new ProfileConfigSnapshot(
                 new DeviceConnectionConfig(
                     ConfigStore.TryGetString(device["host"], DeviceConnectionConfig.DefaultHost),
                     ConfigStore.TryGetInt(device["port"], DeviceConnectionConfig.DefaultPort),
-                    ConfigStore.TryGetString(device["serial"], string.Empty) is string serial && !string.IsNullOrWhiteSpace(serial) ? serial : null,
+                    string.IsNullOrWhiteSpace(serial) ? null : serial,
                     ConfigStore.TryGetString(device["emulator_type"], DeviceConnectionConfig.DefaultEmulatorType),
                     ConfigStore.TryGetString(device["emulator_path"], string.Empty),
                     ConfigStore.TryGetString(device["emulator_instance"], string.Empty)),
