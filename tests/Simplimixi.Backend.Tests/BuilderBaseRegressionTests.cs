@@ -29,6 +29,11 @@ namespace CvAut.Backend.Tests
         [InlineData(1012, 10, 12)]
         [InlineData(1212, 12, 12)]
         [InlineData(66, 6, 6)]
+        [InlineData(36, 3, 6)]
+        [InlineData(712, 7, 12)]
+        [InlineData(1010, 10, 10)]
+        [InlineData(1112, 11, 12)]
+        [InlineData(106, 0, 0)]
         [InlineData(126, 0, 0)]
         public void ParseStarPair_SupportsTwoDigitMaximum(int raw, int expectedRemaining, int expectedMax)
         {
@@ -36,6 +41,17 @@ namespace CvAut.Backend.Tests
 
             Assert.Equal(expectedRemaining, remaining);
             Assert.Equal(expectedMax, max);
+        }
+
+        [Theory]
+        [InlineData(1, false, false, true)]
+        [InlineData(1, false, true, false)]
+        [InlineData(1, true, true, true)]
+        [InlineData(0, true, false, false)]
+        public void EvaluateArmyReadiness_HonorsRequireHeroFlag(int visibleTroops, bool heroReady, bool requireHero, bool expectedReady)
+        {
+            bool ready = BuilderBaseArmyManager.EvaluateArmyReadiness(visibleTroops, heroReady, requireHero);
+            Assert.Equal(expectedReady, ready);
         }
 
         [Fact]
