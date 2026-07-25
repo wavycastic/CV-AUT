@@ -1,9 +1,9 @@
 # CI digest
 
-- commit: `c44bc09135ba93b1bed156424bf8f4585bd9f5ce`
+- commit: `1ee69b61b5e592955014a0cdea365284b94ea8b8`
 - ref: `refs/heads/refactor/preferences-and-adb-foundation`
 - build exit code: `0`
-- test exit code: `skipped`
+- test exit code: `0`
 
 ## Compiler errors (0)
 ```
@@ -23,5 +23,6 @@ D:\a\CV-AUT\CV-AUT\src\backend\Core\BotOrchestrator.cs(23,19): warning CS0618: '
 
 ## Test results
 ```
-Passed!  - Failed:     0, Passed:    60, Skipped:     0, Total:    60, Duration: 156 ms - Simplimixi.Frontend.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    60, Skipped:     0, Total:    60, Duration: 136 ms - Simplimixi.Frontend.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   142, Skipped:     0, Total:   142, Duration: 24 s - Simplimixi.Backend.Tests.dll (net10.0)
 ```

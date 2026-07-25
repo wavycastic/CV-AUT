@@ -23,6 +23,6 @@ D:\a\CV-AUT\CV-AUT\src\backend\Core\BotOrchestrator.cs(23,19): warning CS0618: '
 
 ## Test results
 ```
-Passed!  - Failed:     0, Passed:    60, Skipped:     0, Total:    60, Duration: 224 ms - Simplimixi.Frontend.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    60, Skipped:     0, Total:    60, Duration: 136 ms - Simplimixi.Frontend.Tests.dll (net10.0)
 Passed!  - Failed:     0, Passed:   142, Skipped:     0, Total:   142, Duration: 24 s - Simplimixi.Backend.Tests.dll (net10.0)
 ```

@@ -3,6 +3,6 @@ Test run for D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\bin\Debug\net10.0
 A total of 1 test files matched the specified pattern.
 A total of 1 test files matched the specified pattern.
 
-Passed!  - Failed:     0, Passed:    60, Skipped:     0, Total:    60, Duration: 224 ms - Simplimixi.Frontend.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    60, Skipped:     0, Total:    60, Duration: 136 ms - Simplimixi.Frontend.Tests.dll (net10.0)
 
 Passed!  - Failed:     0, Passed:   142, Skipped:     0, Total:   142, Duration: 24 s - Simplimixi.Backend.Tests.dll (net10.0)
