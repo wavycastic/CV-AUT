@@ -82,6 +82,8 @@
     <Compile Include="ViewModels\MainWindowViewModel.cs" />
     <Compile Include="ViewModels\DashboardViewModel.cs" />
     <Compile Include="ViewModels\DeviceViewModel.cs" />
+    <Compile Include="ViewModels\DeviceStatusPresenter.cs" />
+    <Compile Include="ViewModels\EmulatorIconLoader.cs" />
     <Compile Include="ViewModels\SessionStatsViewModel.cs" />
     <Compile Include="ViewModels\TopBarViewModel.cs" />
     <Compile Include="ViewModels\SidebarViewModel.cs" />
