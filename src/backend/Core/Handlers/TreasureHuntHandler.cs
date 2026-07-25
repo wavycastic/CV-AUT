@@ -10,11 +10,11 @@ namespace CvAut.Handlers
     /// </summary>
     internal class TreasureHuntHandler
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly string _templatesPath;
 
-        public TreasureHuntHandler(ADBHelper adb, VisionEngine vision, string templatesPath)
+        public TreasureHuntHandler(IADBHelper adb, IVisionEngine vision, string templatesPath)
         {
             _adb = adb;
             _vision = vision;

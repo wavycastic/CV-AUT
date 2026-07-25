@@ -11,8 +11,8 @@ namespace CvAut
     /// </summary>
     internal sealed class BuilderBaseClockTower
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
 
         private const double ClockThreshold = 0.62;
@@ -38,7 +38,7 @@ namespace CvAut
             @"ui\boost"
         };
 
-        public BuilderBaseClockTower(ADBHelper adb, VisionEngine vision, BuilderBaseNavigator navigator)
+        public BuilderBaseClockTower(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator)
         {
             _adb = adb;
             _vision = vision;

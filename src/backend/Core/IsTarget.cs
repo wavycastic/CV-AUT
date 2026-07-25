@@ -44,7 +44,7 @@ namespace CvAut
         /// <param name="adb">Đối tượng ADBHelper để thực hiện giao tiếp với thiết bị.</param>
         /// <param name="vision">Đối tượng VisionEngine chứa thuật toán OCR.</param>
         /// <returns>Bộ ba số nguyên biểu thị lượng (Vàng, Dầu hồng, Dầu đen) nhận diện được.</returns>
-        public static (int Gold, int Elixir, int DarkElixir) ExtractResources(ADBHelper adb, VisionEngine vision)
+        public static (int Gold, int Elixir, int DarkElixir) ExtractResources(IADBHelper adb, IVisionEngine vision)
         {
             Console.WriteLine("[SCOUT-CS] phase=extract status=start details=\"target\"");
             using Mat? screenshot = adb.TakeScreenshot();
@@ -56,7 +56,7 @@ namespace CvAut
             return ExtractResources(screenshot, vision);
         }
 
-        public static (int Gold, int Elixir, int DarkElixir) ExtractResources(Mat screenshot, VisionEngine vision)
+        public static (int Gold, int Elixir, int DarkElixir) ExtractResources(Mat screenshot, IVisionEngine vision)
         {
             int hImg = screenshot.Height;
             int wImg = screenshot.Width;
@@ -104,7 +104,7 @@ namespace CvAut
         /// <param name="adb">Đối tượng ADBHelper.</param>
         /// <param name="vision">Đối tượng VisionEngine.</param>
         /// <returns>Bộ ba số nguyên biểu thị lượng tài nguyên làng chính.</returns>
-        public static (int Gold, int Elixir, int DarkElixir) ExtractHomeResources(ADBHelper adb, VisionEngine vision)
+        public static (int Gold, int Elixir, int DarkElixir) ExtractHomeResources(IADBHelper adb, IVisionEngine vision)
         {
             Console.WriteLine("[SCOUT-CS] phase=extract status=start details=\"home\"");
             using Mat? screenshot = adb.TakeScreenshot();

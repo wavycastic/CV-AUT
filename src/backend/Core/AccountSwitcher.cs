@@ -10,8 +10,8 @@ namespace CvAut;
 
 internal sealed class AccountSwitcher : IAccountSwitcher
 {
-    private readonly ADBHelper _adb;
-    private readonly VisionEngine _vision;
+    private readonly IADBHelper _adb;
+    private readonly IVisionEngine _vision;
     private readonly string _templatesPath;
     private readonly AccountManager _manager;
     private readonly Func<int, bool> _ensureHomeBase;
@@ -20,7 +20,7 @@ internal sealed class AccountSwitcher : IAccountSwitcher
 
     public string ActiveAccountName => _activeAccountName;
 
-    public AccountSwitcher(ADBHelper adb, VisionEngine vision, string templatesPath, Func<int, bool> ensureHomeBase)
+    public AccountSwitcher(IADBHelper adb, IVisionEngine vision, string templatesPath, Func<int, bool> ensureHomeBase)
     {
         _adb = adb;
         _vision = vision;

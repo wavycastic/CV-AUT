@@ -8,6 +8,12 @@ namespace CvAut.Backend.Tests
     public class AdbScreenCapturerTests
     {
         [Fact]
+        public void Constructor_RejectsMissingExecutablePath()
+        {
+            Assert.Throws<ArgumentException>(() => new AdbScreenCapturer(string.Empty));
+        }
+
+        [Fact]
         public void DecodeImageBytes_NullOrEmpty_ReturnsNull()
         {
             Assert.Null(AdbScreenCapturer.DecodeImageBytes(null!));
@@ -17,52 +23,60 @@ namespace CvAut.Backend.Tests
         [Fact]
         public void DecodeImageBytes_ValidRawRgba_DecodesToBgrMat()
         {
-            int width = 10;
-            int height = 10;
-            int pixelFormat = 1; // RGBA_8888
+            const int width = 10;
+            const int height = 10;
             byte[] bytes = new byte[12 + width * height * 4];
 
             BitConverter.GetBytes(width).CopyTo(bytes, 0);
             BitConverter.GetBytes(height).CopyTo(bytes, 4);
-            BitConverter.GetBytes(pixelFormat).CopyTo(bytes, 8);
+            BitConverter.GetBytes(1).CopyTo(bytes, 8);
 
-            // Fill pixels with Red (R=255, G=0, B=0, A=255)
             for (int i = 12; i < bytes.Length; i += 4)
             {
-                bytes[i] = 255;     // R
-                bytes[i + 1] = 0;   // G
-                bytes[i + 2] = 0;   // B
-                bytes[i + 3] = 255; // A
+                bytes[i] = 255;
+                bytes[i + 3] = 255;
             }
 
             using Mat? mat = AdbScreenCapturer.DecodeImageBytes(bytes);
 
             Assert.NotNull(mat);
-            Assert.False(mat!.Empty());
-            Assert.Equal(width, mat.Width);
+            Assert.Equal(width, mat!.Width);
             Assert.Equal(height, mat.Height);
             Assert.Equal(MatType.CV_8UC3, mat.Type());
-
-            // Check first pixel in BGR (B=0, G=0, R=255)
             Vec3b pixel = mat.At<Vec3b>(0, 0);
-            Assert.Equal(0, pixel.Item0);   // B
-            Assert.Equal(0, pixel.Item1);   // G
-            Assert.Equal(255, pixel.Item2); // R
+            Assert.Equal(0, pixel.Item0);
+            Assert.Equal(0, pixel.Item1);
+            Assert.Equal(255, pixel.Item2);
         }
 
         [Fact]
         public void DecodeImageBytes_ValidPngHeader_DecodesPngMat()
         {
-            // Create a small Mat and encode to PNG bytes
-            using Mat originalMat = new Mat(10, 10, MatType.CV_8UC3, new Scalar(0, 255, 0));
-            Cv2.ImEncode(".png", originalMat, out byte[] pngBytes);
+            using var original = new Mat(10, 10, MatType.CV_8UC3, new Scalar(0, 255, 0));
+            Cv2.ImEncode(".png", original, out byte[] pngBytes);
 
             using Mat? mat = AdbScreenCapturer.DecodeImageBytes(pngBytes);
 
             Assert.NotNull(mat);
-            Assert.False(mat!.Empty());
-            Assert.Equal(10, mat.Width);
+            Assert.Equal(10, mat!.Width);
             Assert.Equal(10, mat.Height);
+        }
+
+        [Fact]
+        public void IsBlankFrame_UniformImage_ReturnsTrue()
+        {
+            using var frame = new Mat(20, 20, MatType.CV_8UC3, Scalar.Black);
+
+            Assert.True(AdbScreenCapturer.IsBlankFrame(frame));
+        }
+
+        [Fact]
+        public void IsBlankFrame_VariedImage_ReturnsFalse()
+        {
+            using var frame = new Mat(20, 20, MatType.CV_8UC3, Scalar.Black);
+            Cv2.Rectangle(frame, new Rect(0, 0, 10, 20), Scalar.White, -1);
+
+            Assert.False(AdbScreenCapturer.IsBlankFrame(frame));
         }
     }
 }

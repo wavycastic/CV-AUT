@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using CvAut.Configuration;
 
 namespace CvAut;
 
@@ -20,10 +21,9 @@ public sealed class BotOrchestrator : IAutomationRunner
     {
         var configService = new ConfigService(configPath);
         Config = configService;
-        var cfg = configService.Config;
-        var devConfig = ConfigManager.GetObjectOrDefault(cfg, "device_connection");
-        string host = ConfigManager.GetStringOrDefault(devConfig, "host", "127.0.0.1");
-        int port = ConfigManager.GetIntOrDefault(devConfig, "port", 5556);
+        DeviceConnectionConfig device = configService.Current.DeviceConnection;
+        string host = device.Host;
+        int port = device.Port;
 
         var adb = new ADBHelper(host, port);
         string templatesPath = System.IO.Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
