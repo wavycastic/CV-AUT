@@ -19,6 +19,16 @@ public sealed record DeviceConnectionConfig(
 
 internal static class DeviceConnectionConfigReader
 {
+    /// <summary>
+    /// Reads the device_connection section and returns a normalized config.
+    /// Normalization is deliberate, not incidental, because <see cref="DeviceConnectionConfig.Endpoint"/>
+    /// is passed straight to ADB and a padded, blank or out-of-range value yields an endpoint that
+    /// can never connect:
+    /// - Host is trimmed, and a blank host falls back to <see cref="DeviceConnectionConfig.DefaultHost"/>.
+    /// - Port is clamped to the valid TCP range 1-65535, defaulting to <see cref="DeviceConnectionConfig.DefaultPort"/>.
+    /// - Serial is trimmed, and a blank serial becomes null so callers can treat it as "not set".
+    /// Note that this differs from the raw JSON surface it replaced, which passed these values through untouched.
+    /// </summary>
     public static DeviceConnectionConfig Read(JsonElement root)
     {
         JsonConfigReader device = new JsonConfigReader(root).Section("device_connection");
