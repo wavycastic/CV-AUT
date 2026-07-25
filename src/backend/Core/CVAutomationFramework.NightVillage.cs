@@ -14,9 +14,9 @@ namespace CvAut
                 _vision,
                 _builderBaseNavigator);
 
-        private bool IsNightVillageMode(JsonElement cfg, int villageIdx)
+        private bool IsNightVillageMode(int villageIdx)
             => VillageModeResolver.IsNightVillage(
-                cfg,
+                _configService.Current.MultiAccount,
                 _configService.RunSession,
                 villageIdx);
 

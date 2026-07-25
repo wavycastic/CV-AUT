@@ -7,6 +7,25 @@ namespace CvAut.Automation;
 internal static class VillageModeResolver
 {
     public static bool IsNightVillage(
+        MultiAccountConfig multiAccount,
+        RunSessionConfig runSession,
+        int villageIndex)
+    {
+        if (runSession.PlayMode == VillagePlayMode.NightVillage)
+            return true;
+
+        foreach (CvAut.Configuration.AccountConfig account in multiAccount.Accounts)
+        {
+            if (account.ProfileVillage == villageIndex)
+            {
+                return account.TargetVillage == VillagePlayMode.NightVillage;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool IsNightVillage(
         JsonElement root,
         RunSessionConfig runSession,
         int villageIndex)

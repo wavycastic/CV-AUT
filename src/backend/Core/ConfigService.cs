@@ -18,10 +18,29 @@ internal sealed class ConfigService : IConfigService
 
     public AutomationConfigSnapshot Current { get; private set; }
 
-    // Temporary compatibility surface for workflow code that has not yet moved to
-    // typed sections. Raw JSON ownership remains inside the persistence layer.
-    [Obsolete("Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.")]
-    public JsonElement Config => _persistence.Root;
+    internal MainVillageConfig GetMainVillageConfig(int villageIndex)
+        => GetMainVillageConfig(_persistence.Root, villageIndex);
+
+    internal CvAut.TrainingConfig GetTrainingConfig(int villageIndex)
+        => GetTrainingConfig(_persistence.Root, villageIndex);
+
+    internal string GetAttackStrategy(int villageIndex)
+        => GetAttackStrategy(_persistence.Root, villageIndex);
+
+    internal CvAut.WallUpgradeConfig GetWallUpgradeConfig(int villageIndex)
+        => GetWallUpgradeConfig(_persistence.Root, villageIndex);
+
+    MainVillageConfig IConfigService.GetMainVillageConfig(int villageIndex)
+        => GetMainVillageConfig(villageIndex);
+
+    CvAut.TrainingConfig IConfigService.GetTrainingConfig(int villageIndex)
+        => GetTrainingConfig(villageIndex);
+
+    string IConfigService.GetAttackStrategy(int villageIndex)
+        => GetAttackStrategy(villageIndex);
+
+    CvAut.WallUpgradeConfig IConfigService.GetWallUpgradeConfig(int villageIndex)
+        => GetWallUpgradeConfig(villageIndex);
 
     public void Reload()
     {

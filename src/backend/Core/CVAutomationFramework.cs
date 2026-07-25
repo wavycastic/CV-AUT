@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenCvSharp;
+using CvAut.Configuration;
 using Point = OpenCvSharp.Point;
 using Size = OpenCvSharp.Size;
 using static CvAut.ConfigManager;
@@ -62,7 +63,7 @@ namespace CvAut
         private int _sessionBattlesCompleted;
         private static bool s_loggedBuilderBaseAssetAudit;
 
-        public JsonElement Config => _configService.Config;
+
 
         /// <summary>
         /// Public constructor (backward compatible). Creates dependencies internally.
@@ -110,19 +111,17 @@ namespace CvAut
             _zoom = zoom;
             _accounts = accounts;
 
-            var cfg = configService.Config;
-            var devConfig = cfg.GetProperty("device_connection");
-            string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
-            int port = devConfig.GetProperty("port").GetInt32();
-            string? serial = devConfig.TryGetProperty("serial", out JsonElement serialElement) ? serialElement.GetString() : null;
+            DeviceConnectionConfig devConfig = configService.Current.DeviceConnection;
+            string host = devConfig.Host;
+            int port = devConfig.Port;
+            string? serial = devConfig.Serial;
 
             _adb = adb;
             _adb.BeforeInputAction = null;
             _templatesPath = templatesPath;
             _vision = vision;
             _training = new Training(_adb, _templatesPath, _vision);
-            _attacks = new Attacks(_adb, _vision, _templatesPath,
-                ConfigManager.ReadAttackDelayConfig(cfg), ConfigManager.ReadAttackCoordinateConfig(cfg));
+            _attacks = new Attacks(_adb, _vision, _templatesPath, CreateAttackDelayConfig(configService.Current.Advanced));
             _wallUpdater = new WallUpdater(_adb, _vision, _templatesPath);
             _builderBaseNavigator = new BuilderBaseNavigator(_adb, _vision);
             _builderBaseResources = new BuilderBaseResources(_adb, _vision, _builderBaseNavigator);
@@ -139,11 +138,10 @@ namespace CvAut
         private static (IConfigService, IADBHelper, IVisionEngine, string) CreateServices(string configPath)
         {
             var config = new ConfigService(configPath);
-            var cfg = config.Config;
-            var devConfig = cfg.GetProperty("device_connection");
-            string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
-            int port = devConfig.GetProperty("port").GetInt32();
-            string? serial = devConfig.TryGetProperty("serial", out JsonElement serialElement) ? serialElement.GetString() : null;
+            DeviceConnectionConfig devConfig = config.Current.DeviceConnection;
+            string host = devConfig.Host;
+            int port = devConfig.Port;
+            string? serial = devConfig.Serial;
             var adb = new ADBHelper(host, port, serial);
             string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
             var vision = new VisionEngine(templatesPath);
@@ -162,7 +160,7 @@ namespace CvAut
             if (_isRunning) return;
 
             _configService.Reload();
-            _attacks = new Attacks(_adb, _vision, _templatesPath, ConfigManager.ReadAttackDelayConfig(Config), ConfigManager.ReadAttackCoordinateConfig(Config));
+            _attacks = new Attacks(_adb, _vision, _templatesPath, CreateAttackDelayConfig(_configService.Current.Advanced));
 
             _isRunning = true;
             _fastAttackQueued = false;
@@ -184,12 +182,12 @@ namespace CvAut
         {
             try
             {
-                var devConfig = Config.GetProperty("device_connection");
-                string host = devConfig.GetProperty("host").GetString() ?? "127.0.0.1";
-                int port = devConfig.GetProperty("port").GetInt32();
-                string emulatorType = devConfig.TryGetProperty("emulator_type", out var typeProp) ? (typeProp.GetString() ?? "BlueStacks") : "BlueStacks";
-                string emulatorPath = devConfig.TryGetProperty("emulator_path", out var pathProp) ? (pathProp.GetString() ?? string.Empty) : string.Empty;
-                string emulatorInstance = devConfig.TryGetProperty("emulator_instance", out var instProp) ? (instProp.GetString() ?? string.Empty) : string.Empty;
+                DeviceConnectionConfig devConfig = _configService.Current.DeviceConnection;
+                string host = devConfig.Host;
+                int port = devConfig.Port;
+                string emulatorType = devConfig.EmulatorType;
+                string emulatorPath = devConfig.EmulatorPath;
+                string emulatorInstance = devConfig.EmulatorInstance;
 
                 // Đảm bảo giả lập đã được bật và mở CoC
                 if (!EmulatorBootstrapper.EnsureReady(_adb, host, port, emulatorType, emulatorPath, token, emulatorInstance))
@@ -277,7 +275,7 @@ namespace CvAut
                 for (int i = 1; i <= cycleLimit && !CheckStop(token); i++)
                 {
                     Console.WriteLine($"[FSM-CS] phase=test_cycle status=pending cycle={i} max={cycleLimit}");
-                    OneCycle(Config, token);
+                    OneCycle(token);
                     if (i < cycleLimit && !CheckStop(token))
                     {
                         InterruptibleSleep(_fastAttackQueued ? AutomationThresholds.FastAttackCycleDelayMs : AutomationThresholds.NormalCycleDelayMs, token);
@@ -299,11 +297,9 @@ namespace CvAut
         {
             if (!_isRunning) return true;
 
-            JsonElement session = GetObjectOrDefault(Config, "run_session");
-            if (session.ValueKind != JsonValueKind.Object) return false;
-
-            bool stopByBattles = GetBoolOrDefault(session, "stop_after_battles_enabled", false);
-            int battleLimit = GetIntOrDefault(session, "stop_after_battles", 0);
+            RunSessionConfig session = _configService.Current.RunSession;
+            bool stopByBattles = session.StopAfterBattlesEnabled;
+            int battleLimit = session.StopAfterBattles;
             if (stopByBattles && battleLimit > 0 && _sessionBattlesCompleted >= battleLimit)
             {
                 _isRunning = false;
@@ -313,8 +309,8 @@ namespace CvAut
                 return true;
             }
 
-            bool stopByMinutes = GetBoolOrDefault(session, "stop_after_minutes_enabled", false);
-            int minuteLimit = GetIntOrDefault(session, "stop_after_minutes", 0);
+            bool stopByMinutes = session.StopAfterMinutesEnabled;
+            int minuteLimit = session.StopAfterMinutes;
             if (stopByMinutes && minuteLimit > 0)
             {
                 TimeSpan activeElapsed = DateTime.Now - _sessionStartedAt - _pausedDuration;
@@ -374,7 +370,7 @@ namespace CvAut
         ///    - Nếu đạt tiêu chuẩn: Triển khai rải quân đánh, chờ trận kết thúc, lưu số liệu thống kê (Stats), bấm quay về Làng chính.
         ///    - Nếu chưa đạt: Bấm tiếp tục tìm kiếm nhà khác (Search Next).
         /// </summary>
-        public void OneCycle(JsonElement cfg, CancellationToken token)
+        public void OneCycle(CancellationToken token)
         {
             WaitIfPaused(token);
             if (CheckStop(token)) return;
@@ -392,7 +388,7 @@ namespace CvAut
             WaitIfPaused(token);
             if (CheckStop(token)) return;
 
-            bool nightVillageMode = IsNightVillageMode(cfg, _currentVillageIdx);
+            bool nightVillageMode = IsNightVillageMode(_currentVillageIdx);
             if (!nightVillageMode)
             {
                 Console.WriteLine("[FSM-CS] phase=home_check status=start");
@@ -406,11 +402,11 @@ namespace CvAut
 
             if (nightVillageMode)
             {
-                OneBuilderBaseCycle(cfg, token);
+                OneBuilderBaseCycle(token);
                 return;
             }
 
-            MainVillageConfig mainConfig = GetMainVillageConfig(cfg, _currentVillageIdx);
+            MainVillageConfig mainConfig = GetMainVillageConfig(_currentVillageIdx);
 
             // 2. Kéo camera rộng sau khi Home Base đã render để thấy toàn bộ mỏ tài nguyên.
             WaitIfPaused(token);
@@ -447,7 +443,7 @@ namespace CvAut
                     return;
                 }
 
-                var trainConfig = GetTrainingConfig(cfg, _currentVillageIdx);
+                var trainConfig = GetTrainingConfig(_currentVillageIdx);
 
                 if (trainConfig.Mode.Equals("quick", StringComparison.OrdinalIgnoreCase) && _cycleCount % 5 == 0)
                 {
@@ -457,7 +453,7 @@ namespace CvAut
                 else if (!trainConfig.Mode.Equals("quick", StringComparison.OrdinalIgnoreCase) && _cycleCount % 3 == 0)
                 {
                     Console.WriteLine($"[TRAIN] phase=smart_train strategy={trainConfig.AttackStrategy} status=start");
-                    if (!_training.SmartTrain(cfg, trainConfig.AttackStrategy))
+                    if (!_training.SmartTrain(default, trainConfig.AttackStrategy))
                     {
                         Console.WriteLine("[TRAIN] phase=smart_train status=skip reason=incomplete");
                         return;
@@ -481,7 +477,7 @@ namespace CvAut
                 TryUseCakeIfConfigured(mainConfig, token);
                 TryRequestTroopsIfConfigured(mainConfig, token);
 
-                TryUpgradeWallsFromHome(cfg, token, "after_collect");
+                TryUpgradeWallsFromHome(token, "after_collect");
             }
 
             // 6. Tìm kiếm tài nguyên (Scouting loop)
@@ -557,7 +553,7 @@ namespace CvAut
                     if (InterruptibleSleep(1500, token)) break;
 
                     // Chạy script tự động rải quân tấn công
-                    string attackStrategy = GetAttackStrategy(cfg, _currentVillageIdx);
+                    string attackStrategy = GetAttackStrategy(_currentVillageIdx);
                     Console.WriteLine($"[ATTACK-CS] phase=select_strategy status=success village={_currentVillageIdx} strategy={attackStrategy}");
                     _attacks.Run(attackStrategy, token, mainConfig.UseEventTroops);
                     battleExecuted = true;
@@ -579,7 +575,7 @@ namespace CvAut
                     Console.WriteLine($"[FSM-CS] phase=battle_stats stars={starsGot} gold={gained.Gold} elixir={gained.Elixir} dark_elixir={gained.DarkElixir} status=success");
 
                     // Cập nhật số liệu thống kê phiên chơi
-                    if (GetBoolOrDefault(cfg, "enable_stats", false))
+                    if (_configService.Current.EnableStats)
                     {
                         _stats.UpdateStats(_currentVillageIdx, starsGot, gained);
                     }
@@ -598,7 +594,7 @@ namespace CvAut
 
                     if (returnedHome)
                     {
-                        TryUpgradeWallsFromHome(cfg, token, "post_battle");
+                        TryUpgradeWallsFromHome(token, "post_battle");
                     }
 
                     CheckAutoStop();
@@ -629,7 +625,7 @@ namespace CvAut
             Console.WriteLine($"[FSM-CS] phase=cycle status=success village={_currentVillageIdx}");
         }
 
-        private void OneBuilderBaseCycle(JsonElement cfg, CancellationToken token)
+        private void OneBuilderBaseCycle(CancellationToken token)
         {
             WaitIfPaused(token);
             if (CheckStop(token)) return;
@@ -645,41 +641,41 @@ namespace CvAut
             WaitIfPaused(token);
             if (CheckStop(token)) return;
 
-            JsonElement night = GetObjectOrDefault(cfg, "night_village");
-            string farmMode = GetStringOrDefault(night, "farm_mode", "trophy");
-            bool forceAttackForClanGames = GetBoolOrDefault(night, "force_attack_for_clan_games", false);
-            bool trophyRangeEnabled = GetBoolOrDefault(night, "trophy_range_enabled", false);
-            int minTrophy = Math.Clamp(GetIntOrDefault(night, "min_cups", 0), 0, 10000);
-            int maxTrophy = Math.Clamp(GetIntOrDefault(night, "max_cups", 5000), 0, 10000);
-            bool haltOnGoldFull = GetBoolOrDefault(night, "halt_on_gold_full", false);
-            bool haltOnElixirFull = GetBoolOrDefault(night, "halt_on_elixir_full", false);
-            bool upgradeWall = GetBoolOrDefault(night, "upgrade_wall", false);
-            bool enableAttack = GetBoolOrDefault(night, "enable_attack", true);
-            bool boostClockTower = GetBoolOrDefault(night, "boost_clock_tower", false);
-            int maxAttacksPerCycle = Math.Clamp(GetIntOrDefault(night, "max_attacks_per_cycle", 20), 1, 100);
+            NightVillageConfig night = _configService.Current.NightVillage;
+            string farmMode = night.FarmMode;
+            bool forceAttackForClanGames = false;
+            bool trophyRangeEnabled = false;
+            int minTrophy = Math.Clamp(night.MinCups, 0, 10000);
+            int maxTrophy = Math.Clamp(night.MaxCups, 0, 10000);
+            bool haltOnGoldFull = false;
+            bool haltOnElixirFull = false;
+            bool upgradeWall = night.UpgradeWall;
+            bool enableAttack = night.EnableAttack;
+            bool boostClockTower = night.BoostClockTower;
+            int maxAttacksPerCycle = Math.Clamp(night.MaxAttacksPerCycle, 1, 100);
             var armyOptions = new BuilderBaseArmyOptions(
-                Enabled: true,
-                Formation: GetStringOrDefault(night, "army_formation", "auto"),
-                RequireHero: GetBoolOrDefault(night, "wait_for_heroes", true));
+                Enabled: night.ArmyManagement,
+                Formation: night.ArmyFormation,
+                RequireHero: night.WaitForHeroes);
             var battleOptions = new BuilderBaseBattleOptions(
-                DropOrder: GetStringOrDefault(night, "drop_order", "BattleMachine|BattleCopter|BoxerGiant|DropShip|HogGlider|Bomber|SuperPekka|PowerPekka|BabyDragon|CannonCart|ElectrofireWizard|NightWitch|RagedBarbarian|BetaMinion|SneakyArcher"),
-                UseCustomDropOrder: GetBoolOrDefault(night, "custom_drop_order_enabled", false),
-                NextTroopDelayMs: 600,
-                SameTroopDelayMs: 180,
-                HandleBomber: GetBoolOrDefault(night, "handle_bomber", true));
+                DropOrder: night.DropOrder,
+                UseCustomDropOrder: night.CustomDropOrderEnabled,
+                NextTroopDelayMs: night.NextTroopDelayMs,
+                SameTroopDelayMs: night.SameTroopDelayMs,
+                HandleBomber: night.HandleBomber);
             var maintenanceOptions = new BuilderBaseMaintenanceOptions(
-                SuggestedUpgrades: GetBoolOrDefault(night, "suggested_upgrades", false),
-                StarLaboratory: GetBoolOrDefault(night, "star_laboratory", false),
-                UpgradeBattleMachine: GetBoolOrDefault(night, "upgrade_battle_machine", false),
-                UpgradeBattleCopter: GetBoolOrDefault(night, "upgrade_battle_copter", false),
-                PlaceNewBuildings: GetBoolOrDefault(night, "place_new_buildings", false),
-                IgnoreGoldUpgrades: GetBoolOrDefault(night, "ignore_gold_upgrades", false),
-                IgnoreElixirUpgrades: GetBoolOrDefault(night, "ignore_elixir_upgrades", false),
-                IgnoreHallUpgrades: GetBoolOrDefault(night, "ignore_hall_upgrades", true),
-                IgnoreWallUpgrades: GetBoolOrDefault(night, "ignore_wall_upgrades", true),
-                StarLaboratoryTroop: GetStringOrDefault(night, "star_laboratory_troop", "auto"),
+                SuggestedUpgrades: false,
+                StarLaboratory: false,
+                UpgradeBattleMachine: false,
+                UpgradeBattleCopter: false,
+                PlaceNewBuildings: false,
+                IgnoreGoldUpgrades: false,
+                IgnoreElixirUpgrades: false,
+                IgnoreHallUpgrades: true,
+                IgnoreWallUpgrades: true,
+                StarLaboratoryTroop: "auto",
                 VillageIdx: _currentVillageIdx,
-                StarLaboratoryDebugScreenshots: GetBoolOrDefault(night, "star_laboratory_debug_screenshots", GetBoolOrDefault(night, "debug_screenshots", false)));
+                StarLaboratoryDebugScreenshots: false);
 
             LogBuilderBaseBaselineAssetAudit(armyOptions, battleOptions, maintenanceOptions, boostClockTower, upgradeWall);
 
@@ -1019,9 +1015,9 @@ namespace CvAut
             Console.WriteLine($"[BB-CS WARNING] phase=asset_audit status=partial checked={required.Count} missing={missing.Length} templates=\"{string.Join(",", missing)}\" action=skip_template_dependent_steps");
         }
 
-        private void TryUpgradeWallsFromHome(JsonElement cfg, CancellationToken token, string phase)
+        private void TryUpgradeWallsFromHome(CancellationToken token, string phase)
         {
-            var wallConfig = GetWallUpgradeConfig(cfg, _currentVillageIdx);
+            var wallConfig = GetWallUpgradeConfig(_currentVillageIdx);
             Console.WriteLine($"[WALL DECISION] phase={phase} cycle={_cycleCount} enabled={wallConfig.Enabled} home=true gold_start={wallConfig.GoldThreshold:N0} elixir_start={wallConfig.ElixirThreshold:N0} gold_reserve={wallConfig.GoldReserve:N0} elixir_reserve={wallConfig.ElixirReserve:N0} batch_limit={wallConfig.BatchLimit} wall_debug_screenshots={wallConfig.DebugScreenshots} status=check");
 
             if (!wallConfig.Enabled)
@@ -1045,7 +1041,7 @@ namespace CvAut
                 wallConfig.DebugScreenshots,
                 _cycleCount,
                 token);
-            if (upgradedWalls > 0 && GetBoolOrDefault(cfg, "enable_stats", false))
+            if (upgradedWalls > 0 && _configService.Current.EnableStats)
             {
                 _stats.UpdateWallStats(_currentVillageIdx, upgradedWalls);
             }
@@ -1059,8 +1055,8 @@ namespace CvAut
         {
             Console.WriteLine("[DEBUG][FSM-CS] phase=worker_loop status=start");
 
-            JsonElement multiConfig = GetObjectOrDefault(Config, "multi_account");
-            bool enableMulti = GetBoolOrDefault(multiConfig, "enable_multi_account", false);
+            MultiAccountConfig multiConfig = _configService.Current.MultiAccount;
+            bool enableMulti = multiConfig.Enabled;
 
             if (!enableMulti)
             {
@@ -1068,7 +1064,7 @@ namespace CvAut
                 _currentVillageIdx = 1;
                 while (!CheckStop(token))
                 {
-                    OneCycle(Config, token);
+                    OneCycle(token);
                     if (CheckStop(token)) break;
                     // Nghỉ ngắt quãng giữa các chu kỳ. Nếu vừa đánh xong, delay ngắn hơn để đánh tiếp ngay
                     InterruptibleSleep(_fastAttackQueued ? AutomationThresholds.FastAttackCycleDelayMs : AutomationThresholds.NormalCycleDelayMs, token);
@@ -1077,13 +1073,13 @@ namespace CvAut
             }
 
             // Chế độ chạy nhiều tài khoản (Multi Account)
-            AccountConfig[] accounts = _accounts.GetConfiguredAccounts(multiConfig);
-            int intervalSecs = Math.Max(1, GetIntOrDefault(multiConfig, "multi_interval_mins", 60)) * 60;
-            bool switchByMinutes = GetBoolOrDefault(multiConfig, "switch_after_minutes_enabled", true);
-            bool switchByBattles = GetBoolOrDefault(multiConfig, "switch_after_battles_enabled", false);
-            int battleLimit = GetIntOrDefault(multiConfig, "switch_after_battles", 0);
-            bool switchByClanPoints = GetBoolOrDefault(multiConfig, "switch_after_clan_points_enabled", false);
-            int clanPointLimit = GetIntOrDefault(multiConfig, "switch_after_clan_points", 0);
+            AccountConfig[] accounts = _accounts.GetConfiguredAccounts(default);
+            int intervalSecs = Math.Max(1, multiConfig.IntervalMinutes) * 60;
+            bool switchByMinutes = multiConfig.SwitchAfterMinutesEnabled;
+            bool switchByBattles = multiConfig.SwitchAfterBattlesEnabled;
+            int battleLimit = multiConfig.SwitchAfterBattles;
+            bool switchByClanPoints = multiConfig.SwitchAfterClanPointsEnabled;
+            int clanPointLimit = multiConfig.SwitchAfterClanPoints;
 
             while (!CheckStop(token))
             {
@@ -1127,7 +1123,7 @@ namespace CvAut
                         out switchReason) && !CheckStop(token))
                     {
                         WaitIfPaused(token);
-                        OneCycle(Config, token);
+                        OneCycle(token);
                         if (CheckStop(token)) break;
                         InterruptibleSleep(_fastAttackQueued ? AutomationThresholds.FastAttackCycleDelayMs : 15000, token);
                     }
@@ -1306,10 +1302,21 @@ namespace CvAut
             return false;
         }
 
-        private static MainVillageConfig GetMainVillageConfig(JsonElement cfg, int villageIdx) => ConfigService.GetMainVillageConfig(cfg, villageIdx);
-        private static TrainingConfig GetTrainingConfig(JsonElement cfg, int villageIdx) => ConfigService.GetTrainingConfig(cfg, villageIdx);
-        private static string GetAttackStrategy(JsonElement cfg, int villageIdx) => ConfigService.GetAttackStrategy(cfg, villageIdx);
-        private static WallUpgradeConfig GetWallUpgradeConfig(JsonElement cfg, int villageIdx) => ConfigService.GetWallUpgradeConfig(cfg, villageIdx);
+        private MainVillageConfig GetMainVillageConfig(int villageIdx) => _configService.GetMainVillageConfig(villageIdx);
+        private TrainingConfig GetTrainingConfig(int villageIdx) => _configService.GetTrainingConfig(villageIdx);
+        private string GetAttackStrategy(int villageIdx) => _configService.GetAttackStrategy(villageIdx);
+        private WallUpgradeConfig GetWallUpgradeConfig(int villageIdx) => _configService.GetWallUpgradeConfig(villageIdx);
+
+        private static AttackDelayConfig CreateAttackDelayConfig(CvAut.Configuration.AdvancedConfig adv)
+        {
+            return new AttackDelayConfig
+            {
+                TroopDeployDelayMs = adv.TroopDeployDelayMs,
+                RageSpellDelayMs = adv.RageSpellDelayMs,
+                FreezeSpellDelayMs = adv.FreezeSpellDelayMs,
+                GrandWardenAbilityDelayMs = adv.GrandWardenAbilityDelayMs
+            };
+        }
 
         private static bool ShouldAcceptTarget((int Gold, int Elixir, int DarkElixir) resources, FarmingTargetConfig config, out string reason)
         {
