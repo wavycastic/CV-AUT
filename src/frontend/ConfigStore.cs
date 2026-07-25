@@ -7,38 +7,6 @@ using CvAut.Models;
 
 namespace CvAut
 {
-    public sealed class BotProfile
-    {
-        public string Name { get; init; } = "Default";
-        public string ConfigPath { get; init; } = Path.Combine("Config", "test_config.json");
-        public DateTimeOffset UpdatedAt { get; init; } = DateTimeOffset.Now;
-
-        public override string ToString() => Name;
-    }
-
-    public interface IConfigStore
-    {
-        string ActiveProfileName { get; }
-        IReadOnlyList<BotProfile> Profiles { get; }
-        JsonObject LoadActiveConfig();
-        void SaveActiveConfig(JsonObject config);
-        void LoadProfile(string name);
-        void SaveProfileAs(string name, JsonObject config);
-        void DeleteProfile(string name);
-        string ResolveActiveConfigPath();
-
-        /// <summary>Ensures a per-device config file exists whose device_connection points at this device,
-        /// then returns its path. Does not change the active profile — safe to call per device before Start
-        /// so concurrent devices each load their own host/port (Phase 3 multi-device).</summary>
-        string PrepareDeviceConfig(string deviceProfileKey, string host, int port, string? emulatorType = null, string? emulatorPath = null, string? emulatorInstance = null);
-
-        /// <summary>Loads opt-in notification settings (disabled/empty by default).</summary>
-        NotificationSettings LoadNotificationSettings();
-
-        /// <summary>Persists notification settings.</summary>
-        void SaveNotificationSettings(NotificationSettings settings);
-    }
-
     /// <summary>
     /// JSON DOM config/profile store. AOT-safe: no reflection serializers, no assembly scanning.
     /// Preserves unknown backend fields while UI edits known Phase 2 fields.
@@ -414,7 +382,6 @@ namespace CvAut
             root["attack_mode"] ??= "attack";
             root["use_electro_dragon"] ??= false;
             root["request_troops"] ??= false;
-            
 
             JsonObject smart = GetOrCreateObject(root, "smart_surrender");
             smart["enabled"] ??= false;
@@ -439,8 +406,6 @@ namespace CvAut
             night["next_troop_delay_ms"] ??= 600;
             night["same_troop_delay_ms"] ??= 180;
             night["handle_bomber"] ??= true;
-            
-            
             night["suggested_upgrades"] ??= false;
             night["place_new_buildings"] ??= false;
             night["ignore_gold_upgrades"] ??= false;
@@ -451,7 +416,6 @@ namespace CvAut
             night["star_laboratory_troop"] ??= "auto";
             night["upgrade_battle_machine"] ??= false;
             night["upgrade_battle_copter"] ??= false;
-            
 
             JsonObject clanGames = GetOrCreateObject(root, "clan_games");
             clanGames["village"] ??= "main_village";
@@ -499,32 +463,6 @@ namespace CvAut
             var root = new JsonObject();
             EnsureDefaults(root);
             return root;
-        }
-    }
-
-    public static class AttackCatalog
-    {
-        public static IReadOnlyList<string> Discover()
-        {
-            var names = new List<string>();
-            try
-            {
-                string dir = Path.Combine(AppContext.BaseDirectory, "assets", "Templates", "attacks");
-                if (Directory.Exists(dir))
-                {
-                    foreach (string file in Directory.GetFiles(dir, "*.txt"))
-                    {
-                        names.Add(Path.GetFileNameWithoutExtension(file));
-                    }
-                }
-            }
-            catch
-            {
-                // Best effort — empty catalog means user types attack name.
-            }
-
-            names.Sort(StringComparer.OrdinalIgnoreCase);
-            return names;
         }
     }
 }
