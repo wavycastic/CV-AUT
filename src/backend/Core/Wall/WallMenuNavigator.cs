@@ -3,7 +3,7 @@ using System.Threading;
 namespace CvAut
 {
     /// <summary>
-    /// Điều hướng cơ bản trên màn hình Làng chính khi nâng cấp tường: giải tỏa menu/popup còn sót lại.
+    /// Basic main village navigation for the wall upgrade flow: dismissing leftover menus/popups.
     /// </summary>
     internal sealed class WallMenuNavigator
     {
@@ -14,7 +14,7 @@ namespace CvAut
             _adb = adb;
         }
 
-        /// <summary>Giải tỏa menu theo kiểu best-effort, nuốt mọi lỗi để không phá vỡ luồng chính.</summary>
+        /// <summary>Dismisses menus on a best-effort basis, swallowing every error so the main flow is never broken.</summary>
         public void BestEffortDismiss()
         {
             try
@@ -26,7 +26,7 @@ namespace CvAut
             catch { }
         }
 
-        /// <summary>Giải tỏa menu nhưng tôn trọng tín hiệu hủy.</summary>
+        /// <summary>Dismisses menus while honouring the cancellation signal.</summary>
         public void SafeDismiss(CancellationToken token)
         {
             if (token.IsCancellationRequested)

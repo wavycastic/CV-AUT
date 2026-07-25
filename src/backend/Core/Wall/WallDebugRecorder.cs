@@ -6,7 +6,7 @@ using OpenCvSharp;
 namespace CvAut
 {
     /// <summary>
-    /// Lưu ảnh chụp gỡ lỗi và đếm số liệu phiên cho luồng nâng cấp tường.
+    /// Saves debug screenshots and tracks per-session counters for the wall upgrade flow.
     /// </summary>
     internal sealed class WallDebugRecorder
     {
@@ -25,7 +25,7 @@ namespace CvAut
             _debugDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimpliMixi", "debug", "wall");
         }
 
-        /// <summary>Chu kỳ hiện tại, dùng trong mọi dòng log của WallUpdater.</summary>
+        /// <summary>The current cycle, used in every WallUpdater log line.</summary>
         public int Cycle => _cycle;
 
         public void Configure(bool debugScreenshotsEnabled, int cycle)

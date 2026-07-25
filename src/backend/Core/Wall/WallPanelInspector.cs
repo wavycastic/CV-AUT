@@ -4,8 +4,8 @@ using OpenCvSharp;
 namespace CvAut
 {
     /// <summary>
-    /// Nhận diện trạng thái giao diện trong luồng nâng cấp tường:
-    /// bảng Thợ xây, bảng nâng cấp, hộp thoại xác nhận và tình trạng nút tài nguyên.
+    /// Recognises UI state during the wall upgrade flow: the builder panel,
+    /// the upgrade panel, the confirmation dialog and the state of the resource buttons.
     /// </summary>
     internal sealed class WallPanelInspector
     {
@@ -16,7 +16,7 @@ namespace CvAut
             _adb = adb;
         }
 
-        /// <summary>Bảng gợi ý Thợ xây có đang mở không (dựa trên tỉ lệ điểm ảnh tối trong ROI).</summary>
+        /// <summary>Whether the builder suggestions panel is open (based on the ratio of dark pixels in the ROI).</summary>
         public bool IsBuilderMenuOpen()
         {
             using Mat? screenshot = _adb.TakeScreenshot();
@@ -42,7 +42,7 @@ namespace CvAut
             return open;
         }
 
-        /// <summary>Xác thực bảng nâng cấp tường đã mở và đọc tình trạng hai nút tài nguyên.</summary>
+        /// <summary>Validates that the wall upgrade panel is open and reads the state of both resource buttons.</summary>
         public bool ValidateWallPanelOpen(out bool goldAvailable, out bool elixirAvailable)
         {
             goldAvailable = false;
@@ -76,7 +76,7 @@ namespace CvAut
             return true;
         }
 
-        /// <summary>Chụp màn hình mới rồi kiểm tra chi phí có bị tô đỏ không.</summary>
+        /// <summary>Takes a fresh screenshot and checks whether the cost label is red.</summary>
         public bool IsUpgradeCostRed(string resource, out double redRatio, out int redPixels)
         {
             redRatio = 0;
@@ -92,7 +92,7 @@ namespace CvAut
             return red;
         }
 
-        /// <summary>Hộp thoại xác nhận có đang mở không (dựa trên độ sáng trung bình).</summary>
+        /// <summary>Whether the confirmation dialog is open (based on average brightness).</summary>
         public bool IsConfirmDialogOpen()
         {
             using Mat? screenshot = _adb.TakeScreenshot();
@@ -108,7 +108,7 @@ namespace CvAut
             return open;
         }
 
-        /// <summary>Hộp thoại xác nhận đã đóng hẳn chưa.</summary>
+        /// <summary>Whether the confirmation dialog has fully closed.</summary>
         public bool IsConfirmDialogClosed()
         {
             using Mat? screenshot = _adb.TakeScreenshot();
@@ -122,7 +122,7 @@ namespace CvAut
             return brightness < 60;
         }
 
-        /// <summary>Nút nâng cấp bằng tài nguyên chỉ định có sáng (khả dụng) không.</summary>
+        /// <summary>Whether the upgrade button for the given resource is lit up (affordable).</summary>
         public static bool IsResourceUpgradeButtonAvailable(Mat screenshot, string resource)
         {
             Point point = WallUiLayout.UpgradePointFor(resource);
@@ -138,7 +138,7 @@ namespace CvAut
             return brightness >= 45;
         }
 
-        /// <summary>Chỉ hỗ trợ đúng độ phân giải đã hiệu chỉnh; sai kích thước thì bỏ qua toàn bộ chu kỳ.</summary>
+        /// <summary>Only the calibrated resolution is supported; a different screen size skips the whole cycle.</summary>
         public static bool ValidateSupportedLayout(Mat? screenshot, int cycle, out string reason)
         {
             if (screenshot == null || screenshot.Empty())

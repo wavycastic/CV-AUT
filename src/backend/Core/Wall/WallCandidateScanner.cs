@@ -8,11 +8,11 @@ using Size = OpenCvSharp.Size;
 
 namespace CvAut
 {
-    /// <summary>Một ứng viên tường tìm được trong Builder menu.</summary>
+    /// <summary>A single wall candidate found inside the builder menu.</summary>
     internal sealed record WallCandidate(Point Point, double Confidence, string TemplateName);
 
     /// <summary>
-    /// Quét tìm các đoạn tường trong Builder menu bằng so khớp mẫu, lọc trùng lặp và sắp xếp ứng viên.
+    /// Scans the builder menu for wall segments using template matching, then dedupes and sorts the candidates.
     /// </summary>
     internal sealed class WallCandidateScanner
     {
@@ -29,7 +29,7 @@ namespace CvAut
             _navigator = navigator;
         }
 
-        /// <summary>Danh sách 4 generic Wall template thực sự tồn tại trong thư mục Templates.</summary>
+        /// <summary>The four generic wall templates that actually exist in the Templates directory.</summary>
         public string[] GetWallTemplateNames()
         {
             return new[]
@@ -41,7 +41,7 @@ namespace CvAut
             }.Where(name => TemplateAssetLoader.Exists(_templatesPath, name)).ToArray();
         }
 
-        /// <summary>Mở Builder menu rồi quét tối đa 7 lần (có cuộn lại) cho tới khi tìm được ứng viên.</summary>
+        /// <summary>Opens the builder menu and scans up to seven times (scrolling between attempts) until candidates are found.</summary>
         public List<WallCandidate> FindAllWallCandidates(CancellationToken token = default)
         {
             if (token.IsCancellationRequested) return new List<WallCandidate>();
@@ -107,7 +107,7 @@ namespace CvAut
             return new List<WallCandidate>();
         }
 
-        /// <summary>Quét tường trên một ảnh có sẵn, không chạm vào giao diện.</summary>
+        /// <summary>Scans for walls on an existing screenshot, without touching the UI.</summary>
         public List<Point> ScanWallLocations(Mat screenshot)
         {
             var locations = new List<Point>();

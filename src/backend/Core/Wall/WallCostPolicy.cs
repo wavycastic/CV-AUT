@@ -3,18 +3,18 @@ using OpenCvSharp;
 
 namespace CvAut
 {
-    /// <summary>Kết quả kiểm tra chi phí nâng cấp tường đọc được từ OCR.</summary>
+    /// <summary>Result of validating the wall upgrade cost read through OCR.</summary>
     internal sealed record WallCostValidationResult(bool IsValid, int Cost, string Reason);
 
     /// <summary>
-    /// Các quy tắc thuần tuý (không chạm ADB) để kiểm tra chi phí nâng cấp tường:
-    /// đối chiếu chi phí Vàng/Dầu hồng, xác minh tài nguyên đã trừ sau confirm, và phát hiện chi phí bị tô đỏ.
+    /// Pure rules (no ADB access) for validating the wall upgrade cost: cross-checking the gold/elixir
+    /// cost, verifying that resources were actually deducted after confirming, and detecting a red cost label.
     /// </summary>
     internal static class WallCostPolicy
     {
         /// <summary>
-        /// Đối chiếu hai giá trị chi phí OCR. Nếu cả hai đọc được thì tỉ lệ lệch không được vượt maxMismatchRatio.
-        /// Luôn chọn giá trị lớn hơn để an toàn.
+        /// Cross-checks the two OCR cost values. When both are readable their mismatch ratio must not exceed
+        /// maxMismatchRatio. The larger value is always chosen, to stay on the safe side.
         /// </summary>
         internal static WallCostValidationResult ValidateWallCosts(int goldCost, int elixirCost, double maxMismatchRatio = WallUiLayout.MaxCostMismatchRatio)
         {
@@ -36,7 +36,7 @@ namespace CvAut
             return new WallCostValidationResult(true, Math.Max(goldCost, elixirCost), "ok");
         }
 
-        /// <summary>Xác minh tài nguyên thực sự bị trừ đúng khoảng kỳ vọng sau khi xác nhận giao dịch.</summary>
+        /// <summary>Verifies that resources really dropped by roughly the expected amount after confirming the transaction.</summary>
         internal static bool IsResourceDeltaVerified(long resourceBefore, long resourceAfter, long expectedSpend, long tolerance = 0)
         {
             if (resourceAfter <= 0 || resourceBefore <= 0) return false;
@@ -48,7 +48,7 @@ namespace CvAut
             return actualSpend >= (expectedSpend - tolerance) && actualSpend <= (expectedSpend + tolerance);
         }
 
-        /// <summary>Đếm số điểm ảnh đỏ trong ROI chi phí để biết tài nguyên có đủ hay không.</summary>
+        /// <summary>Counts red pixels inside the cost ROI to tell whether the player can afford the upgrade.</summary>
         internal static bool IsUpgradeCostRed(Mat screenshot, string resource, out double redRatio, out int redPixels)
         {
             redRatio = 0;
