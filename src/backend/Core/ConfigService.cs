@@ -20,6 +20,7 @@ internal sealed class ConfigService : IConfigService
 
     // Temporary compatibility surface for workflow code that has not yet moved to
     // typed sections. Raw JSON ownership remains inside the persistence layer.
+    [Obsolete("Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.")]
     public JsonElement Config => _persistence.Root;
 
     public void Reload()
