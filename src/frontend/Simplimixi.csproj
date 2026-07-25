@@ -74,6 +74,7 @@
     <Compile Include="AppLog.cs" />
     <Compile Include="Converters\LogLevelToBrushConverter.cs" />
     <Compile Include="ConfigStore.cs" />
+    <Compile Include="ConfigSchemaDefaults.cs" />
     <Compile Include="BotProfile.cs" />
     <Compile Include="IConfigStore.cs" />
     <Compile Include="AttackCatalog.cs" />
