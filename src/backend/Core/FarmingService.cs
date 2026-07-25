@@ -6,10 +6,10 @@ using Point = OpenCvSharp.Point;
 namespace CvAut;
 
 /// <summary>
-/// Facade mỏng cho luồng farming. Toàn bộ logic nằm ở các collaborator trong Core/Farming:
+/// Thin facade over the farming flow. All logic lives in the collaborators under Core/Farming:
 /// <see cref="BattleResultDetector"/>, <see cref="BattleRewardReader"/>,
-/// <see cref="RewardPopupHandler"/>, <see cref="CameraZoomController"/> và
-/// <see cref="TargetAcceptancePolicy"/>. Bề mặt public giữ nguyên để consumer không phải sửa.
+/// <see cref="RewardPopupHandler"/>, <see cref="CameraZoomController"/> and
+/// <see cref="TargetAcceptancePolicy"/>. The public surface is unchanged so consumers stay untouched.
 /// </summary>
 internal sealed class FarmingService
 {
