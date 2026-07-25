@@ -111,6 +111,7 @@
     <Compile Include="Models\LogEntry.cs" />
     <Compile Include="Models\SessionStats.cs" />
     <Compile Include="Services\AppStateService.cs" />
+    <Compile Include="Services\AppPreferences.cs" />
     <Compile Include="Services\Sessions\IDeviceSession.cs" />
     <Compile Include="Services\Sessions\IDeviceSessionManager.cs" />
     <Compile Include="Services\Sessions\AutomationRunnerSession.cs" />

@@ -20,8 +20,8 @@ namespace CvAut
     /// </summary>
     internal sealed class BuilderBaseArmyManager
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
 
         private const double ButtonThreshold = 0.60;
@@ -88,7 +88,7 @@ namespace CvAut
             ["electrofire_wizard"] = new[] { @"troops\builder_base\electrofire_wizard_click" }
         };
 
-        public BuilderBaseArmyManager(ADBHelper adb, VisionEngine vision, BuilderBaseNavigator navigator)
+        public BuilderBaseArmyManager(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator)
         {
             _adb = adb;
             _vision = vision;

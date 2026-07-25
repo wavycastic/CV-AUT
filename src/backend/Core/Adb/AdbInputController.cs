@@ -1,28 +1,39 @@
 using System;
-using System.Threading;
+using System.Collections.Generic;
+using System.Linq;
+using OpenCvSharp;
 
 namespace CvAut.Adb
 {
     /// <summary>
-    /// Chuyên xử lý gửi các thao tác chạm (Tap), vuốt (Swipe) và cử chỉ tương tác ngầm với giả lập Android.
+    /// Translates device input operations into Android shell commands.
     /// </summary>
-    internal class AdbInputController
+    internal sealed class AdbInputController : IAdbInputController
     {
-        private readonly AdbProcessRunner _runner;
+        private readonly IAdbShellExecutor _shell;
 
-        public AdbInputController(AdbProcessRunner runner)
+        public AdbInputController(IAdbShellExecutor shell)
         {
-            _runner = runner;
+            _shell = shell ?? throw new ArgumentNullException(nameof(shell));
         }
 
-        public void Tap(string deviceAddress, int x, int y)
-        {
-            _runner.RunAdbCommand(deviceAddress, $"shell input tap {x} {y}");
-        }
+        public string Tap(int x, int y)
+            => _shell.Execute($"input tap {x} {y}");
 
-        public void Swipe(string deviceAddress, int x1, int y1, int x2, int y2, int durationMs = 300)
+        public string Swipe(int x1, int y1, int x2, int y2, int durationMs = 300)
+            => _shell.Execute($"input swipe {x1} {y1} {x2} {y2} {durationMs}");
+
+        public string TapSequence(IEnumerable<Point> points)
         {
-            _runner.RunAdbCommand(deviceAddress, $"shell input swipe {x1} {y1} {x2} {y2} {durationMs}");
+            ArgumentNullException.ThrowIfNull(points);
+
+            string[] commands = points
+                .Select(point => $"input tap {point.X} {point.Y}")
+                .ToArray();
+
+            return commands.Length == 0
+                ? string.Empty
+                : _shell.Execute(string.Join("; ", commands));
         }
     }
 }

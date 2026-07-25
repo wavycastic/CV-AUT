@@ -15,8 +15,8 @@ namespace CvAut
     /// </summary>
     internal sealed class BuilderBaseResources
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
 
         private const double CollectorThreshold = 0.62;
@@ -91,7 +91,7 @@ namespace CvAut
             @"ui\builder_elixir_cart"
         };
 
-        public BuilderBaseResources(ADBHelper adb, VisionEngine vision, BuilderBaseNavigator navigator)
+        public BuilderBaseResources(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator)
         {
             _adb = adb;
             _vision = vision;

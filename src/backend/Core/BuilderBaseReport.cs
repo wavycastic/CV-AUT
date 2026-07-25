@@ -32,8 +32,8 @@ namespace CvAut
     /// </summary>
     internal sealed class BuilderBaseReport
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
 
         private static readonly Rect TrophyRoi = new(92, 92, 135, 42);
@@ -54,7 +54,7 @@ namespace CvAut
             @"resources\full_elixir_builder"
         };
 
-        public BuilderBaseReport(ADBHelper adb, VisionEngine vision, BuilderBaseNavigator navigator)
+        public BuilderBaseReport(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator)
         {
             _adb = adb;
             _vision = vision;

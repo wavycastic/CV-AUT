@@ -8,12 +8,12 @@ namespace CvAut;
 
 internal sealed class StatsRepository : IStatsRepository
 {
-    private readonly ADBHelper _adb;
-    private readonly VisionEngine _vision;
+    private readonly IADBHelper _adb;
+    private readonly IVisionEngine _vision;
     private readonly string _templatesPath;
     private static readonly string WritableLogsDirectory = ResolveWritableLogsDirectory();
 
-    public StatsRepository(ADBHelper adb, VisionEngine vision, string templatesPath)
+    public StatsRepository(IADBHelper adb, IVisionEngine vision, string templatesPath)
     {
         _adb = adb;
         _vision = vision;

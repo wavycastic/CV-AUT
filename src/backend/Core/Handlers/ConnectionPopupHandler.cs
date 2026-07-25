@@ -10,12 +10,12 @@ namespace CvAut.Handlers
     /// </summary>
     internal class ConnectionPopupHandler
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly string _templatesPath;
         private bool _handlingConnectionPopup;
 
-        public ConnectionPopupHandler(ADBHelper adb, VisionEngine vision, string templatesPath)
+        public ConnectionPopupHandler(IADBHelper adb, IVisionEngine vision, string templatesPath)
         {
             _adb = adb;
             _vision = vision;

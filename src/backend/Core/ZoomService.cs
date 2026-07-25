@@ -6,11 +6,11 @@ namespace CvAut;
 
 internal sealed class ZoomService : IZoomService
 {
-    private readonly ADBHelper _adb;
+    private readonly IADBHelper _adb;
 
-    public ZoomService(ADBHelper adb)
+    public ZoomService(IADBHelper adb)
     {
-        _adb = adb;
+        _adb = adb ?? throw new ArgumentNullException(nameof(adb));
     }
 
     public void ZoomOut()
@@ -35,10 +35,9 @@ internal sealed class ZoomService : IZoomService
         {
             Console.WriteLine("[FSM-CS] phase=camera_zoom status=pending details=\"bluestacks_detected\"");
             bool ok = _adb.PinchInZoomOut(count: 3, durationMs: 450, intervalMs: 500);
-            if (ok)
-                Console.WriteLine("[FSM-CS] phase=camera_zoom status=success details=\"bluestacks_adb_pinch\"");
-            else
-                Console.WriteLine("[FSM-CS WARNING] phase=camera_zoom status=fail reason=no_confirmation");
+            Console.WriteLine(ok
+                ? "[FSM-CS] phase=camera_zoom status=success details=\"bluestacks_adb_pinch\""
+                : "[FSM-CS WARNING] phase=camera_zoom status=fail reason=no_confirmation");
         }
         else
         {
@@ -53,33 +52,40 @@ internal sealed class ZoomService : IZoomService
             try
             {
                 foreach (var process in System.Diagnostics.Process.GetProcessesByName(processName))
-                    if (process.MainWindowHandle != IntPtr.Zero)
-                        return process.MainWindowHandle;
+                {
+                    using (process)
+                    {
+                        if (process.MainWindowHandle != IntPtr.Zero)
+                            return process.MainWindowHandle;
+                    }
+                }
             }
-            catch { }
+            catch
+            {
+                // Best effort: fall back to title-based lookup.
+            }
         }
         return IntPtr.Zero;
     }
 
-    private static void SendKeyToWindow(IntPtr hWnd, IntPtr virtualKey, int repetitions, int gapMs)
+    private static void SendKeyToWindow(IntPtr windowHandle, IntPtr virtualKey, int repetitions, int gapMs)
     {
-        const uint WM_KEYDOWN = 0x0100;
-        const uint WM_KEYUP = 0x0101;
+        const uint WmKeyDown = 0x0100;
+        const uint WmKeyUp = 0x0101;
 
         uint currentThreadId = GetCurrentThreadId();
-        uint targetThreadId = GetWindowThreadProcessId(hWnd, out _);
+        uint targetThreadId = GetWindowThreadProcessId(windowHandle, out _);
 
-        for (int i = 0; i < repetitions; i++)
+        for (int index = 0; index < repetitions; index++)
         {
-            bool attached = false;
-            if (targetThreadId != 0 && targetThreadId != currentThreadId)
-                attached = AttachThreadInput(currentThreadId, targetThreadId, true);
-
+            bool attached = targetThreadId != 0 &&
+                            targetThreadId != currentThreadId &&
+                            AttachThreadInput(currentThreadId, targetThreadId, true);
             try
             {
-                PostMessage(hWnd, WM_KEYDOWN, virtualKey, IntPtr.Zero);
+                PostMessage(windowHandle, WmKeyDown, virtualKey, IntPtr.Zero);
                 Thread.Sleep(20);
-                PostMessage(hWnd, WM_KEYUP, virtualKey, IntPtr.Zero);
+                PostMessage(windowHandle, WmKeyUp, virtualKey, IntPtr.Zero);
             }
             finally
             {
@@ -90,19 +96,18 @@ internal sealed class ZoomService : IZoomService
         }
     }
 
-    // --- Win32 P/Invoke ---
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+    private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
+    private static extern IntPtr FindWindow(string? className, string? windowName);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
 
     [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
     [DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();
