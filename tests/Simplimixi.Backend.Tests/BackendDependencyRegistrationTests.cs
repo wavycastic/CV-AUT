@@ -7,21 +7,25 @@ namespace CvAut.Backend.Tests
     public class BackendDependencyRegistrationTests
     {
         [Fact]
-        public void AddCvAutBackend_RegistersConcreteAdbAndInterfaceAsSingletons()
+        public void AddCvAutBackend_RegistersAbstractionsAsSingletons()
         {
             var services = new ServiceCollection();
 
             services.AddCvAutBackend("Config/test_config.json");
 
-            ServiceDescriptor concrete = Assert.Single(
-                services.Where(descriptor => descriptor.ServiceType == typeof(ADBHelper)));
-            ServiceDescriptor abstraction = Assert.Single(
-                services.Where(descriptor => descriptor.ServiceType == typeof(IADBHelper)));
+            var provider = services.BuildServiceProvider();
 
-            Assert.Equal(ServiceLifetime.Singleton, concrete.Lifetime);
-            Assert.Equal(ServiceLifetime.Singleton, abstraction.Lifetime);
-            Assert.NotNull(concrete.ImplementationFactory);
-            Assert.NotNull(abstraction.ImplementationFactory);
+            var adb = provider.GetRequiredService<IADBHelper>();
+            var vision = provider.GetRequiredService<IVisionEngine>();
+            var config = provider.GetRequiredService<IConfigService>();
+
+            Assert.IsType<ADBHelper>(adb);
+            Assert.IsType<VisionEngine>(vision);
+            Assert.IsType<ConfigService>(config);
+
+            Assert.Same(adb, provider.GetRequiredService<IADBHelper>());
+            Assert.Same(vision, provider.GetRequiredService<IVisionEngine>());
+            Assert.Same(config, provider.GetRequiredService<IConfigService>());
         }
     }
 }

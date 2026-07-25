@@ -1600,7 +1600,7 @@ namespace CvAut
             Stop();
             _pauseEvent.Dispose();
             _cts?.Dispose();
-            _vision.Dispose();
+            (_vision as IDisposable)?.Dispose();
         }
     }
 }

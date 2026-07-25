@@ -3,7 +3,7 @@ using OpenCvSharp;
 
 namespace CvAut;
 
-public interface IVisionEngine : IDisposable
+public interface IVisionEngine
 {
     string TemplatesPath { get; }
     string TemplatesDirectory => TemplatesPath;

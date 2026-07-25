@@ -12,23 +12,17 @@ public static class ServiceCollectionExtensions
         string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
 
         // --- Composition root: the only place that knows about concrete implementations. ---
-        services.AddSingleton<ConfigService>(_ => new ConfigService(configPath));
-        services.AddSingleton<IConfigService>(serviceProvider =>
-            serviceProvider.GetRequiredService<ConfigService>());
+        services.AddSingleton<IConfigService>(_ => new ConfigService(configPath));
 
-        services.AddSingleton<ADBHelper>(serviceProvider =>
+        services.AddSingleton<IADBHelper>(serviceProvider =>
         {
             DeviceConnectionConfig device = serviceProvider
                 .GetRequiredService<IConfigService>()
                 .DeviceConnection;
             return new ADBHelper(device.Host, device.Port, device.Serial);
         });
-        services.AddSingleton<IADBHelper>(serviceProvider =>
-            serviceProvider.GetRequiredService<ADBHelper>());
 
-        services.AddSingleton<VisionEngine>(_ => new VisionEngine(templatesPath));
-        services.AddSingleton<IVisionEngine>(serviceProvider =>
-            serviceProvider.GetRequiredService<VisionEngine>());
+        services.AddSingleton<IVisionEngine>(_ => new VisionEngine(templatesPath));
 
         // --- Consumers: abstractions only. ---
         services.AddSingleton<IPopupHandlerService>(serviceProvider => new PopupHandlerService(
