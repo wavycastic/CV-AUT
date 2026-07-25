@@ -1,0 +1,13 @@
+D:\a\CV-AUT\CV-AUT\src\backend\Core\CVAutomationFramework.cs(90,93): warning CS8603: Possible null reference return. [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+  Simplimixi.Backend -> D:\a\CV-AUT\CV-AUT\src\backend\bin\Debug\net10.0-windows\Simplimixi.Backend.dll
+  Simplimixi.Backend.Tests -> D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\bin\Debug\net10.0-windows\Simplimixi.Backend.Tests.dll
+  Simplimixi -> D:\a\CV-AUT\CV-AUT\src\frontend\bin\Debug\net10.0-windows\AutoClashOfClan20206.dll
+  Simplimixi.Frontend.Tests -> D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\bin\Debug\net10.0-windows\Simplimixi.Frontend.Tests.dll
+
+Build succeeded.
+
+D:\a\CV-AUT\CV-AUT\src\backend\Core\CVAutomationFramework.cs(90,93): warning CS8603: Possible null reference return. [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+    1 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:20.50
