@@ -12,7 +12,7 @@ internal sealed class MainVillageCycleRunner
     private readonly ZoomService _zoom;
     private readonly PopupHandlerService _popups;
     private readonly Training _training;
-    private readonly Attacks _attacks;
+    private readonly Func<Attacks> _attacksProvider;
     private readonly StatsRepository _stats;
     private readonly HomeBaseDetector _homeDetector;
     private readonly ScoutingFlow _scouting;
@@ -27,7 +27,7 @@ internal sealed class MainVillageCycleRunner
         ZoomService zoom,
         PopupHandlerService popups,
         Training training,
-        Attacks attacks,
+        Func<Attacks> attacksProvider,
         StatsRepository stats,
         HomeBaseDetector homeDetector,
         ScoutingFlow scouting,
@@ -41,7 +41,7 @@ internal sealed class MainVillageCycleRunner
         _zoom = zoom;
         _popups = popups;
         _training = training;
-        _attacks = attacks;
+        _attacksProvider = attacksProvider;
         _stats = stats;
         _homeDetector = homeDetector;
         _scouting = scouting;
@@ -53,7 +53,8 @@ internal sealed class MainVillageCycleRunner
     public void RunCycle(
         int currentVillageIdx,
         ref int cycleCount,
-        ref bool fastAttackQueued,
+        Func<bool> getFastAttackQueuedFunc,
+        Action<bool> setFastAttackQueuedAction,
         ref int sessionBattlesCompleted,
         Func<CancellationToken, bool> checkStopFunc,
         Action waitIfPausedFunc,
@@ -72,8 +73,8 @@ internal sealed class MainVillageCycleRunner
         if (checkStopFunc(token)) return;
 
         Console.WriteLine($"[FSM-CS] phase=cycle status=start village={currentVillageIdx}");
-        bool fastAttackOnly = fastAttackQueued;
-        fastAttackQueued = false;
+        bool fastAttackOnly = getFastAttackQueuedFunc();
+        setFastAttackQueuedAction(false);
         if (fastAttackOnly)
         {
             Console.WriteLine("[FSM-CS] phase=cycle status=pending mode=fast_attack");
@@ -238,7 +239,7 @@ internal sealed class MainVillageCycleRunner
 
                 string attackStrategy = _configService.GetAttackStrategy(currentVillageIdx);
                 Console.WriteLine($"[ATTACK-CS] phase=select_strategy status=success village={currentVillageIdx} strategy={attackStrategy}");
-                _attacks.Run(attackStrategy, token, mainConfig.UseEventTroops);
+                _attacksProvider().Run(attackStrategy, token, mainConfig.UseEventTroops);
                 battleExecuted = true;
 
                 waitIfPausedFunc();
@@ -266,7 +267,7 @@ internal sealed class MainVillageCycleRunner
                 sessionBattlesCompleted++;
 
                 returnedHome = _battleWatcher.ReturnHome(_homeDetector.DetectHomeBase, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds));
-                fastAttackQueued = returnedHome;
+                setFastAttackQueuedAction(returnedHome);
 
                 waitIfPausedFunc();
                 if (checkStopFunc(token)) break;

@@ -22,7 +22,8 @@ internal sealed class AccountRotationLoop
 
     public void Run(
         ref int currentVillageIdx,
-        ref bool fastAttackQueued,
+        Func<bool> getFastAttackQueuedFunc,
+        Action<bool> setFastAttackQueuedAction,
         ref int cycleCount,
         ref int sessionBattlesCompleted,
         Func<CancellationToken, bool> checkStopFunc,
@@ -44,7 +45,7 @@ internal sealed class AccountRotationLoop
             {
                 oneCycleFunc(token);
                 if (checkStopFunc(token)) break;
-                interruptibleSleepFunc(fastAttackQueued ? AutomationThresholds.FastAttackCycleDelayMs : AutomationThresholds.NormalCycleDelayMs, token);
+                interruptibleSleepFunc(getFastAttackQueuedFunc() ? AutomationThresholds.FastAttackCycleDelayMs : AutomationThresholds.NormalCycleDelayMs, token);
             }
             return;
         }
@@ -66,7 +67,7 @@ internal sealed class AccountRotationLoop
 
                 int idx = account.ProfileVillage;
                 currentVillageIdx = idx;
-                fastAttackQueued = false;
+                setFastAttackQueuedAction(false);
                 Console.WriteLine($"[FSM-CS] phase=worker_loop status=pending action=switch_account target={idx} account=\"{account.Name}\"");
 
                 if (!_accounts.SwitchToAccount(account, token))
@@ -99,7 +100,7 @@ internal sealed class AccountRotationLoop
                     waitIfPausedFunc();
                     oneCycleFunc(token);
                     if (checkStopFunc(token)) break;
-                    interruptibleSleepFunc(fastAttackQueued ? AutomationThresholds.FastAttackCycleDelayMs : 15000, token);
+                    interruptibleSleepFunc(getFastAttackQueuedFunc() ? AutomationThresholds.FastAttackCycleDelayMs : 15000, token);
                 }
 
                 Console.WriteLine($"[FSM-CS] phase=worker_loop status=pending action=switch_account target={idx} outcome=next reason={switchReason}");

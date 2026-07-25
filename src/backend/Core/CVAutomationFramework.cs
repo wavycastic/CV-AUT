@@ -115,7 +115,7 @@ internal partial class CVAutomationFramework : IAutomationRunner
         _battleWatcher = new BattleCompletionWatcher(_adb, _vision, _popups);
         _collector = new HomeResourceCollector(_adb, _popups, _templatesPath);
         _wallRunner = new HomeWallUpgradeRunner(_wallUpdater, _configService, _stats);
-        _mainCycleRunner = new MainVillageCycleRunner(_adb, _vision, _configService, _zoom, _popups, _training, _attacks, _stats, _homeDetector, _scouting, _battleWatcher, _collector, _wallRunner);
+        _mainCycleRunner = new MainVillageCycleRunner(_adb, _vision, _configService, _zoom, _popups, _training, () => _attacks, _stats, _homeDetector, _scouting, _battleWatcher, _collector, _wallRunner);
         _builderBaseCycleRunner = new BuilderBaseCycleRunner(_adb, _vision, _configService, _builderBaseNavigator, _builderBaseResources, _builderBaseReport, _builderBaseArmyManager, _builderBaseAttacks, _builderBaseClockTower, _builderBaseWallUpdater, _stats, _templatesPath);
         _accountLoop = new AccountRotationLoop(_configService, _accounts, _wallUpdater);
 
@@ -298,11 +298,11 @@ internal partial class CVAutomationFramework : IAutomationRunner
 
     public void OneCycle(CancellationToken token)
     {
-        bool fastAttack = _fastAttackQueued;
         _mainCycleRunner.RunCycle(
             _currentVillageIdx,
             ref _cycleCount,
-            ref fastAttack,
+            () => _fastAttackQueued,
+            val => _fastAttackQueued = val,
             ref _sessionBattlesCompleted,
             CheckStop,
             () => WaitIfPaused(token),
@@ -316,7 +316,6 @@ internal partial class CVAutomationFramework : IAutomationRunner
             ShouldSmartSurrender,
             ExecuteSurrender,
             token);
-        _fastAttackQueued = fastAttack;
     }
 
     private void OneBuilderBaseCycle(CancellationToken token)
@@ -349,10 +348,10 @@ internal partial class CVAutomationFramework : IAutomationRunner
 
     private void BotLoop(CancellationToken token)
     {
-        bool fastAttack = _fastAttackQueued;
         _accountLoop.Run(
             ref _currentVillageIdx,
-            ref fastAttack,
+            () => _fastAttackQueued,
+            val => _fastAttackQueued = val,
             ref _cycleCount,
             ref _sessionBattlesCompleted,
             CheckStop,
@@ -360,7 +359,6 @@ internal partial class CVAutomationFramework : IAutomationRunner
             InterruptibleSleep,
             OneCycle,
             token);
-        _fastAttackQueued = fastAttack;
     }
 
     private bool EnsureHomeBase(int maxWaitSeconds = 50, bool allowBootRecovery = true)
