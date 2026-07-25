@@ -8,11 +8,11 @@ using Point = OpenCvSharp.Point;
 namespace CvAut
 {
     /// <summary>
-    /// Bộ nâng cấp tường (Wall Updater) - điều phối luồng nâng cấp:
-    /// - Quét ứng viên tường qua WallCandidateScanner.
-    /// - Xác thực giao diện qua WallPanelInspector.
-    /// - Ra quyết định Vàng hay Dầu hồng bằng WallUpgradeDecider, kiểm tra cost OCR bằng WallCostPolicy.
-    /// - Xác minh tài nguyên (resource delta) sau khi xác nhận giao dịch.
+    /// Wall Updater - orchestrates the wall upgrade flow:
+    /// - Scans wall candidates through WallCandidateScanner.
+    /// - Validates the UI through WallPanelInspector.
+    /// - Decides between Gold and Elixir with WallUpgradeDecider, checking the OCR cost with WallCostPolicy.
+    /// - Verifies the resource delta after the transaction is confirmed.
     /// </summary>
     internal sealed partial class WallUpdater
     {
@@ -48,8 +48,8 @@ namespace CvAut
             => WallCostPolicy.IsUpgradeCostRed(screenshot, resource, out redRatio, out redPixels);
 
         /// <summary>
-        /// Xử lý nâng cấp tường không phụ thuộc Wall Level.
-        /// Quét Builder menu bằng 4 generic Wall templates, đọc tài nguyên hiện tại, tính toán qua WallUpgradeDecider và thực hiện nâng cấp.
+        /// Handles wall upgrades independently of the wall level.
+        /// Scans the builder menu with the 4 generic wall templates, reads the current resources, runs the numbers through WallUpgradeDecider and performs the upgrade.
         /// </summary>
         public int HandleHomeResources(
             int wallGoldThreshold,
@@ -192,7 +192,7 @@ namespace CvAut
                     if (InterruptibleSleep(1000, token)) return WallTransactionResult.Skip("cancelled");
                     _debug.Capture("candidate_selected");
 
-                    // Tắt bảng Thợ xây để hiện panel nâng cấp bên dưới
+                    // Close the builder panel so the upgrade panel underneath becomes visible
                     _adb.Tap(WallUiLayout.BuilderMenuPoint.X, WallUiLayout.BuilderMenuPoint.Y);
                     if (InterruptibleSleep(500, token)) return WallTransactionResult.Skip("cancelled");
 
@@ -221,7 +221,7 @@ namespace CvAut
                     return WallTransactionResult.Skip("screenshot_failed").WithCandidateMatchCount(candidateMatchCount);
                 }
 
-                // Trích xuất tài nguyên hiện tại và chi phí một bức tường
+                // Extract the current resources and the cost of a single wall
                 (int currentGold, int currentElixir, _) = IsTarget.ExtractHomeResources(_adb, _vision);
                 int detectedGoldCost = _vision.ExtractNumericalMetrics(currentScreenshot, WallUiLayout.GoldUpgradeCostRoi);
                 int detectedElixirCost = _vision.ExtractNumericalMetrics(currentScreenshot, WallUiLayout.ElixirUpgradeCostRoi);
@@ -236,7 +236,7 @@ namespace CvAut
 
                 int singleWallCost = costValidation.Cost;
 
-                // Quyết định tài nguyên bằng WallUpgradeDecider
+                // Pick the resource with WallUpgradeDecider
                 var decisionInput = new WallUpgradeDecisionInput(
                     WallCost: singleWallCost,
                     Gold: currentGold,
@@ -307,7 +307,7 @@ namespace CvAut
                     return new WallTransactionResult(0, "outcome_unknown", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
                 }
 
-                // Poll đọc lại tài nguyên sau confirm tối đa 3 lần (mỗi lần 250ms) để chờ thanh tài nguyên cập nhật xong
+                // Re-read the resources after confirming, polling up to 3 times (250 ms each) to let the resource bar finish updating
                 int resourceAfter = 0;
                 long expectedSpend = (long)singleWallCost * actualSelectedCount;
                 long actualSpend = 0;
@@ -351,7 +351,7 @@ namespace CvAut
         }
 
         /// <summary>
-        /// Bấm nút +1 từng bước, dừng ngay khi chi phí chuyển đỏ hoặc vùng chi phí không đổi (đã chạm trần).
+        /// Taps the +1 button one step at a time, stopping as soon as the cost turns red or the cost region stops changing (the cap has been reached).
         /// </summary>
         private int AddWallsSafely(string resource, int requestedCount, int batchLimit, CancellationToken token)
         {
