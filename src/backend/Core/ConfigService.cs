@@ -18,29 +18,17 @@ internal sealed class ConfigService : IConfigService
 
     public AutomationConfigSnapshot Current { get; private set; }
 
-    internal MainVillageConfig GetMainVillageConfig(int villageIndex)
+    MainVillageConfig IConfigService.GetMainVillageConfig(int villageIndex)
         => GetMainVillageConfig(_persistence.Root, villageIndex);
 
-    internal CvAut.TrainingConfig GetTrainingConfig(int villageIndex)
+    CvAut.TrainingConfig IConfigService.GetTrainingConfig(int villageIndex)
         => GetTrainingConfig(_persistence.Root, villageIndex);
 
-    internal string GetAttackStrategy(int villageIndex)
+    string IConfigService.GetAttackStrategy(int villageIndex)
         => GetAttackStrategy(_persistence.Root, villageIndex);
 
-    internal CvAut.WallUpgradeConfig GetWallUpgradeConfig(int villageIndex)
-        => GetWallUpgradeConfig(_persistence.Root, villageIndex);
-
-    MainVillageConfig IConfigService.GetMainVillageConfig(int villageIndex)
-        => GetMainVillageConfig(villageIndex);
-
-    CvAut.TrainingConfig IConfigService.GetTrainingConfig(int villageIndex)
-        => GetTrainingConfig(villageIndex);
-
-    string IConfigService.GetAttackStrategy(int villageIndex)
-        => GetAttackStrategy(villageIndex);
-
     CvAut.WallUpgradeConfig IConfigService.GetWallUpgradeConfig(int villageIndex)
-        => GetWallUpgradeConfig(villageIndex);
+        => GetWallUpgradeConfig(_persistence.Root, villageIndex);
 
     public void Reload()
     {
