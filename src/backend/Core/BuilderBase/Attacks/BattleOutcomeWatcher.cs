@@ -250,27 +250,7 @@ namespace CvAut
             return false;
         }
 
-        public bool IsBBAttackPage()
-        {
-            using Mat? screenshot = _adb.TakeScreenshot();
-            if (screenshot == null || screenshot.Empty()) return false;
-
-            if (TryGetPixel(screenshot, 30, 550, out Vec3b pixel) && IsColorNear(pixel, 0xCF0D0E, 20))
-            {
-                Console.WriteLine("[BB-ATTACK] phase=attack_page status=success reason=surrender_red_pixel");
-                return true;
-            }
-
-            int scaledX = (int)Math.Round(30 * (screenshot.Width / 860.0));
-            int scaledY = (int)Math.Round(550 * (screenshot.Height / 732.0));
-            bool detected = TryGetPixel(screenshot, scaledX, scaledY, out pixel) && IsColorNear(pixel, 0xCF0D0E, 20);
-            if (detected)
-            {
-                Console.WriteLine("[BB-ATTACK] phase=attack_page status=success reason=scaled_surrender_red_pixel");
-            }
-
-            return detected;
-        }
+        public bool IsBBAttackPage() => _entryFlow.IsBBAttackPage();
 
         public bool WaitForStage2BattleReady(CancellationToken token)
         {

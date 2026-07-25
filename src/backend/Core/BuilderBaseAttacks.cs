@@ -18,9 +18,8 @@ namespace CvAut
             TroopDeploymentExecutor deploymentExecutor = new(adb, vision, random, barScanner, heroController);
             AttackEntryFlow entryFlow = new(adb, vision, navigator);
 
-            BattleOutcomeWatcher? outcomeWatcher = null;
-            ReturnHomeController returnHomeController = new(adb, vision, navigator, entryFlow, () => outcomeWatcher?.IsBBAttackPage() ?? false);
-            outcomeWatcher = new BattleOutcomeWatcher(adb, vision, navigator, heroController, barScanner, returnHomeController, entryFlow);
+            ReturnHomeController returnHomeController = new(adb, vision, navigator, entryFlow);
+            BattleOutcomeWatcher outcomeWatcher = new(adb, vision, navigator, heroController, barScanner, returnHomeController, entryFlow);
 
             _orchestrator = new BuilderBaseAttackOrchestrator(
                 adb,

@@ -11,15 +11,13 @@ namespace CvAut
         private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
         private readonly AttackEntryFlow _entryFlow;
-        private readonly Func<bool> _isBBAttackPageFunc;
 
-        public ReturnHomeController(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator, AttackEntryFlow entryFlow, Func<bool> isBBAttackPageFunc)
+        public ReturnHomeController(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator, AttackEntryFlow entryFlow)
         {
             _adb = adb;
             _vision = vision;
             _navigator = navigator;
             _entryFlow = entryFlow;
-            _isBBAttackPageFunc = isBBAttackPageFunc;
         }
 
         public bool ReturnHomeDropTrophyBB(CancellationToken token)
@@ -34,7 +32,7 @@ namespace CvAut
                     return true;
                 }
 
-                if (_isBBAttackPageFunc())
+                if (_entryFlow.IsBBAttackPage())
                 {
                     using Mat? screenshot = _adb.TakeScreenshot();
                     if (screenshot == null || screenshot.Empty())

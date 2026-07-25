@@ -252,6 +252,46 @@ namespace CvAut
             return mean.Val0 + mean.Val1 + mean.Val2 > 45;
         }
 
+        public bool IsBBAttackPage()
+        {
+            using Mat? screenshot = _adb.TakeScreenshot();
+            if (screenshot == null || screenshot.Empty()) return false;
+
+            if (TryGetPixel(screenshot, 30, 550, out Vec3b pixel) && IsColorNear(pixel, 0xCF0D0E, 20))
+            {
+                Console.WriteLine("[BB-ATTACK] phase=attack_page status=success reason=surrender_red_pixel");
+                return true;
+            }
+
+            int scaledX = (int)Math.Round(30 * (screenshot.Width / 860.0));
+            int scaledY = (int)Math.Round(550 * (screenshot.Height / 732.0));
+            bool detected = TryGetPixel(screenshot, scaledX, scaledY, out pixel) && IsColorNear(pixel, 0xCF0D0E, 20);
+            if (detected)
+            {
+                Console.WriteLine("[BB-ATTACK] phase=attack_page status=success reason=scaled_surrender_red_pixel");
+            }
+
+            return detected;
+        }
+
+        private static bool TryGetPixel(Mat image, int x, int y, out Vec3b pixel)
+        {
+            pixel = default;
+            if (x < 0 || y < 0 || x >= image.Width || y >= image.Height) return false;
+            pixel = image.At<Vec3b>(y, x);
+            return true;
+        }
+
+        private static bool IsColorNear(Vec3b pixel, int rgb, int tolerance)
+        {
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+            return Math.Abs(pixel.Item2 - r) <= tolerance
+                && Math.Abs(pixel.Item1 - g) <= tolerance
+                && Math.Abs(pixel.Item0 - b) <= tolerance;
+        }
+
         private static bool Sleep(int milliseconds, CancellationToken token) => token.WaitHandle.WaitOne(milliseconds);
     }
 }
