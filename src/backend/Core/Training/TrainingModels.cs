@@ -26,7 +26,7 @@ internal static class TrainingPlanResolver
 {
     public static ArmySpec Resolve(JsonElement config, string? requestedStrategy)
     {
-        string strategy = requestedStrategy;
+        string? strategy = requestedStrategy;
         if (string.IsNullOrWhiteSpace(strategy)
             && config.ValueKind == JsonValueKind.Object
             && config.TryGetProperty("attack", out JsonElement attack)

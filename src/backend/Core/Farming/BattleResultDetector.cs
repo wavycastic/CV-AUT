@@ -31,7 +31,6 @@ namespace CvAut
             int stableResultMatches = 0;
             bool waitingLogged = false;
             bool resultDetectedLogged = false;
-            bool smartSurrenderExecuted = false;
             while (!_checkStop())
             {
                 if (_checkStop()) return false;
