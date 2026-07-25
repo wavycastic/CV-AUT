@@ -1,0 +1,159 @@
+# Staged workflow file.
+# Move it into place locally, then commit and push:
+#
+#   git mv ci/build.yml .github/workflows/build.yml
+#   git commit -m "ci: add windows dotnet build and test workflow"
+#   git push
+#
+# It does nothing while it sits in ci/ -- GitHub only runs workflows found in
+# .github/workflows/.
+
+name: build
+
+on:
+  push:
+    branches-ignore:
+      - ci-logs
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        shell: pwsh
+        run: |
+          dotnet restore CV-AUT.slnx 2>&1 | Tee-Object -FilePath restore.log
+          exit $LASTEXITCODE
+
+      - name: Build
+        id: build
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          dotnet build CV-AUT.slnx --no-restore -c Debug -v minimal -clp:NoSummary 2>&1 | Tee-Object -FilePath build.log
+          $code = $LASTEXITCODE
+          "exit_code=$code" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          exit $code
+
+      - name: Test
+        id: test
+        if: steps.build.outputs.exit_code == '0'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          dotnet test CV-AUT.slnx --no-build -c Debug -v minimal 2>&1 | Tee-Object -FilePath test.log
+          $code = $LASTEXITCODE
+          "exit_code=$code" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          exit $code
+
+      - name: Build digest
+        if: always()
+        shell: pwsh
+        run: |
+          $lines = New-Object System.Collections.Generic.List[string]
+          $buildExit = '${{ steps.build.outputs.exit_code }}'
+          $testExit = '${{ steps.test.outputs.exit_code }}'
+          if ([string]::IsNullOrWhiteSpace($buildExit)) { $buildExit = 'skipped' }
+          if ([string]::IsNullOrWhiteSpace($testExit)) { $testExit = 'skipped' }
+
+          $lines.Add("# CI digest")
+          $lines.Add("")
+          $lines.Add("- commit: ``$env:GITHUB_SHA``")
+          $lines.Add("- ref: ``$env:GITHUB_REF``")
+          $lines.Add("- build exit code: ``$buildExit``")
+          $lines.Add("- test exit code: ``$testExit``")
+          $lines.Add("")
+
+          if (Test-Path build.log) {
+            $errors = @(Select-String -Path build.log -Pattern ': error ' -SimpleMatch |
+              ForEach-Object { $_.Line.Trim() } | Select-Object -Unique -First 80)
+            $lines.Add("## Compiler errors ($($errors.Count))")
+            $lines.Add('```')
+            if ($errors.Count -gt 0) { $errors | ForEach-Object { $lines.Add($_) } } else { $lines.Add('none') }
+            $lines.Add('```')
+            $lines.Add("")
+
+            $warnings = @(Select-String -Path build.log -Pattern ': warning ' -SimpleMatch |
+              ForEach-Object { $_.Line.Trim() } | Select-Object -Unique -First 40)
+            $lines.Add("## Compiler warnings ($($warnings.Count), first 40)")
+            $lines.Add('```')
+            if ($warnings.Count -gt 0) { $warnings | ForEach-Object { $lines.Add($_) } } else { $lines.Add('none') }
+            $lines.Add('```')
+            $lines.Add("")
+          }
+
+          if (Test-Path test.log) {
+            $testLines = @(Select-String -Path test.log -Pattern 'Passed!|Failed!|error|Failed ' |
+              ForEach-Object { $_.Line.Trim() } | Select-Object -Unique -First 80)
+            $lines.Add("## Test results")
+            $lines.Add('```')
+            if ($testLines.Count -gt 0) { $testLines | ForEach-Object { $lines.Add($_) } } else { $lines.Add('no matching lines') }
+            $lines.Add('```')
+          }
+
+          $digest = $lines -join "`n"
+          $digest | Out-File -FilePath digest.md -Encoding utf8
+          $digest | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Publish logs to ci-logs branch
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $repoUrl = "https://x-access-token:$env:GH_TOKEN@github.com/$env:GITHUB_REPOSITORY.git"
+          $tmp = Join-Path $env:RUNNER_TEMP 'ci-logs'
+          Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+
+          git clone --depth 1 --branch ci-logs $repoUrl $tmp 2>&1 | Out-Null
+          if (-not (Test-Path (Join-Path $tmp '.git'))) {
+            Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+            git clone --depth 1 $repoUrl $tmp 2>&1 | Out-Null
+            Push-Location $tmp
+            git checkout --orphan ci-logs 2>&1 | Out-Null
+            git rm -rf . 2>&1 | Out-Null
+            Pop-Location
+          }
+
+          $dest = Join-Path $tmp "runs/$env:GITHUB_SHA"
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          foreach ($f in @('restore.log', 'build.log', 'test.log', 'digest.md')) {
+            if (Test-Path $f) { Copy-Item $f (Join-Path $dest $f) -Force }
+          }
+          if (Test-Path digest.md) { Copy-Item digest.md (Join-Path $tmp 'latest.md') -Force }
+
+          Push-Location $tmp
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m "ci: logs for $env:GITHUB_SHA" 2>&1 | Out-Null
+          git push origin ci-logs
+          Pop-Location
+
+      - name: Fail if build or test failed
+        if: always()
+        shell: pwsh
+        run: |
+          $buildExit = '${{ steps.build.outputs.exit_code }}'
+          $testExit = '${{ steps.test.outputs.exit_code }}'
+          if ($buildExit -ne '0') { Write-Host "build failed (exit $buildExit)"; exit 1 }
+          if ($testExit -ne '0') { Write-Host "tests failed (exit $testExit)"; exit 1 }
+          Write-Host 'build and tests passed'
