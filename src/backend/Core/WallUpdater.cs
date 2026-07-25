@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using OpenCvSharp;
 using Point = OpenCvSharp.Point;
@@ -10,8 +9,9 @@ namespace CvAut
     /// <summary>
     /// Wall Updater - orchestrates the wall upgrade flow:
     /// - Scans wall candidates through WallCandidateScanner.
-    /// - Validates the UI through WallPanelInspector.
+    /// - Picks and validates one candidate through WallCandidateSelector.
     /// - Decides between Gold and Elixir with WallUpgradeDecider, checking the OCR cost with WallCostPolicy.
+    /// - Grows the batch through WallQuantityAdjuster.
     /// - Verifies the resource delta after the transaction is confirmed.
     /// </summary>
     internal sealed partial class WallUpdater
@@ -21,9 +21,9 @@ namespace CvAut
         private readonly WallMenuNavigator _navigator;
         private readonly WallPanelInspector _inspector;
         private readonly WallCandidateScanner _scanner;
+        private readonly WallCandidateSelector _selector;
+        private readonly WallQuantityAdjuster _quantityAdjuster;
         private readonly WallDebugRecorder _debug;
-
-        private int? _savedWallOffset;
 
         public WallUpdater(IADBHelper adb, IVisionEngine vision, string templatesPath)
         {
@@ -33,7 +33,12 @@ namespace CvAut
             _inspector = new WallPanelInspector(adb);
             _scanner = new WallCandidateScanner(adb, templatesPath, _inspector, _navigator);
             _debug = new WallDebugRecorder(adb);
+            _selector = new WallCandidateSelector(adb, _scanner, _inspector, _navigator, _debug);
+            _quantityAdjuster = new WallQuantityAdjuster(adb);
         }
+
+        /// <summary>Scans wall locations on an existing screenshot; delegates to WallCandidateScanner.</summary>
+        public List<Point> ScanWallLocations(Mat screenshot) => _scanner.ScanWallLocations(screenshot);
 
         private static bool InterruptibleSleep(int milliseconds, CancellationToken token)
             => ThreadingUtil.InterruptibleSleep(milliseconds, token);
@@ -117,15 +122,6 @@ namespace CvAut
             return result.VerifiedCount;
         }
 
-        private sealed record WallTransactionResult(int VerifiedCount, string Reason, string Resource = "none", int CandidateMatchCount = 0, int RequestedCount = 0, int Cost = 0)
-        {
-            public static WallTransactionResult Skip(string reason) => new(0, reason);
-            public WallTransactionResult WithCandidateMatchCount(int count) => this with { CandidateMatchCount = count };
-            public WallTransactionResult WithCost(int cost) => this with { Cost = cost };
-            public static WallTransactionResult Verified(string resource, int count, int cost, int candidateMatchCount, int requestedCount) =>
-                new(count, "verified", Resource: resource, CandidateMatchCount: candidateMatchCount, RequestedCount: requestedCount, Cost: cost);
-        }
-
         private WallTransactionResult UpgradeWallBulk(
             int wallGoldThreshold,
             int wallElixirThreshold,
@@ -151,67 +147,17 @@ namespace CvAut
             if (token.IsCancellationRequested) return WallTransactionResult.Skip("cancelled");
             int safeBatchLimit = Math.Clamp(batchLimit, 1, 10);
             int candidateMatchCount = 0;
-            var triedCoords = new List<Point>();
-            Point? validCoord = null;
 
             try
             {
-                for (int attempt = 0; attempt < WallUiLayout.MaxCandidateAttempts; attempt++)
+                WallCandidateSelection selection = _selector.SelectValidatedCandidate(token);
+                candidateMatchCount = selection.CandidateMatchCount;
+
+                if (selection.SkipReason is string skipReason)
                 {
-                    if (token.IsCancellationRequested)
-                    {
-                        _navigator.BestEffortDismiss();
-                        return WallTransactionResult.Skip("cancelled");
-                    }
-
-                    List<WallCandidate> candidates = _scanner.FindAllWallCandidates(token)
-                        .Where(candidate => !triedCoords.Any(tried => Math.Abs(candidate.Point.Y - tried.Y) <= 20))
-                        .ToList();
-
-                    candidateMatchCount = Math.Max(candidateMatchCount, candidates.Count);
-                    if (candidates.Count == 0)
-                    {
-                        Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debug.Cycle} candidate_match_count={candidateMatchCount} verified_count=0 status=skip reason=no_candidates");
-                        _navigator.BestEffortDismiss();
-                        return WallTransactionResult.Skip("no_candidates").WithCandidateMatchCount(candidateMatchCount);
-                    }
-
-                    WallCandidate candidate;
-                    if (_savedWallOffset.HasValue && _savedWallOffset.Value >= -candidates.Count && _savedWallOffset.Value < candidates.Count)
-                    {
-                        candidate = candidates[IndexFromEnd(candidates, _savedWallOffset.Value)];
-                    }
-                    else
-                    {
-                        candidate = candidates[candidates.Count - 1];
-                    }
-                    triedCoords.Add(candidate.Point);
-
-                    Console.WriteLine($"[WALL] phase=select_candidate cycle={_debug.Cycle} candidate_match_count={candidates.Count} attempt={attempt + 1} x={candidate.Point.X} y={candidate.Point.Y} conf={candidate.Confidence:F3} template=\"{candidate.TemplateName}\" status=start");
-                    _adb.Tap(candidate.Point.X, candidate.Point.Y);
-                    if (InterruptibleSleep(1000, token)) return WallTransactionResult.Skip("cancelled");
-                    _debug.Capture("candidate_selected");
-
-                    // Close the builder panel so the upgrade panel underneath becomes visible
-                    _adb.Tap(WallUiLayout.BuilderMenuPoint.X, WallUiLayout.BuilderMenuPoint.Y);
-                    if (InterruptibleSleep(500, token)) return WallTransactionResult.Skip("cancelled");
-
-                    if (_inspector.ValidateWallPanelOpen(out _, out _))
-                    {
-                        validCoord = candidate.Point;
-                        _savedWallOffset ??= -1 - attempt;
-                        break;
-                    }
-
-                    _adb.Tap(WallUiLayout.DismissPoint.X, WallUiLayout.DismissPoint.Y);
-                    if (InterruptibleSleep(500, token)) return WallTransactionResult.Skip("cancelled");
-                    _savedWallOffset = null;
-                }
-
-                if (!validCoord.HasValue)
-                {
-                    Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debug.Cycle} candidate_match_count={candidateMatchCount} verified_count=0 status=skip reason=unvalidated");
-                    return WallTransactionResult.Skip("unvalidated").WithCandidateMatchCount(candidateMatchCount);
+                    return string.Equals(skipReason, "cancelled", StringComparison.Ordinal)
+                        ? WallTransactionResult.Skip("cancelled")
+                        : WallTransactionResult.Skip(skipReason).WithCandidateMatchCount(candidateMatchCount);
                 }
 
                 using Mat? currentScreenshot = _adb.TakeScreenshot();
@@ -266,7 +212,7 @@ namespace CvAut
                     return WallTransactionResult.Skip("resource_button_unavailable_or_red").WithCandidateMatchCount(candidateMatchCount);
                 }
 
-                int actualSelectedCount = AddWallsSafely(selectedResource, decision.RequestedCount, safeBatchLimit, token);
+                int actualSelectedCount = _quantityAdjuster.AddWallsSafely(selectedResource, decision.RequestedCount, safeBatchLimit, token);
                 if (actualSelectedCount <= 0)
                 {
                     _navigator.BestEffortDismiss();
@@ -350,80 +296,9 @@ namespace CvAut
             }
         }
 
-        /// <summary>
-        /// Taps the +1 button one step at a time, stopping as soon as the cost turns red or the cost region stops changing (the cap has been reached).
-        /// </summary>
-        private int AddWallsSafely(string resource, int requestedCount, int batchLimit, CancellationToken token)
-        {
-            int targetCount = Math.Clamp(requestedCount, 1, Math.Clamp(batchLimit, 1, 10));
-            int selectedCount = 1;
-            int addMoreTaps = targetCount - 1;
-            if (addMoreTaps <= 0) return 1;
-
-            Rect costRoi = WallUiLayout.CostRoiFor(resource);
-
-            for (int i = 0; i < addMoreTaps; i++)
-            {
-                if (token.IsCancellationRequested) break;
-
-                using Mat? beforeScreenshot = _adb.TakeScreenshot();
-                if (beforeScreenshot == null || beforeScreenshot.Empty())
-                {
-                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=before_screenshot_failed");
-                    break;
-                }
-
-                _adb.Tap(WallUiLayout.AddWallPlusOneButton.X, WallUiLayout.AddWallPlusOneButton.Y);
-                if (InterruptibleSleep(WallUiLayout.WallUiAnimationDelayMs, token)) break;
-
-                using Mat? afterScreenshot = _adb.TakeScreenshot();
-                if (afterScreenshot == null || afterScreenshot.Empty())
-                {
-                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=after_screenshot_failed");
-                    break;
-                }
-
-                if (WallCostPolicy.IsUpgradeCostRed(afterScreenshot, resource, out _, out _))
-                {
-                    _adb.Tap(WallUiLayout.RemoveWallMinusOneButton.X, WallUiLayout.RemoveWallMinusOneButton.Y);
-                    InterruptibleSleep(WallUiLayout.WallUiAnimationDelayMs, token);
-                    break;
-                }
-
-                Rect clamped = ImageUtils.ClampRect(costRoi, afterScreenshot.Width, afterScreenshot.Height);
-                if (clamped.Width <= 0 || clamped.Height <= 0)
-                {
-                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=invalid_roi");
-                    break;
-                }
-
-                using Mat beforeCost = new Mat(beforeScreenshot, clamped);
-                using Mat afterCost = new Mat(afterScreenshot, clamped);
-                using Mat diff = new Mat();
-                Cv2.Absdiff(beforeCost, afterCost, diff);
-                Scalar meanDiff = Cv2.Mean(diff);
-                double diffVal = meanDiff.Val0 + meanDiff.Val1 + meanDiff.Val2;
-
-                if (diffVal < 3.0)
-                {
-                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=cost_region_unchanged diff={diffVal:F2}");
-                    break;
-                }
-
-                selectedCount++;
-            }
-
-            return selectedCount;
-        }
-
-        private static int IndexFromEnd<T>(IReadOnlyList<T> list, int negativeIndex)
-        {
-            return negativeIndex < 0 ? list.Count + negativeIndex : negativeIndex;
-        }
-
         public void ResetSavedOffset()
         {
-            _savedWallOffset = null;
+            _selector.ResetSavedOffset();
         }
     }
 }

@@ -1,12 +1,9 @@
-using System.Collections.Generic;
-using OpenCvSharp;
-using Point = OpenCvSharp.Point;
-
 namespace CvAut
 {
+    // ScanWallLocations now lives in WallUpdater.cs. This partial is intentionally empty for one
+    // commit so that neither this commit nor the follow-up deletion has a duplicate or missing
+    // member; the file itself is removed next.
     internal sealed partial class WallUpdater
     {
-        /// <summary>Quét vị trí tường trên một ảnh có sẵn; uỷ quyền cho WallCandidateScanner.</summary>
-        public List<Point> ScanWallLocations(Mat screenshot) => _scanner.ScanWallLocations(screenshot);
     }
 }
