@@ -86,8 +86,10 @@ internal partial class CVAutomationFramework : IAutomationRunner
         _templatesPath = templatesPath;
         _vision = vision;
 
+        // _attacks is assigned a few lines below and the delegate is only invoked
+        // from RunCycle, so the capture can never observe the unassigned field.
         AutomationParts parts = AutomationCompositionRoot.Build(
-            configService, adb, vision, templatesPath, stats, popups, zoom, accounts, () => _attacks);
+            configService, adb, vision, templatesPath, stats, popups, zoom, accounts, () => _attacks!);
 
         _attacks = parts.Attacks;
         _wallUpdater = parts.WallUpdater;
