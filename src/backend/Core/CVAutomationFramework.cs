@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CvAut.Automation;
@@ -12,17 +11,10 @@ internal partial class CVAutomationFramework : IAutomationRunner
 {
     private readonly IADBHelper _adb;
     private readonly IVisionEngine _vision;
-    private readonly Training _training;
     private Attacks _attacks;
     private readonly WallUpdater _wallUpdater;
     private readonly BuilderBaseNavigator _builderBaseNavigator;
-    private readonly BuilderBaseResources _builderBaseResources;
     private readonly BuilderBaseReport _builderBaseReport;
-    private readonly BuilderBaseArmyManager _builderBaseArmyManager;
-    private readonly BuilderBaseAttacks _builderBaseAttacks;
-    private readonly BuilderBaseClockTower _builderBaseClockTower;
-    private readonly BuilderBaseWallUpdater _builderBaseWallUpdater;
-    private readonly BuilderBaseMaintenance _builderBaseMaintenance;
     private readonly string _templatesPath;
     private readonly string _configPath;
 
@@ -30,12 +22,8 @@ internal partial class CVAutomationFramework : IAutomationRunner
     private readonly StatsRepository _stats;
     private readonly PopupHandlerService _popups;
     private readonly ZoomService _zoom;
-    private readonly AccountSwitcher _accounts;
 
     private readonly HomeBaseDetector _homeDetector;
-    private readonly ScoutingFlow _scouting;
-    private readonly BattleCompletionWatcher _battleWatcher;
-    private readonly HomeResourceCollector _collector;
     private readonly HomeWallUpgradeRunner _wallRunner;
     private readonly MainVillageCycleRunner _mainCycleRunner;
     private readonly BuilderBaseCycleRunner _builderBaseCycleRunner;
@@ -55,7 +43,7 @@ internal partial class CVAutomationFramework : IAutomationRunner
     private int _sessionBattlesCompleted;
 
     public CVAutomationFramework(string configPath = "Config/test_config.json")
-        : this(CreateServices(configPath))
+        : this(AutomationCompositionRoot.CreateServices(configPath))
     {
     }
 
@@ -92,44 +80,26 @@ internal partial class CVAutomationFramework : IAutomationRunner
         _stats = stats;
         _popups = popups;
         _zoom = zoom;
-        _accounts = accounts;
 
         _adb = adb;
         _adb.BeforeInputAction = null;
         _templatesPath = templatesPath;
         _vision = vision;
-        _training = new Training(_adb, _templatesPath, _vision);
-        _attacks = new Attacks(_adb, _vision, _templatesPath, CreateAttackDelayConfig(configService.Current.Advanced));
-        _wallUpdater = new WallUpdater(_adb, _vision, _templatesPath);
-        _builderBaseNavigator = new BuilderBaseNavigator(_adb, _vision);
-        _builderBaseResources = new BuilderBaseResources(_adb, _vision, _builderBaseNavigator);
-        _builderBaseReport = new BuilderBaseReport(_adb, _vision, _builderBaseNavigator);
-        _builderBaseArmyManager = new BuilderBaseArmyManager(_adb, _vision, _builderBaseNavigator);
-        _builderBaseAttacks = new BuilderBaseAttacks(_adb, _vision, _builderBaseNavigator);
-        _builderBaseClockTower = new BuilderBaseClockTower(_adb, _vision, _builderBaseNavigator);
-        _builderBaseWallUpdater = new BuilderBaseWallUpdater(_adb, _vision, _builderBaseNavigator);
-        _builderBaseMaintenance = new BuilderBaseMaintenance(_adb, _vision, _builderBaseNavigator, _templatesPath);
 
-        _homeDetector = new HomeBaseDetector(_adb, _vision, _popups);
-        _scouting = new ScoutingFlow(_adb, _vision, _popups);
-        _battleWatcher = new BattleCompletionWatcher(_adb, _vision, _popups);
-        _collector = new HomeResourceCollector(_adb, _popups, _templatesPath);
-        _wallRunner = new HomeWallUpgradeRunner(_wallUpdater, _configService, _stats);
-        _mainCycleRunner = new MainVillageCycleRunner(_adb, _vision, _configService, _zoom, _popups, _training, () => _attacks, _stats, _homeDetector, _scouting, _battleWatcher, _collector, _wallRunner);
-        _builderBaseCycleRunner = new BuilderBaseCycleRunner(_adb, _vision, _configService, _builderBaseNavigator, _builderBaseResources, _builderBaseReport, _builderBaseArmyManager, _builderBaseAttacks, _builderBaseClockTower, _builderBaseWallUpdater, _stats, _templatesPath);
-        _accountLoop = new AccountRotationLoop(_configService, _accounts, _wallUpdater);
+        AutomationParts parts = AutomationCompositionRoot.Build(
+            configService, adb, vision, templatesPath, stats, popups, zoom, accounts, () => _attacks);
+
+        _attacks = parts.Attacks;
+        _wallUpdater = parts.WallUpdater;
+        _builderBaseNavigator = parts.BuilderBaseNavigator;
+        _builderBaseReport = parts.BuilderBaseReport;
+        _homeDetector = parts.HomeDetector;
+        _wallRunner = parts.WallRunner;
+        _mainCycleRunner = parts.MainCycleRunner;
+        _builderBaseCycleRunner = parts.BuilderBaseCycleRunner;
+        _accountLoop = parts.AccountLoop;
 
         Console.WriteLine("[FSM-CS] phase=init status=success details=\"automation_core_initialized\"");
-    }
-
-    private static (IConfigService, IADBHelper, IVisionEngine, string) CreateServices(string configPath)
-    {
-        var config = new ConfigService(configPath);
-        DeviceConnectionConfig devConfig = config.Current.DeviceConnection;
-        var adb = new ADBHelper(devConfig.Host, devConfig.Port, devConfig.Serial);
-        string templatesPath = Path.Combine(AppContext.BaseDirectory, "assets", "Templates");
-        var vision = new VisionEngine(templatesPath);
-        return (config, adb, vision, templatesPath);
     }
 
     private void LoadConfig(string path) => _configService.Reload();
@@ -139,7 +109,7 @@ internal partial class CVAutomationFramework : IAutomationRunner
         if (_isRunning) return;
 
         _configService.Reload();
-        _attacks = new Attacks(_adb, _vision, _templatesPath, CreateAttackDelayConfig(_configService.Current.Advanced));
+        _attacks = AutomationCompositionRoot.CreateAttacks(_adb, _vision, _templatesPath, _configService.Current.Advanced);
 
         _isRunning = true;
         _fastAttackQueued = false;
@@ -283,7 +253,7 @@ internal partial class CVAutomationFramework : IAutomationRunner
         {
             int remaining = Math.Min(500, Math.Max(1, (int)(end - DateTime.Now).TotalMilliseconds));
             if (ThreadingUtil.InterruptibleSleep(remaining, token) || !_isRunning) return true;
-            _popups.HandleBlockingConnectionPopup("[WARN] Connection popup during wait → recover");
+            _popups.HandleBlockingConnectionPopup("[WARN] Connection popup during wait \u2192 recover");
         }
         return false;
     }
@@ -393,12 +363,4 @@ internal partial class CVAutomationFramework : IAutomationRunner
         _pauseEvent.Dispose();
         _cts?.Dispose();
     }
-
-    private static AttackDelayConfig CreateAttackDelayConfig(CvAut.Configuration.AdvancedConfig adv) => new()
-    {
-        TroopDeployDelayMs = adv.TroopDeployDelayMs,
-        RageSpellDelayMs = adv.RageSpellDelayMs,
-        FreezeSpellDelayMs = adv.FreezeSpellDelayMs,
-        GrandWardenAbilityDelayMs = adv.GrandWardenAbilityDelayMs
-    };
 }
