@@ -6,8 +6,8 @@ using System.Threading;
 namespace CvAut
 {
     /// <summary>
-    /// Chịu trách nhiệm duy nhất: thu nhỏ camera trong game theo từng loại giả lập
-    /// (MEmu qua phím F3 gửi vào cửa sổ, BlueStacks qua pinch ADB).
+    /// Single responsibility: zoom the in-game camera out, per emulator vendor
+    /// (MEmu via an F3 key posted to its window, BlueStacks via an ADB pinch).
     /// </summary>
     internal sealed class CameraZoomController
     {

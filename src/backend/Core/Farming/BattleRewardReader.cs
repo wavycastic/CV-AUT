@@ -5,7 +5,7 @@ using OpenCvSharp;
 namespace CvAut
 {
     /// <summary>
-    /// Chịu trách nhiệm duy nhất: đọc kết quả trận từ màn hình (số sao và tài nguyên nhận được).
+    /// Single responsibility: read the battle outcome from the screen (star count and looted resources).
     /// </summary>
     internal sealed class BattleRewardReader
     {

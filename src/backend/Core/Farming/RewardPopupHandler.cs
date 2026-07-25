@@ -6,7 +6,7 @@ using Point = OpenCvSharp.Point;
 namespace CvAut
 {
     /// <summary>
-    /// Chịu trách nhiệm duy nhất: xử lý các popup phần thưởng (star bonus, rương treasure hunt).
+    /// Single responsibility: handle reward popups (star bonus, treasure hunt chest).
     /// </summary>
     internal sealed class RewardPopupHandler
     {

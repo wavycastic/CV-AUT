@@ -1,8 +1,8 @@
 namespace CvAut
 {
     /// <summary>
-    /// Chịu trách nhiệm duy nhất: quyết định chấp nhận hay bỏ qua một mục tiêu
-    /// dựa trên lượng tài nguyên do dò thám và cấu hình ngưỡng của người dùng.
+    /// Single responsibility: decide whether to accept or skip a scouted target,
+    /// based on the resources seen on screen and the user's configured thresholds.
     /// </summary>
     internal static class TargetAcceptancePolicy
     {

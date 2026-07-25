@@ -6,7 +6,7 @@ using Point = OpenCvSharp.Point;
 namespace CvAut
 {
     /// <summary>
-    /// Chịu trách nhiệm duy nhất: nhận biết trận đấu đã kết thúc và chờ tới màn hình kết quả.
+    /// Single responsibility: detect that a battle has ended and wait for the result screen.
     /// </summary>
     internal sealed class BattleResultDetector
     {
@@ -22,7 +22,7 @@ namespace CvAut
         }
 
         /// <summary>
-        /// Vòng lặp chờ màn hình kết quả xuất hiện ổn định, hoặc dừng khi hết thời gian.
+        /// Polls until the result screen is stably visible, or gives up once the timeout elapses.
         /// </summary>
         public bool WaitBattleEnd(CancellationToken token, SmartSurrenderConfig? surrenderConfig = null)
         {
@@ -72,7 +72,7 @@ namespace CvAut
         }
 
         /// <summary>
-        /// Kiểm tra một khung hình xem trận đã kết thúc chưa (nút continue hoặc marker kết quả).
+        /// Inspects a single frame to decide whether the battle is over (continue button or result marker).
         /// </summary>
         public bool BattleEnded(out string matchInfo)
         {
