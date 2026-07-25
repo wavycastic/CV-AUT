@@ -1,0 +1,25 @@
+D:\a\CV-AUT\CV-AUT\src\backend\Core\Training\TrainingModels.cs(29,27): warning CS8600: Converting null literal or possible null value to non-nullable type. [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\Training\TrainingModels.cs(35,24): warning CS8600: Converting null literal or possible null value to non-nullable type. [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\Farming\BattleResultDetector.cs(34,18): warning CS0219: The variable 'smartSurrenderExecuted' is assigned but its value is never used [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\CVAutomationFramework.cs(65,38): warning CS0618: 'IConfigService.Config' is obsolete: 'Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.' [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\CVAutomationFramework.cs(113,23): warning CS0618: 'IConfigService.Config' is obsolete: 'Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.' [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\CVAutomationFramework.cs(142,23): warning CS0618: 'ConfigService.Config' is obsolete: 'Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.' [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\BotOrchestrator.cs(23,19): warning CS0618: 'ConfigService.Config' is obsolete: 'Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.' [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+  Simplimixi.Backend -> D:\a\CV-AUT\CV-AUT\src\backend\bin\Debug\net10.0-windows\Simplimixi.Backend.dll
+  Simplimixi.Backend.Tests -> D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\bin\Debug\net10.0-windows\Simplimixi.Backend.Tests.dll
+  Simplimixi -> D:\a\CV-AUT\CV-AUT\src\frontend\bin\Debug\net10.0-windows\AutoClashOfClan20206.dll
+  Simplimixi.Frontend.Tests -> D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\bin\Debug\net10.0-windows\Simplimixi.Frontend.Tests.dll
+
+Build succeeded.
+
+D:\a\CV-AUT\CV-AUT\src\backend\Core\Training\TrainingModels.cs(29,27): warning CS8600: Converting null literal or possible null value to non-nullable type. [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\Training\TrainingModels.cs(35,24): warning CS8600: Converting null literal or possible null value to non-nullable type. [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\Farming\BattleResultDetector.cs(34,18): warning CS0219: The variable 'smartSurrenderExecuted' is assigned but its value is never used [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\CVAutomationFramework.cs(65,38): warning CS0618: 'IConfigService.Config' is obsolete: 'Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.' [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\CVAutomationFramework.cs(113,23): warning CS0618: 'IConfigService.Config' is obsolete: 'Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.' [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\CVAutomationFramework.cs(142,23): warning CS0618: 'ConfigService.Config' is obsolete: 'Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.' [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+D:\a\CV-AUT\CV-AUT\src\backend\Core\BotOrchestrator.cs(23,19): warning CS0618: 'ConfigService.Config' is obsolete: 'Temporary migration surface for raw JSON configuration access. Prefer typed snapshot properties.' [D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj]
+    7 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:20.32
