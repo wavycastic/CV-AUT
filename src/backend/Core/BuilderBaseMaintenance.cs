@@ -31,8 +31,8 @@ namespace CvAut
     /// </summary>
     internal sealed partial class BuilderBaseMaintenance
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
         private readonly string _templatesPath;
         private DateTime? _starLabUpgradeFinishUtc;
@@ -84,7 +84,7 @@ namespace CvAut
             new(12, "electrofire_wizard", "Electrofire Wizard", new Point(622, 449), new[] { "electrofire_wizard", "electro_fire_wizard", "efwizard", "wizard" })
         };
 
-        public BuilderBaseMaintenance(ADBHelper adb, VisionEngine vision, BuilderBaseNavigator navigator, string templatesPath)
+        public BuilderBaseMaintenance(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator, string templatesPath)
         {
             _adb = adb;
             _vision = vision;

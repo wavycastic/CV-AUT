@@ -107,15 +107,18 @@ internal static class AutomationConfigSnapshotReader
             root.Int("hero_wait_seconds", 90, 0));
 
     private static WallUpgradeConfig ReadWall(JsonConfigReader root)
-        => new(
-            root.Bool("upgrade_wall", false),
+    {
+        JsonConfigReader legacy = root.Section("element_state_automation");
+        return new WallUpgradeConfig(
+            root.Bool("upgrade_wall", legacy.Bool("upgrade_enabled", false)),
             root.Int("wall_level", 14, 1),
-            root.Int("wall_gold_threshold", root.Int("wall_upgrade_threshold", 5000000), 0),
-            root.Int("wall_elixir_threshold", root.Int("wall_upgrade_threshold", 5000000), 0),
-            root.Int("wall_gold_reserve", root.Int("wall_reserve_threshold", 100000), 0),
-            root.Int("wall_elixir_reserve", 0, 0),
-            root.Int("wall_batch_limit", 1, 1, 10),
+            root.Int("wall_gold_threshold", legacy.Int("wall_gold_threshold", root.Int("wall_upgrade_threshold", 5000000), 0), 0),
+            root.Int("wall_elixir_threshold", legacy.Int("wall_elixir_threshold", root.Int("wall_upgrade_threshold", 5000000), 0), 0),
+            root.Int("wall_gold_reserve", legacy.Int("wall_gold_reserve", root.Int("wall_reserve_threshold", 100000), 0), 0),
+            root.Int("wall_elixir_reserve", legacy.Int("wall_elixir_reserve", 0, 0), 0),
+            root.Int("wall_batch_limit", root.Int("wall_batch_limit", legacy.Int("wall_batch_limit", 1, 1, 10), 1, 10), 1, 10),
             root.Bool("wall_debug_screenshots", false));
+    }
 
     private static MultiAccountConfig ReadMultiAccount(JsonConfigReader root)
     {

@@ -41,7 +41,7 @@ namespace CvAut.Adb
 
             for (int attempt = 1; attempt <= MaxRetries && !token.IsCancellationRequested; attempt++)
             {
-                Stopwatch captureStopwatch = framePacer.StartCaptureMeasurement();
+                Stopwatch captureStopwatch = FramePacer.StartCaptureMeasurement();
                 try
                 {
                     var startInfo = new ProcessStartInfo

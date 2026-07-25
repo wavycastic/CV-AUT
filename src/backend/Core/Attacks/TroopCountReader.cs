@@ -7,9 +7,9 @@ namespace CvAut;
 internal sealed class TroopCountReader
 {
     private readonly IADBHelper _adb;
-    private readonly VisionEngine _vision;
+    private readonly IVisionEngine _vision;
 
-    public TroopCountReader(IADBHelper adb, VisionEngine vision)
+    public TroopCountReader(IADBHelper adb, IVisionEngine vision)
     {
         _adb = adb;
         _vision = vision;

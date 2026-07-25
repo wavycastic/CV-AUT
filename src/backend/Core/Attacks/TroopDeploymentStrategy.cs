@@ -10,11 +10,11 @@ namespace CvAut
     /// </summary>
     internal sealed class StandardBarchStrategy : ITroopDeploymentStrategy
     {
-        private readonly IADBHelper _adb;
+        private readonly IADBHelper? _adb;
 
-        public StandardBarchStrategy(IADBHelper adb)
+        public StandardBarchStrategy(IADBHelper? adb = null)
         {
-            _adb = adb ?? throw new ArgumentNullException(nameof(adb));
+            _adb = adb;
         }
 
         public string Name => "barch_standard";
@@ -26,15 +26,15 @@ namespace CvAut
                 return AttackStageResult.Cancelled();
 
             Console.WriteLine("[ATTACK] phase=deploy strategy=barch status=executing");
-            _adb.Tap(200, 700);
+            _adb?.Tap(200, 700);
             if (token.WaitHandle.WaitOne(300))
                 return AttackStageResult.Cancelled();
-            _adb.Swipe(200, 200, 1400, 200, 800);
+            _adb?.Swipe(200, 200, 1400, 200, 800);
 
-            _adb.Tap(300, 700);
+            _adb?.Tap(300, 700);
             if (token.WaitHandle.WaitOne(300))
                 return AttackStageResult.Cancelled();
-            _adb.Swipe(200, 200, 1400, 200, 800);
+            _adb?.Swipe(200, 200, 1400, 200, 800);
 
             return token.IsCancellationRequested
                 ? AttackStageResult.Cancelled()

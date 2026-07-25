@@ -50,15 +50,11 @@ public static class ServiceCollectionExtensions
             templatesPath,
             _ => true));
 
-        // TODO(dependency-inversion): CVAutomationFramework still takes concrete
-        // ConfigService/ADBHelper/VisionEngine. Once its constructor accepts
-        // IConfigService/IADBHelper/IVisionEngine, switch these to GetRequiredService<I...>()
-        // and the concrete registrations above can become private to this method.
         services.AddSingleton<CVAutomationFramework>(serviceProvider => new CVAutomationFramework(
             configPath,
-            serviceProvider.GetRequiredService<ConfigService>(),
-            serviceProvider.GetRequiredService<ADBHelper>(),
-            serviceProvider.GetRequiredService<VisionEngine>(),
+            serviceProvider.GetRequiredService<IConfigService>(),
+            serviceProvider.GetRequiredService<IADBHelper>(),
+            serviceProvider.GetRequiredService<IVisionEngine>(),
             templatesPath));
 
         services.AddSingleton<BotOrchestrator>();

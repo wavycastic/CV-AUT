@@ -21,12 +21,12 @@ internal sealed class BuilderBaseEntryCoordinator
     };
 
     private readonly IADBHelper _adb;
-    private readonly VisionEngine _vision;
+    private readonly IVisionEngine _vision;
     private readonly BuilderBaseNavigator _navigator;
 
     public BuilderBaseEntryCoordinator(
         IADBHelper adb,
-        VisionEngine vision,
+        IVisionEngine vision,
         BuilderBaseNavigator navigator)
     {
         _adb = adb ?? throw new ArgumentNullException(nameof(adb));

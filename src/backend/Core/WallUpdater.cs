@@ -46,8 +46,8 @@ namespace CvAut
         private const double WallSearchThreshold = 0.90;
         private const int SwipeDurationMs = 600;
         private const double MaxCostMismatchRatio = 1.15;
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly string _templatesPath;
         private readonly string _debugDirectory;
         private const int SupportedScreenshotWidth = 1600;
@@ -62,7 +62,7 @@ namespace CvAut
         private int _sessionWallSkipped = 0;
         private int _sessionWallUnknown = 0;
 
-        public WallUpdater(ADBHelper adb, VisionEngine vision, string templatesPath)
+        public WallUpdater(IADBHelper adb, IVisionEngine vision, string templatesPath)
         {
             _adb = adb;
             _vision = vision;

@@ -1,4 +1,5 @@
 using CvAut;
+using CvAut.AttackPipelines;
 using Xunit;
 
 namespace CvAut.Backend.Tests

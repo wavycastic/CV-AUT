@@ -112,7 +112,7 @@ namespace CvAut
             @"village\Page\BuilderBase\MachineEye_0_90"
         };
 
-        public BuilderBaseNavigator(ADBHelper adb, VisionEngine vision)
+        public BuilderBaseNavigator(IADBHelper adb, IVisionEngine vision)
             : this(new VillageSwitchIO(adb, vision))
         {
         }
@@ -682,10 +682,10 @@ namespace CvAut
 
     internal sealed class VillageSwitchIO : IVillageSwitchIO
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
 
-        internal VillageSwitchIO(ADBHelper adb, VisionEngine vision)
+        internal VillageSwitchIO(IADBHelper adb, IVisionEngine vision)
         {
             _adb = adb;
             _vision = vision;

@@ -23,10 +23,10 @@ internal sealed class AttackDeployBarScanner
     private static readonly Rect DeployBarRoi = Rect.FromLTRB(70, 720, 1180, 890);
 
     private readonly IADBHelper _adb;
-    private readonly VisionEngine _vision;
+    private readonly IVisionEngine _vision;
     private readonly string _templatesPath;
 
-    public AttackDeployBarScanner(IADBHelper adb, VisionEngine vision, string templatesPath)
+    public AttackDeployBarScanner(IADBHelper adb, IVisionEngine vision, string templatesPath)
     {
         _adb = adb;
         _vision = vision;

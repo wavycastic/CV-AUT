@@ -83,7 +83,7 @@ namespace CvAut
             }
         }
 
-        public static bool EnsureReady(ADBHelper adb, string host, int port, string emulatorType, string emulatorPath, CancellationToken token, string emulatorInstance = "")
+        public static bool EnsureReady(IADBHelper adb, string host, int port, string emulatorType, string emulatorPath, CancellationToken token, string emulatorInstance = "")
         {
             Console.WriteLine($"[ADB] phase=boot status=start host={host} port={port} type={emulatorType}");
 
@@ -223,7 +223,7 @@ namespace CvAut
         /// <summary>
         /// Vòng lặp chờ giả lập online thông qua việc ping kết nối ADB.
         /// </summary>
-        private static bool WaitForOnline(ADBHelper adb, CancellationToken token)
+        private static bool WaitForOnline(IADBHelper adb, CancellationToken token)
         {
             DateTime deadline = DateTime.Now.AddSeconds(90);
             while (DateTime.Now < deadline && !token.IsCancellationRequested)
@@ -478,7 +478,7 @@ namespace CvAut
             }
         }
 
-        private static bool LaunchClashAndWaitForeground(ADBHelper adb, CancellationToken token, int timeoutSeconds)
+        private static bool LaunchClashAndWaitForeground(IADBHelper adb, CancellationToken token, int timeoutSeconds)
         {
             Console.WriteLine("[ADB] phase=launch_app status=start");
             adb.ExecuteShell($"monkey -p {ClashPackageName} -c android.intent.category.LAUNCHER 1");
@@ -497,7 +497,7 @@ namespace CvAut
             return false;
         }
 
-        private static bool IsClashOfClansForeground(ADBHelper adb)
+        private static bool IsClashOfClansForeground(IADBHelper adb)
         {
             string windowInfo = adb.ExecuteShell("dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'");
             string activityInfo = adb.ExecuteShell("dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity'");

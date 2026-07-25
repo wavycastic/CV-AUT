@@ -15,12 +15,12 @@ internal sealed class Training
     private readonly ArmyTrainingCoordinator _coordinator;
     private readonly DonationService _donations;
 
-    public Training(ADBHelper adb, string templatesPath, VisionEngine vision)
-        : this((IADBHelper)adb, templatesPath, vision)
+    public Training(IADBHelper adb, string templatesPath, IVisionEngine vision)
+        : this(adb, templatesPath, vision, null)
     {
     }
 
-    internal Training(IADBHelper adb, string templatesPath, VisionEngine vision)
+    internal Training(IADBHelper adb, string templatesPath, IVisionEngine vision, object? unused = null)
     {
         ArgumentNullException.ThrowIfNull(adb);
         ArgumentNullException.ThrowIfNull(vision);

@@ -6,10 +6,10 @@ namespace CvAut;
 
 internal sealed class TrainingVision
 {
-    private readonly VisionEngine _vision;
+    private readonly IVisionEngine _vision;
     private readonly string _root;
 
-    public TrainingVision(VisionEngine vision, string root)
+    public TrainingVision(IVisionEngine vision, string root)
     {
         _vision = vision;
         _root = root;

@@ -7,9 +7,9 @@ namespace CvAut.Automation;
 internal sealed class MainVillageInteractionService
 {
     private readonly IADBHelper _adb;
-    private readonly VisionEngine _vision;
+    private readonly IVisionEngine _vision;
 
-    public MainVillageInteractionService(IADBHelper adb, VisionEngine vision)
+    public MainVillageInteractionService(IADBHelper adb, IVisionEngine vision)
     {
         _adb = adb ?? throw new ArgumentNullException(nameof(adb));
         _vision = vision ?? throw new ArgumentNullException(nameof(vision));
@@ -160,7 +160,7 @@ internal sealed class MainVillageInteractionService
 
         if (config.LowResourcesEnabled && config.LowResourcesThreshold > 0)
         {
-            ScoutedResources resources = IsTarget.ExtractResources(_adb, _vision);
+            var resources = IsTarget.ExtractResources(_adb, _vision);
             int remainingTotal = resources.Gold + resources.Elixir;
             if (remainingTotal > 0 && remainingTotal <= config.LowResourcesThreshold)
             {

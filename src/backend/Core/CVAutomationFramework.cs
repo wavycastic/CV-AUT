@@ -24,8 +24,8 @@ namespace CvAut
     /// </summary>
     internal partial class CVAutomationFramework : IAutomationRunner
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly Training _training;
         private Attacks _attacks;
         private readonly WallUpdater _wallUpdater;
@@ -42,7 +42,7 @@ namespace CvAut
         private readonly string _configPath;
 
         // Extracted services
-        private readonly ConfigService _configService;
+        private readonly IConfigService _configService;
         private readonly StatsRepository _stats;
         private readonly PopupHandlerService _popups;
         private readonly ZoomService _zoom;
@@ -72,12 +72,12 @@ namespace CvAut
         {
         }
 
-        private CVAutomationFramework((ConfigService Config, ADBHelper Adb, VisionEngine Vision, string TemplatesPath) services)
+        private CVAutomationFramework((IConfigService Config, IADBHelper Adb, IVisionEngine Vision, string TemplatesPath) services)
             : this(services.Config, services.Adb, services.Vision, services.TemplatesPath)
         {
         }
 
-        private CVAutomationFramework(ConfigService configService, ADBHelper adb, VisionEngine vision, string templatesPath)
+        private CVAutomationFramework(IConfigService configService, IADBHelper adb, IVisionEngine vision, string templatesPath)
             : this("", configService, adb, vision, templatesPath,
                   new StatsRepository(adb, vision, templatesPath),
                   new PopupHandlerService(adb, vision, templatesPath),
@@ -89,8 +89,8 @@ namespace CvAut
         /// <summary>
         /// Internal constructor accepting pre-built services (used by BotOrchestrator).
         /// </summary>
-        internal CVAutomationFramework(string configPath, ConfigService configService,
-            ADBHelper adb, VisionEngine vision, string templatesPath)
+        internal CVAutomationFramework(string configPath, IConfigService configService,
+            IADBHelper adb, IVisionEngine vision, string templatesPath)
             : this(configPath, configService, adb, vision, templatesPath,
                   new StatsRepository(adb, vision, templatesPath),
                   new PopupHandlerService(adb, vision, templatesPath),
@@ -99,8 +99,8 @@ namespace CvAut
         {
         }
 
-        private CVAutomationFramework(string configPath, ConfigService configService,
-            ADBHelper adb, VisionEngine vision, string templatesPath,
+        private CVAutomationFramework(string configPath, IConfigService configService,
+            IADBHelper adb, IVisionEngine vision, string templatesPath,
             StatsRepository stats, PopupHandlerService popups, ZoomService zoom, AccountSwitcher accounts)
         {
             _configPath = configPath;
@@ -136,7 +136,7 @@ namespace CvAut
             Console.WriteLine("[FSM-CS] phase=init status=success details=\"automation_core_initialized\"");
         }
 
-        private static (ConfigService, ADBHelper, VisionEngine, string) CreateServices(string configPath)
+        private static (IConfigService, IADBHelper, IVisionEngine, string) CreateServices(string configPath)
         {
             var config = new ConfigService(configPath);
             var cfg = config.Config;
@@ -150,7 +150,7 @@ namespace CvAut
             return (config, adb, vision, templatesPath);
         }
 
-        private static (ConfigService, ADBHelper, VisionEngine, string) CreateServicesFromConfig(ConfigService config, ADBHelper adb, string templatesPath)
+        private static (IConfigService, IADBHelper, IVisionEngine, string) CreateServicesFromConfig(IConfigService config, IADBHelper adb, string templatesPath)
         {
             return (config, adb, new VisionEngine(templatesPath), templatesPath);
         }

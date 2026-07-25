@@ -11,8 +11,8 @@ namespace CvAut
     /// </summary>
     internal sealed class BuilderBaseWallUpdater
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
 
         private const double ReadyThreshold = 0.70;
@@ -32,7 +32,7 @@ namespace CvAut
             new("elixir", "400k")
         };
 
-        public BuilderBaseWallUpdater(ADBHelper adb, VisionEngine vision, BuilderBaseNavigator navigator)
+        public BuilderBaseWallUpdater(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator)
         {
             _adb = adb;
             _vision = vision;

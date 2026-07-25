@@ -3,9 +3,10 @@ using OpenCvSharp;
 
 namespace CvAut;
 
-public interface IVisionEngine
+public interface IVisionEngine : IDisposable
 {
     string TemplatesPath { get; }
+    string TemplatesDirectory => TemplatesPath;
 
     Point? FindElement(Mat screenshot, string templateName, double threshold, Rect roi, out double maxVal);
 
@@ -23,6 +24,13 @@ public interface IVisionEngine
         bool isOffline = false,
         bool useRgbThresh = false,
         bool invert = false);
+
+    int ExtractNumericalMetrics(
+        Mat screenshot,
+        Rect roi,
+        bool isOffline = false,
+        bool useRgbThresh = false,
+        bool invert = false) => TryExtractNumericalMetrics(screenshot, roi, out int value, out _, isOffline, useRgbThresh, invert) ? value : 0;
 
     int OcrReadNumber(Mat croppedImage);
 

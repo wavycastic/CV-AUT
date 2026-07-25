@@ -10,8 +10,8 @@ namespace CvAut
 {
     internal partial class BuilderBaseAttacks
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
         private readonly Random _random = new();
         private readonly List<BuilderBaseTroopSlot> _activeBomberSlots = new();
@@ -190,7 +190,7 @@ namespace CvAut
             new(1390, 520), new(1330, 565), new(1265, 610), new(1195, 655), new(1115, 695), new(1025, 705), new(935, 670)
         };
 
-        public BuilderBaseAttacks(ADBHelper adb, VisionEngine vision, BuilderBaseNavigator navigator)
+        public BuilderBaseAttacks(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator)
         {
             _adb = adb;
             _vision = vision;

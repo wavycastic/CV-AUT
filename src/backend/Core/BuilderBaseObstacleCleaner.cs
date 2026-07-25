@@ -8,11 +8,11 @@ namespace CvAut
     /// </summary>
     internal class BuilderBaseObstacleCleaner
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
 
-        public BuilderBaseObstacleCleaner(ADBHelper adb, VisionEngine vision, BuilderBaseNavigator navigator)
+        public BuilderBaseObstacleCleaner(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator)
         {
             _adb = adb;
             _vision = vision;

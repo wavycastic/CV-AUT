@@ -28,18 +28,8 @@ internal sealed class Attacks : IAttackStageOperations
     private string _activeStrategy = "Dragon_Attack";
 
     public Attacks(
-        ADBHelper adb,
-        VisionEngine vision,
-        string? templatesPath = null,
-        AttackDelayConfig? delays = null,
-        AttackCoordinateConfig? coordinates = null)
-        : this((IADBHelper)adb, vision, templatesPath, delays, coordinates)
-    {
-    }
-
-    internal Attacks(
         IADBHelper adb,
-        VisionEngine vision,
+        IVisionEngine vision,
         string? templatesPath = null,
         AttackDelayConfig? delays = null,
         AttackCoordinateConfig? coordinates = null)
