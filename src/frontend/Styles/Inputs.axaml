@@ -1,0 +1,146 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+>
+    <Style Selector="TextBox">
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+            </Transitions>
+        </Setter>
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+    </Style>
+    <!-- ===================== ComboBox & Dropdown ===================== -->
+    <Style Selector="ComboBox">
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Padding" Value="9,4" />
+        <Setter Property="MinHeight" Value="26" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+    </Style>
+
+    <!-- ComboBox Button Hover -->
+    <Style Selector="ComboBox:pointerover /template/ Border#Background">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+    </Style>
+    <Style Selector="ComboBox:pointerover">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+    </Style>
+
+    <!-- ComboBox Focus & Open -->
+    <Style Selector="ComboBox:focus /template/ Border#Background">
+        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+    <Style Selector="ComboBox:dropdownopen /template/ Border#Background">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+
+    <!-- Dropdown Arrow Glyph -->
+    <Style Selector="ComboBox /template/ Path#DropDownGlyph">
+        <Setter Property="Fill" Value="{DynamicResource AppTextSecondaryBrush}" />
+    </Style>
+    <Style Selector="ComboBox:pointerover /template/ Path#DropDownGlyph">
+        <Setter Property="Fill" Value="{DynamicResource AppTextPrimaryBrush}" />
+    </Style>
+
+    <!-- Dropdown Popup Container -->
+    <Style Selector="ComboBox /template/ Border#PopupBorder">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
+        <Setter Property="BoxShadow" Value="0 10 30 0 #50000000" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+
+    <!-- ComboBoxItem Style -->
+    <Style Selector="ComboBoxItem">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Margin" Value="0,1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ComboBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+    </Style>
+
+    <!-- ComboBoxItem Hover -->
+    <Style Selector="ComboBoxItem:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+    </Style>
+
+    <!-- ComboBoxItem Selected -->
+    <Style Selector="ComboBoxItem:selected">
+        <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+
+    <!-- ComboBoxItem Selected + Hover -->
+    <Style Selector="ComboBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+    <Style Selector="NumericUpDown">
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="TextBox:focus">
+        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+    <Style Selector="NumericUpDown:focus-within">
+        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+    <Style Selector="CheckBox">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
+    </Style>
+    <Style Selector="CheckBox:checked">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="CheckBox /template/ Border#border">
+        <Setter Property="CornerRadius" Value="3" />
+    </Style>
+    <Style Selector="CheckBox:checked /template/ Border#border">
+        <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+    <Style Selector="CheckBox:checked /template/ Path#checkMark">
+        <Setter Property="Fill" Value="{DynamicResource AppBackgroundBrush}" />
+        <Setter Property="Stroke" Value="Transparent" />
+        <Setter Property="StrokeThickness" Value="0" />
+    </Style>
+
+    <!-- ToggleSwitch accent when on -->
+    <Style Selector="ToggleSwitch:checked /template/ Border#SwitchKnobBounds">
+        <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+</Styles>
