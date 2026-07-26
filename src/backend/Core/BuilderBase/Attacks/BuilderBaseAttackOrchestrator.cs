@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 
 namespace CvAut
@@ -34,6 +35,9 @@ namespace CvAut
         public BuilderBaseBattleResult RunDropTrophyAttack(CancellationToken token)
         {
             Console.WriteLine("[BB-ATTACK] phase=attack status=start mode=drop_trophy");
+            _outcomeWatcher.ResetClanGamesChecks();
+            _heroController.ResetCounters();
+
             if (!_navigator.IsOnBuilderBase())
             {
                 Console.WriteLine("[BB-ATTACK] phase=attack status=skip reason=not_on_builder_base");
@@ -71,13 +75,28 @@ namespace CvAut
 
             if (!_entryFlow.WaitCloudsAndEnemyVillage(token))
             {
+                Console.WriteLine("[BB-ATTACK] phase=cloud status=fail reason=enemy_village_not_detected action=abort_attack");
+                _entryFlow.CloseAttackPrep(token);
                 return new(false, 0, 0, false);
             }
 
-            // Drop 1 troop then immediately surrender
-            _adb.Tap(100, 750); // Tap troop slot
+            // Thả 1 quân rồi đầu hàng ngay. Chọn slot bằng thị giác và thả tại điểm đã hiệu chỉnh,
+            // thay vì tap toạ độ cứng không khớp với thanh quân lẫn đường thả trong layout.
+            if (_entryFlow.TapFirstVisible(BuilderBaseAttackLayout.BuilderTroopTemplates.ToArray(), BuilderBaseAttackLayout.TroopThreshold, BuilderBaseAttackLayout.DeployBarRoi, token, out string troopTemplate))
+            {
+                Console.WriteLine($"[BB-ATTACK] phase=drop_trophy status=pending step=select_troop template=\"{troopTemplate}\"");
+            }
+            else
+            {
+                Console.WriteLine("[BB-ATTACK] phase=drop_trophy status=warning step=select_troop reason=troop_slot_not_detected action=fallback_fixed_slot");
+                _adb.Tap(100, 750);
+            }
+
             if (Sleep(500, token)) return new(false, 0, 0, false);
-            _adb.Tap(400, 450); // Drop troop on field
+
+            var dropPoint = BuilderBaseAttackLayout.BottomLeftDrop[0];
+            _adb.Tap(dropPoint.X, dropPoint.Y);
+            Console.WriteLine($"[BB-ATTACK] phase=drop_trophy status=pending step=deploy point=({dropPoint.X},{dropPoint.Y})");
             if (Sleep(800, token)) return new(false, 0, 0, false);
 
             bool surrendered = _returnHomeController.ReturnHomeDropTrophyBB(token);
