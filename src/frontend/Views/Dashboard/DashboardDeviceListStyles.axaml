@@ -1,0 +1,95 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+>
+    <!--
+        Lifted out of DashboardDeviceListView.axaml, where these lived inline as
+        ListBox.Styles and ToggleButton.Styles.
+
+        The ListBoxItem selectors are unchanged: DeviceList is the only ListBox in the
+        pane that includes this file, so each one still matches the rows it always did.
+        The ToggleButton selectors used to be scoped by sitting inside the item template,
+        so they are qualified with .device-select here to keep matching only the
+        per-row selection toggle.
+    -->
+
+    <Style Selector="ListBoxItem">
+        <Setter Property="Padding" Value="10" />
+        <Setter Property="Margin" Value="0,0,0,6" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+    </Style>
+    <Style Selector="ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.2" />
+                <BrushTransition Property="Background" Duration="0:0:0.2" />
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+    <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+    </Style>
+    <!-- Action buttons inside ListBoxItem: smooth subtle hover without harsh white box -->
+    <Style Selector="ListBoxItem Button.ghost /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.15" />
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="ListBoxItem Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#15ffffff" />
+    </Style>
+    <Style Selector="ListBoxItem Button.ghost:pointerover materialIcons|MaterialIcon">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.device-select">
+        <Setter Property="Content">
+            <Template>
+                <materialIcons:MaterialIcon Kind="CircleOutline" Width="15" Height="15" Foreground="{DynamicResource AppTextMutedBrush}"/>
+            </Template>
+        </Setter>
+    </Style>
+    <Style Selector="ToggleButton.device-select /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="ToggleButton.device-select:checked">
+        <Setter Property="Content">
+            <Template>
+                <materialIcons:MaterialIcon Kind="CheckCircle" Width="15" Height="15" Foreground="{DynamicResource AppAccentBrush}"/>
+            </Template>
+        </Setter>
+    </Style>
+    <Style Selector="ToggleButton.device-select:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="ToggleButton.device-select:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ToggleButton.device-select:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ToggleButton.device-select:pointerover materialIcons|MaterialIcon">
+        <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+    </Style>
+</Styles>

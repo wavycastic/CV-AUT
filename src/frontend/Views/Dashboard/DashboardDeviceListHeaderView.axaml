@@ -1,0 +1,51 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.Dashboard.DashboardDeviceListHeaderView"
+    x:DataType="vm:DashboardViewModel"
+>
+    <Design.DataContext><vm:DashboardViewModel /></Design.DataContext>
+
+    <UserControl.Styles>
+        <StyleInclude Source="/Views/Dashboard/DashboardStyles.axaml" />
+    </UserControl.Styles>
+
+    <!-- Top card of the device list pane: count, emulator filter, rescan. -->
+    <Border Background="{DynamicResource AppSurfaceBrush}"
+            BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
+            CornerRadius="{DynamicResource RadiusMd}" Padding="12">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+            <Border Grid.Column="0" Width="34" Height="34" CornerRadius="9"
+                    Background="{DynamicResource AppAccentSoftBrush}"
+                    BorderBrush="{DynamicResource AppAccentBorderBrush}" BorderThickness="1">
+                <materialIcons:MaterialIcon Kind="CellphoneLink" Width="17" Height="17"
+                                            Foreground="{DynamicResource AppAccentBrush}"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+
+            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="Thiết bị kết nối" FontWeight="Bold" FontSize="13"
+                           Foreground="{DynamicResource AppTextPrimaryBrush}"/>
+                <TextBlock Text="{Binding DeviceSummaryText}" Classes="caption"/>
+            </StackPanel>
+
+            <ComboBox Grid.Column="2" ItemsSource="{Binding EmulatorFilters}"
+                      SelectedItem="{Binding SelectedEmulatorFilter}"
+                      MinWidth="112" Height="32" FontSize="11" Padding="9,4"
+                      VerticalAlignment="Center"/>
+
+            <Button Grid.Column="3" Command="{Binding DetectDevicesCommand}" Classes="ghost"
+                    Padding="0" ToolTip.Tip="Quét lại thiết bị" CornerRadius="8"
+                    Width="32" Height="32" VerticalAlignment="Center">
+                <materialIcons:MaterialIcon Kind="Refresh" Width="15" Height="15"
+                                            Classes.scan-spinner="{Binding IsDetecting}"
+                                            Foreground="{DynamicResource AppTextSecondaryBrush}"/>
+            </Button>
+        </Grid>
+    </Border>
+</UserControl>
