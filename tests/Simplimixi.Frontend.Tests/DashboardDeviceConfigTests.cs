@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using CvAut;
 using CvAut.Models;
+using CvAut.Services.Configuration;
 using CvAut.ViewModels;
 using CvAut.ViewModels.Settings;
 using Xunit;

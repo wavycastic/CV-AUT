@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CvAut.Models;
+using CvAut.Services.Configuration;
 using CvAut.ViewModels.Settings;
 
 namespace CvAut.ViewModels

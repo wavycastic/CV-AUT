@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CvAut.Models;
 using CvAut.Services;
+using CvAut.Services.Configuration;
 using CvAut.Services.Sessions;
 using CvAut.Services.Emulators;
 

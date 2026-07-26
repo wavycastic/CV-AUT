@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using CvAut;
 using CvAut.Services;
+using CvAut.Services.Configuration;
 using CvAut.Services.Emulators;
 using CvAut.Services.Sessions;
 using CvAut.ViewModels;

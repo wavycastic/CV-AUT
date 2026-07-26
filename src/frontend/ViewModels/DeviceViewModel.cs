@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using CvAut.Configuration;
 using CvAut.Models;
 using CvAut.Services;
+using CvAut.Services.Configuration;
 using CvAut.Services.Sessions;
 
 namespace CvAut.ViewModels

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Text.Json.Nodes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CvAut.Services.Configuration;
 
 namespace CvAut.ViewModels.Settings
 {

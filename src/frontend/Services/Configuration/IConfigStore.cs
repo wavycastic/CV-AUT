@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Text.Json.Nodes;
 using CvAut.Models;
 
-namespace CvAut
+namespace CvAut.Services.Configuration
 {
     public interface IConfigStore
     {

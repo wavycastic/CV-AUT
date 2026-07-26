@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using CvAut;
 using CvAut.Services;
+using CvAut.Services.Configuration;
 using CvAut.ViewModels;
 using CvAut.ViewModels.Settings;
 using Xunit;
