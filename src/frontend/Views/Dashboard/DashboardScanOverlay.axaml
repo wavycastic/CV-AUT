@@ -1,0 +1,39 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.Dashboard.DashboardScanOverlay"
+    x:DataType="vm:DashboardViewModel"
+>
+    <Design.DataContext><vm:DashboardViewModel /></Design.DataContext>
+
+    <UserControl.Styles>
+        <StyleInclude Source="/Views/Dashboard/DashboardStyles.axaml" />
+    </UserControl.Styles>
+
+    <Grid Background="#d80b0b10"
+          HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <!-- Floating Card Panel -->
+        <Border Width="220" Padding="20,18" CornerRadius="16"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{DynamicResource AppSurfaceBrush}"
+                BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1"
+                BoxShadow="0 16 48 0 #a0000000">
+            <StackPanel Spacing="12" HorizontalAlignment="Center">
+                <!-- Minimalist Spinning Loading Icon -->
+                <materialIcons:MaterialIcon Classes="scan-spinner" Kind="Loading" Width="32" Height="32"
+                                            Foreground="{DynamicResource AppAccentBrush}"
+                                            HorizontalAlignment="Center">
+                    <materialIcons:MaterialIcon.RenderTransform><RotateTransform /></materialIcons:MaterialIcon.RenderTransform>
+                </materialIcons:MaterialIcon>
+
+                <TextBlock Text="Đang quét giả lập..." FontWeight="Bold" FontSize="13"
+                           Foreground="{DynamicResource AppTextPrimaryBrush}" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
