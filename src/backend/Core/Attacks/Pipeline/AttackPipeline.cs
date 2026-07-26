@@ -7,13 +7,15 @@ internal sealed class AttackPipeline
 {
     private readonly IReadOnlyList<IAttackStage> _stages;
 
+    // Heroes are deployed before spells on purpose: spells are meant to support a push that the
+    // heroes have already joined, so dropping them while the heroes are still on the bar wastes them.
     public AttackPipeline(IAttackStageOperations operations)
         : this(new IAttackStage[]
         {
             new AttackPreparationStage(operations),
             new TroopDeploymentStage(operations),
-            new SpellDeploymentStage(operations),
             new HeroAbilityStage(operations),
+            new SpellDeploymentStage(operations),
             new BattleCompletionStage(operations)
         })
     {
