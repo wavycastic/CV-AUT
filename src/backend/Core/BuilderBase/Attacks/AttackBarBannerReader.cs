@@ -80,7 +80,14 @@ namespace CvAut
 
         public static int ReadSlotCount(Mat screenshot, Point center, IVisionEngine vision)
         {
-            Rect roi = Rect.FromLTRB(Math.Max(0, center.X + 8), Math.Max(0, center.Y - 45), Math.Min(BuilderBaseAttackLayout.ScreenWidth, center.X + 48), Math.Min(BuilderBaseAttackLayout.ScreenHeight, center.Y - 8));
+            // Clamp against the real frame, not the 1600x900 layout constants: the rest of the
+            // attack flow works in the MBR 860x732 space, so the frame is often a different size.
+            Rect roi = ImageUtils.ClampRect(
+                Rect.FromLTRB(center.X + 8, center.Y - 45, center.X + 48, center.Y - 8),
+                screenshot.Width,
+                screenshot.Height);
+            if (roi.Width <= 0 || roi.Height <= 0) return 1;
+
             if (vision.TryExtractNumericalMetrics(screenshot, roi, out int value, out double confidence, useRgbThresh: true)
                 && value > 0 && value <= 20)
             {

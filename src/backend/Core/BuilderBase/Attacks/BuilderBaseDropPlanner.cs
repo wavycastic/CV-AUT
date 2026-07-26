@@ -17,6 +17,9 @@ namespace CvAut
 
     internal sealed class BuilderBaseDropPlanner
     {
+        /// <summary>Which extreme of the red-line cloud a percentile lookup is asking for.</summary>
+        private enum AreaVertex { LeftMost, RightMost, TopMost, BottomMost }
+
         private readonly Dictionary<DropSide, List<Point>> _dropLines;
         private readonly Dictionary<DropSide, List<Point>> _furtherDropLines;
         private readonly int _screenWidth;
@@ -66,8 +69,16 @@ namespace CvAut
                 List<Point> baseLine = redVector.Count > 0 ? redVector : externalVector.Count > 0 ? externalVector : FallbackOuterGreenLine(side);
                 int nearOffset = redVector.Count > 0 ? 12 : 0;
                 int farOffset = redVector.Count > 0 ? 34 : 22;
-                dropLines[side] = MakeDropLine(baseLine, side).Select(p => OffsetOutside(p, side, nearOffset, screenHeight)).Select(TroopDeploymentExecutor.AvoidPotionArea).Where(IsSafeDropPoint).ToList();
-                furtherDropLines[side] = MakeDropLine(baseLine, side).Select(p => OffsetOutside(p, side, farOffset, screenHeight)).Select(TroopDeploymentExecutor.AvoidPotionArea).Where(IsSafeDropPoint).ToList();
+                dropLines[side] = MakeDropLine(baseLine, side)
+                    .Select(p => OffsetOutside(p, side, nearOffset, screenHeight))
+                    .Select(p => TroopDeploymentExecutor.AvoidPotionArea(p, screenHeight))
+                    .Where(p => IsSafeDropPoint(p, screenWidth, screenHeight))
+                    .ToList();
+                furtherDropLines[side] = MakeDropLine(baseLine, side)
+                    .Select(p => OffsetOutside(p, side, farOffset, screenHeight))
+                    .Select(p => TroopDeploymentExecutor.AvoidPotionArea(p, screenHeight))
+                    .Where(p => IsSafeDropPoint(p, screenWidth, screenHeight))
+                    .ToList();
             }
 
             string source = enough ? "dynamic_redline_polygon" : raw.Count >= 24 ? "dynamic_external_polygon" : "mbr_vector_out_zone";
@@ -87,9 +98,9 @@ namespace CvAut
                 && _furtherDropLines[secondarySide].Count > 0 ? _furtherDropLines[secondarySide] : _dropLines[secondarySide];
 
             List<Point> madePrimary = MakeDropPoints(vectorPrimary, primarySide,
-                pointsQty: 4, addTiles: 0, random, _screenHeight).Where(IsSafeDropPoint).ToList();
+                pointsQty: 4, addTiles: 0, random, _screenHeight).Where(p => IsSafeDropPoint(p, _screenWidth, _screenHeight)).ToList();
             List<Point> madeSecondary = MakeDropPoints(vectorSecondary, secondarySide,
-                pointsQty: 4, addTiles: 0, random, _screenHeight).Where(IsSafeDropPoint).ToList();
+                pointsQty: 4, addTiles: 0, random, _screenHeight).Where(p => IsSafeDropPoint(p, _screenWidth, _screenHeight)).ToList();
 
             List<Point> combined = new List<Point>();
             combined.AddRange(madePrimary);
@@ -97,8 +108,8 @@ namespace CvAut
 
             if (combined.Count == 0)
             {
-                combined.AddRange(vectorPrimary.Where(IsSafeDropPoint));
-                combined.AddRange(vectorSecondary.Where(IsSafeDropPoint));
+                combined.AddRange(vectorPrimary.Where(p => IsSafeDropPoint(p, _screenWidth, _screenHeight)));
+                combined.AddRange(vectorSecondary.Where(p => IsSafeDropPoint(p, _screenWidth, _screenHeight)));
             }
 
             LastChosenDropPoints = combined;
@@ -123,8 +134,9 @@ namespace CvAut
             if (screenshot == null || screenshot.Empty()) return result;
             int xStep = Math.Max(1, screenshot.Width / 860);
             int yStep = Math.Max(3, screenshot.Height / 160);
-            int yMax = Math.Min(screenshot.Height - 1, (int)Math.Round(620 * (screenshot.Height / 732.0)));
-            for (int y = 45; y <= yMax; y += yStep)
+            int yMin = Math.Max(0, MbrScreenScaling.ScaleY(screenshot, 45));
+            int yMax = Math.Min(screenshot.Height - 1, MbrScreenScaling.ScaleY(screenshot, 620));
+            for (int y = yMin; y <= yMax; y += yStep)
             {
                 for (int x = 20; x < screenshot.Width - 20; x += xStep)
                 {
@@ -147,22 +159,33 @@ namespace CvAut
             var filtered = raw.Where(p => p.Y >= minY && p.Y <= maxY && Math.Abs(p.X - centerX) <= screenWidth / 2).ToList();
             if (filtered.Count < 24) return fallbackExternal;
 
-            Point left = PercentilePoint(filtered.Where(p => p.X < centerX && Math.Abs(p.Y - centerY) <= screenHeight / 5), fallbackExternal.Left, lowestX: true);
-            Point right = PercentilePoint(filtered.Where(p => p.X > centerX && Math.Abs(p.Y - centerY) <= screenHeight / 5), fallbackExternal.Right, lowestX: false);
-            Point top = PercentilePoint(filtered.Where(p => p.Y < centerY && Math.Abs(p.X - centerX) <= screenWidth / 3), fallbackExternal.Top, lowestY: true);
-            Point bottom = PercentilePoint(filtered.Where(p => p.Y > centerY && Math.Abs(p.X - centerX) <= screenWidth / 3), fallbackExternal.Bottom, lowestY: false);
+            Point left = PercentilePoint(filtered.Where(p => p.X < centerX && Math.Abs(p.Y - centerY) <= screenHeight / 5), fallbackExternal.Left, AreaVertex.LeftMost);
+            Point right = PercentilePoint(filtered.Where(p => p.X > centerX && Math.Abs(p.Y - centerY) <= screenHeight / 5), fallbackExternal.Right, AreaVertex.RightMost);
+            Point top = PercentilePoint(filtered.Where(p => p.Y < centerY && Math.Abs(p.X - centerX) <= screenWidth / 3), fallbackExternal.Top, AreaVertex.TopMost);
+            Point bottom = PercentilePoint(filtered.Where(p => p.Y > centerY && Math.Abs(p.X - centerX) <= screenWidth / 3), fallbackExternal.Bottom, AreaVertex.BottomMost);
 
             if (Distance(left, right) < screenWidth * 0.25 || Distance(top, bottom) < screenHeight * 0.20) return fallbackExternal;
             return new ExternalAreaModel(left, right, top, bottom);
         }
 
-        private static Point PercentilePoint(IEnumerable<Point> source, Point fallback, bool lowestX = false, bool lowestY = false)
+        /// <summary>
+        /// Averages the outermost tenth of a point cloud along the axis implied by <paramref name="vertex"/>.
+        /// Each vertex maps to exactly one ordering; previously the right and bottom vertices were
+        /// indistinguishable because both were requested with the same default flags.
+        /// </summary>
+        private static Point PercentilePoint(IEnumerable<Point> source, Point fallback, AreaVertex vertex)
         {
             List<Point> points = source.ToList();
             if (points.Count == 0) return fallback;
-            IEnumerable<Point> ordered = lowestY || !lowestX ? points.OrderBy(p => p.Y) : points.OrderBy(p => p.X);
-            if (!lowestY && !lowestX) ordered = points.OrderByDescending(p => p.X);
-            if (lowestY == false && lowestX == false && points.Average(p => p.Y) > fallback.Y) ordered = points.OrderByDescending(p => p.Y);
+
+            IEnumerable<Point> ordered = vertex switch
+            {
+                AreaVertex.LeftMost => points.OrderBy(p => p.X),
+                AreaVertex.RightMost => points.OrderByDescending(p => p.X),
+                AreaVertex.TopMost => points.OrderBy(p => p.Y),
+                _ => points.OrderByDescending(p => p.Y)
+            };
+
             List<Point> sample = ordered.Take(Math.Max(3, points.Count / 10)).ToList();
             return new Point((int)Math.Round(sample.Average(p => p.X)), (int)Math.Round(sample.Average(p => p.Y)));
         }
@@ -252,7 +275,7 @@ namespace CvAut
                     break;
             }
 
-            int bottomCap = Math.Min(screenHeight - 120, 555 + Math.Max(0, screenHeight - 732));
+            int bottomCap = BottomCap(screenHeight);
             var vector = new List<Point>(101);
             for (int i = 0; i <= 100; i++)
             {
@@ -286,7 +309,7 @@ namespace CvAut
                     DropSide.BottomLeft => new Point(x - l - rndx, y + l + rndy),
                     _ => new Point(x + l + rndx, y + l + rndy)
                 };
-                output.Add(TroopDeploymentExecutor.AvoidPotionArea(ClampBottom(adjusted, screenHeight)));
+                output.Add(TroopDeploymentExecutor.AvoidPotionArea(ClampBottom(adjusted, screenHeight), screenHeight));
             }
             return output.Distinct().ToList();
         }
@@ -303,9 +326,15 @@ namespace CvAut
             return ClampBottom(result, screenHeight);
         }
 
+        /// <summary>
+        /// Single definition of the lowest usable drop row. Previously this bound was computed
+        /// three different ways, two of which offset an MBR coordinate by a resolution delta.
+        /// </summary>
+        private static int BottomCap(int screenHeight) => Math.Min(screenHeight - 120, (int)Math.Round(555 * (screenHeight / 732.0)));
+
         private static Point ClampBottom(Point point, int screenHeight)
         {
-            int cap = Math.Min(screenHeight - 120, (int)Math.Round(555 * (screenHeight / 732.0)));
+            int cap = BottomCap(screenHeight);
             return point.Y > cap ? new Point(point.X, cap) : point;
         }
 
@@ -329,13 +358,16 @@ namespace CvAut
                 || troopName.Contains("Wizard", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool IsSafeDropPoint(Point point)
+        private static bool IsSafeDropPoint(Point point, int screenWidth, int screenHeight)
         {
-            if (point.X < 120 || point.X > BuilderBaseAttackLayout.ScreenWidth - 120) return false;
-            if (point.Y < 70 || point.Y > BuilderBaseAttackLayout.ScreenHeight - 120) return false;
+            if (point.X < 120 || point.X > screenWidth - 120) return false;
+            if (point.Y < 70 || point.Y > screenHeight - 120) return false;
 
             // Avoid center-ish zone where MBR's ExternalArea would usually reject risky drops.
-            if (point.X >= 560 && point.X <= 1040 && point.Y >= 360 && point.Y <= 700) return false;
+            // The band must stop above the potion cap: AvoidPotionArea clamps points onto that exact
+            // row, so a band covering it would silently discard every clamped bottom-edge point.
+            int centerBandBottom = Math.Min(700, TroopDeploymentExecutor.PotionCapY(screenHeight) - 1);
+            if (point.X >= 560 && point.X <= 1040 && point.Y >= 360 && point.Y <= centerBandBottom) return false;
 
             return true;
         }

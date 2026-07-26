@@ -103,7 +103,16 @@ namespace CvAut
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty()) return;
 
-            Rect roi = Rect.FromLTRB(Math.Max(0, slot.Center.X - 45), Math.Max(0, slot.Center.Y - 60), Math.Min(BuilderBaseAttackLayout.ScreenWidth, slot.Center.X + 95), Math.Min(BuilderBaseAttackLayout.ScreenHeight, slot.Center.Y + 50));
+            Rect roi = ImageUtils.ClampRect(
+                Rect.FromLTRB(slot.Center.X - 45, slot.Center.Y - 60, slot.Center.X + 95, slot.Center.Y + 50),
+                screenshot.Width,
+                screenshot.Height);
+            if (roi.Width <= 0 || roi.Height <= 0)
+            {
+                Console.WriteLine($"[BB-ATTACK] phase=bomber_ability status=skip slot={slot.Index} reason=empty_roi");
+                return;
+            }
+
             Point? ability = null;
             double score = 0;
             foreach (string template in BuilderBaseAttackLayout.BomberAbilityTemplates)
@@ -211,19 +220,16 @@ namespace CvAut
             return IsMachineDeadByMbrPixel(screenshot);
         }
 
+        /// <summary>
+        /// The (71, 663) probe belongs to the MBR 860x732 coordinate space, so it must be scaled
+        /// by the screenshot size. Reading it raw sampled a point in the middle of a 900-high frame,
+        /// where neutral grey can match and wrongly report a live machine as dead.
+        /// </summary>
         public bool IsMachineDeadByMbrPixel(Mat screenshot)
         {
-            int x = 71;
-            int y = 663 + (BuilderBaseAttackLayout.ScreenHeight - 900);
-            if (TryGetPixel(screenshot, x, y, out Vec3b pixel)
-                && IsColorNear(pixel, 0x4E4E4E, 20))
-            {
-                return true;
-            }
-
-            int scaledX = (int)Math.Round(71 * (screenshot.Width / 860.0));
-            int scaledY = (int)Math.Round(663 * (screenshot.Height / 732.0));
-            return TryGetPixel(screenshot, scaledX, scaledY, out pixel) && IsColorNear(pixel, 0x4E4E4E, 20);
+            int x = (int)Math.Round(71 * MbrScreenScaling.ScaleX(screenshot));
+            int y = MbrScreenScaling.ScaleY(screenshot, 663);
+            return TryGetPixel(screenshot, x, y, out Vec3b pixel) && IsColorNear(pixel, 0x4E4E4E, 20);
         }
 
         private bool IsMachineAbilityWaiting(Point machine)
@@ -243,8 +249,10 @@ namespace CvAut
         {
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty()) return false;
-            int bannerX = slot.Center.X + 37;
-            int bannerY = 583 + (BuilderBaseAttackLayout.ScreenHeight - 900);
+
+            // Same banner probe as AttackBarBannerReader; both must resolve to the same pixel.
+            int bannerX = slot.Center.X + (int)Math.Round(34 * MbrScreenScaling.ScaleX(screenshot));
+            int bannerY = MbrScreenScaling.ScaleY(screenshot, 585);
             if (TryGetPixel(screenshot, bannerX, bannerY, out Vec3b mbrPixel)
                 && IsColorNear(mbrPixel, 0x707070, 10))
             {
