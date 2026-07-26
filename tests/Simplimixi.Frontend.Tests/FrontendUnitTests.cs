@@ -537,6 +537,12 @@ namespace CvAut.Tests
         {
             string root = Path.Combine(Path.GetTempPath(), "cvaut_notif_" + System.Guid.NewGuid().ToString("N"));
             var store = new ConfigStore(root);
+
+            // The Default profile resolves to the relative Config/test_config.json, which is shared
+            // by every ConfigStore in the process regardless of its profile root. Activate a profile
+            // inside this test's own root first, so this round-trip cannot race other test classes.
+            store.SaveProfileAs("isolated", new JsonObject());
+
             store.SaveNotificationSettings(new NotificationSettings { Enabled = true, WebhookUrl = "https://discord.com/api/webhooks/1/abc", NotifyOnStopped = true });
 
             var loaded = store.LoadNotificationSettings();

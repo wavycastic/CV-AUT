@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json.Nodes;
 using CvAut;
 using CvAut.Models;
 using CvAut.Services.Configuration;
@@ -19,6 +20,12 @@ namespace CvAut.Tests
         {
             string root = Path.Combine(Path.GetTempPath(), "cvaut_settings_" + Guid.NewGuid().ToString("N"));
             var store = new ConfigStore(root);
+
+            // The Default profile resolves to the relative Config/test_config.json, which is shared
+            // by every ConfigStore in the process regardless of its profile root. Activate a profile
+            // inside this test's own root first, so saving settings cannot race other test classes.
+            store.SaveProfileAs("isolated", new JsonObject());
+
             var vm = new SettingsViewModel(
                 new MainVillageViewModel(store),
                 new NightVillageViewModel(store),

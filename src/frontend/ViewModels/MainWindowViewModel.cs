@@ -18,6 +18,9 @@ namespace CvAut.ViewModels
     /// only holds the collection + the active pointer + app-scoped flags — never per-device
     /// status/stats/logs directly (roadmap: "Không hardcode state runtime ngoài DeviceViewModel").
     ///
+    /// Construction is side-effect free: no device scan is started here. The shell view calls
+    /// <see cref="StartInitialDeviceScan"/> once it is loaded.
+    ///
     /// This file covers shell composition and app-scoped state. The device fleet — detection,
     /// per-device subscriptions and the All-commands — lives in <c>MainWindowViewModel.Devices.cs</c>.
     /// </summary>
@@ -35,6 +38,9 @@ namespace CvAut.ViewModels
         private readonly IConfigStore _configStore;
         private readonly IEmulatorDiscovery _discovery;
         private readonly CvAut.Services.Notifications.INotificationService? _notifications;
+
+        /// <summary>Guards <see cref="StartInitialDeviceScan"/> so the startup scan runs once.</summary>
+        private bool _initialScanStarted;
 
         /// <summary>Design-time / fallback ctor (no DI).</summary>
         public MainWindowViewModel()
@@ -77,7 +83,8 @@ namespace CvAut.ViewModels
                 new NavItem("Nhật ký", "Terminal", logs),
             });
 
-            // Inject commands into Dashboard
+            // Inject commands into Dashboard. These assignments only wire the buttons up; the
+            // first scan is started later, from StartInitialDeviceScan.
             dashboard.DetectDevicesCommand = DetectDevicesCommand;
             dashboard.SelectDeviceCommand = SelectDeviceCommand;
             dashboard.ShowDeviceLogsCommand = ShowDeviceLogsCommand;
@@ -96,6 +103,27 @@ namespace CvAut.ViewModels
                     _logs.Refresh();
                 }
             };
+        }
+
+        /// <summary>
+        /// Starts the one-time device scan that greets the user on launch. This used to run from
+        /// <c>DashboardViewModel.DetectDevicesCommand</c>'s setter, which meant every construction
+        /// of this view model — including in tests and at design time — hit real ADB. The shell
+        /// view now calls this from its Loaded handler instead.
+        /// </summary>
+        public void StartInitialDeviceScan()
+        {
+            if (_initialScanStarted)
+            {
+                return;
+            }
+
+            _initialScanStarted = true;
+
+            if (DetectDevicesCommand.CanExecute(null))
+            {
+                DetectDevicesCommand.Execute(null);
+            }
         }
 
         public TopBarViewModel TopBar { get; }
