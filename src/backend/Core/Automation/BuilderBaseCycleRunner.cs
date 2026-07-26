@@ -97,23 +97,10 @@ internal sealed class BuilderBaseCycleRunner
             NextTroopDelayMs: night.NextTroopDelayMs,
             SameTroopDelayMs: night.SameTroopDelayMs,
             HandleBomber: night.HandleBomber);
-        var maintenanceOptions = new BuilderBaseMaintenanceOptions(
-            SuggestedUpgrades: false,
-            StarLaboratory: false,
-            UpgradeBattleMachine: false,
-            UpgradeBattleCopter: false,
-            PlaceNewBuildings: false,
-            IgnoreGoldUpgrades: false,
-            IgnoreElixirUpgrades: false,
-            IgnoreHallUpgrades: true,
-            IgnoreWallUpgrades: true,
-            StarLaboratoryTroop: "auto",
-            VillageIdx: currentVillageIdx,
-            StarLaboratoryDebugScreenshots: false);
 
-        LogBuilderBaseBaselineAssetAudit(armyOptions, battleOptions, maintenanceOptions, boostClockTower, upgradeWall);
+        LogBuilderBaseBaselineAssetAudit(armyOptions, battleOptions, boostClockTower, upgradeWall);
 
-        Console.WriteLine($"[BB-CS] phase=cycle status=pending step=collect upgrade_wall={upgradeWall} enable_attack={enableAttack} boost_clock_tower={boostClockTower} trophy_range={trophyRangeEnabled} min_trophy={minTrophy} max_trophy={maxTrophy} halt_gold_full={haltOnGoldFull} halt_elixir_full={haltOnElixirFull} force_clan_games={forceAttackForClanGames} suggested_upgrades={maintenanceOptions.SuggestedUpgrades} star_laboratory={maintenanceOptions.StarLaboratory} hero_upgrades={maintenanceOptions.UpgradeBattleMachine || maintenanceOptions.UpgradeBattleCopter} army_management={armyOptions.Enabled} army_formation={armyOptions.Formation}  custom_drop_order={battleOptions.UseCustomDropOrder}");
+        Console.WriteLine($"[BB-CS] phase=cycle status=pending step=collect upgrade_wall={upgradeWall} enable_attack={enableAttack} boost_clock_tower={boostClockTower} trophy_range={trophyRangeEnabled} min_trophy={minTrophy} max_trophy={maxTrophy} halt_gold_full={haltOnGoldFull} halt_elixir_full={haltOnElixirFull} force_clan_games={forceAttackForClanGames} army_management={armyOptions.Enabled} army_formation={armyOptions.Formation}  custom_drop_order={battleOptions.UseCustomDropOrder}");
         BuilderBaseReportSnapshot beforeReport = _builderBaseReport.Read();
         Console.WriteLine($"[BB-CS] phase=cycle status=pending step=report_before gold={beforeReport.Gold} elixir={beforeReport.Elixir} trophy={beforeReport.Trophy} free_builders={beforeReport.FreeBuilders} total_builders={beforeReport.TotalBuilders} builder_hall_level={beforeReport.BuilderHallLevel} loot_available={beforeReport.LootAvailable} remaining_stars={beforeReport.RemainingStars} max_stars={beforeReport.MaxStars} gold_storage_full={beforeReport.GoldStorageFull} elixir_storage_full={beforeReport.ElixirStorageFull}");
         int collected = _builderBaseResources.Collect(token);
@@ -131,17 +118,10 @@ internal sealed class BuilderBaseCycleRunner
             _stats.UpdateWallStats(currentVillageIdx, wallUpgraded ? 1 : 0);
         }
 
-        if (!checkStopFunc(token)
-            && (maintenanceOptions.SuggestedUpgrades || maintenanceOptions.StarLaboratory
-                || maintenanceOptions.UpgradeBattleMachine || maintenanceOptions.UpgradeBattleCopter))
-        {
-            Console.WriteLine("[BB-CS] phase=cycle status=pending step=maintenance_skipped reason=temporary_scope_attack_and_wall_only");
-        }
-
         if (!checkStopFunc(token))
         {
-            BuilderBaseReportSnapshot afterMaintenanceReport = _builderBaseReport.Read();
-            Console.WriteLine($"[BB-CS] phase=cycle status=pending step=report_after_maintenance gold={afterMaintenanceReport.Gold} elixir={afterMaintenanceReport.Elixir} trophy={afterMaintenanceReport.Trophy} free_builders={afterMaintenanceReport.FreeBuilders} total_builders={afterMaintenanceReport.TotalBuilders} builder_hall_level={afterMaintenanceReport.BuilderHallLevel} loot_available={afterMaintenanceReport.LootAvailable} remaining_stars={afterMaintenanceReport.RemainingStars} max_stars={afterMaintenanceReport.MaxStars} gold_storage_full={afterMaintenanceReport.GoldStorageFull} elixir_storage_full={afterMaintenanceReport.ElixirStorageFull}");
+            BuilderBaseReportSnapshot afterWallReport = _builderBaseReport.Read();
+            Console.WriteLine($"[BB-CS] phase=cycle status=pending step=report_after_wall gold={afterWallReport.Gold} elixir={afterWallReport.Elixir} trophy={afterWallReport.Trophy} free_builders={afterWallReport.FreeBuilders} total_builders={afterWallReport.TotalBuilders} builder_hall_level={afterWallReport.BuilderHallLevel} loot_available={afterWallReport.LootAvailable} remaining_stars={afterWallReport.RemainingStars} max_stars={afterWallReport.MaxStars} gold_storage_full={afterWallReport.GoldStorageFull} elixir_storage_full={afterWallReport.ElixirStorageFull}");
         }
 
         if (enableAttack && !checkStopFunc(token))
@@ -253,7 +233,6 @@ internal sealed class BuilderBaseCycleRunner
     private void LogBuilderBaseBaselineAssetAudit(
         BuilderBaseArmyOptions armyOptions,
         BuilderBaseBattleOptions battleOptions,
-        BuilderBaseMaintenanceOptions maintenanceOptions,
         bool boostClockTower,
         bool upgradeWall)
     {
@@ -297,16 +276,6 @@ internal sealed class BuilderBaseCycleRunner
         if (upgradeWall)
         {
             required.UnionWith(new[] { @"walls\wall", @"ui\icon_wall" });
-        }
-
-        if (maintenanceOptions.SuggestedUpgrades || maintenanceOptions.UpgradeBattleMachine || maintenanceOptions.UpgradeBattleCopter)
-        {
-            required.UnionWith(new[] { @"ui\builder_available", @"ui\open_upgrade", @"ui\icon_up", @"resources\gold", @"resources\elixir" });
-        }
-
-        if (maintenanceOptions.StarLaboratory)
-        {
-            required.UnionWith(new[] { @"builder_base\star_laboratory", @"ui\laboratory", @"ui\research" });
         }
 
         string[] missing = required.Where(template => !TemplateAssetLoader.Exists(_templatesPath, template)).ToArray();
