@@ -1,0 +1,28 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.Dashboard.DashboardDeviceListEmptyState"
+    x:DataType="vm:DashboardViewModel"
+>
+    <Design.DataContext><vm:DashboardViewModel /></Design.DataContext>
+
+    <!--
+        Shown only after a scan returns no devices. The IsVisible binding stays on the
+        call site in DashboardDeviceListView so this file holds nothing but the artwork.
+    -->
+    <StackPanel Spacing="16">
+        <Border Width="72" Height="72" CornerRadius="36" Background="{DynamicResource AppSurfaceBrush}"
+                BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1">
+            <materialIcons:MaterialIcon Kind="CellphoneLinkOff" Width="30" Height="30" Foreground="{DynamicResource AppAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+        <StackPanel Spacing="4">
+            <TextBlock Text="KHÔNG TÌM THẤY THIẾT BỊ" FontWeight="Bold" FontSize="13" LetterSpacing="1.2" Foreground="{DynamicResource AppTextPrimaryBrush}" HorizontalAlignment="Center"/>
+            <TextBlock Text="Mở giả lập rồi bấm nút quét lại." Classes="caption" HorizontalAlignment="Center"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>
