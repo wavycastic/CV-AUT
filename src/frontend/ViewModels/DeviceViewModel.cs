@@ -36,39 +36,7 @@ namespace CvAut.ViewModels
 
         public string DisplayName => Device.DisplayName;
 
-        public Bitmap? EmulatorIcon
-        {
-            get
-            {
-                try
-                {
-                    string type = Device.EmulatorType ?? string.Empty;
-                    string resourcePath = "android.ico";
-                    if (type.Contains("BlueStacks", StringComparison.OrdinalIgnoreCase))
-                        resourcePath = "bluestacks.ico";
-                    else if (type.Contains("LDPlayer", StringComparison.OrdinalIgnoreCase))
-                        resourcePath = "ldplayer.png";
-                    else if (type.Contains("MEmu", StringComparison.OrdinalIgnoreCase))
-                        resourcePath = "memu.ico";
-
-                    string appDir = AppContext.BaseDirectory;
-                    string filePath = System.IO.Path.Combine(appDir, "assets", "AppIcon", resourcePath);
-                    if (!System.IO.File.Exists(filePath))
-                    {
-                        filePath = System.IO.Path.Combine(appDir, "assets", "AppIcon", "android.ico");
-                    }
-                    if (System.IO.File.Exists(filePath))
-                    {
-                        return new Bitmap(filePath);
-                    }
-                    return null;
-                }
-                catch
-                {
-                    return null;
-                }
-            }
-        }
+        public Bitmap? EmulatorIcon => EmulatorIconLoader.Load(Device.EmulatorType);
 
         /// <summary>
         /// Human-readable explanation of the device's <see cref="DeviceStatus"/> for the UI,
@@ -76,14 +44,7 @@ namespace CvAut.ViewModels
         /// hint instead of a bare enum name. Bound in <c>DeviceListItemView</c> /
         /// <c>DevicePanelView</c>.
         /// </summary>
-        public string DeviceStatusText => Device.Status switch
-        {
-            DeviceStatus.Ready => "Sẵn sàng",
-            DeviceStatus.Installed => "Đã cài đặt \u2014 Chạy để khởi động giả lập",
-            DeviceStatus.Unauthorized => "ADB chưa được ủy quyền \u2014 hãy chấp nhận yêu cầu gỡ lỗi USB trên giả lập",
-            DeviceStatus.Offline => "ADB ngoại tuyến \u2014 khởi động lại giả lập hoặc ADB",
-            _ => "Không xác định",
-        };
+        public string DeviceStatusText => DeviceStatusPresenter.DeviceStatusText(Device.Status);
 
         /// <summary>Session lifecycle status, mirrored from <see cref="IDeviceSession.StatusChanged"/>.</summary>
         [ObservableProperty]
@@ -103,79 +64,18 @@ namespace CvAut.ViewModels
         private bool _isSelected = true;
 
 
-        public string DisplayStatus => Status switch
-        {
-            BotStatus.Idle => "Rảnh",
-            BotStatus.Starting => "Đang khởi động",
-            BotStatus.Running => "Đang chạy",
-            BotStatus.Paused => "Đang tạm dừng",
-            BotStatus.Stopping => "Đang dừng",
-            BotStatus.Stopped => "Đã dừng",
-            BotStatus.Error => "Lỗi",
-            _ => Status.ToString()
-        };
+        public string DisplayStatus => DeviceStatusPresenter.DisplayStatus(Status);
 
-        public string DisplayStatusColor => Status switch
-        {
-            BotStatus.Running => "LimeGreen",
-            BotStatus.Paused => "Orange",
-            BotStatus.Error => "Red",
-            BotStatus.Starting => "Cyan",
-            BotStatus.Stopping => "LightGray",
-            _ => "Gray"
-        };
+        public string DisplayStatusColor => DeviceStatusPresenter.DisplayStatusColor(Status);
 
         /// <summary>
         /// Clean subtitle string for device list items. Prevents trailing dots and duplicate vendor names.
         /// </summary>
-        public string SubTitleText
-        {
-            get
-            {
-                string source = Device.Source ?? string.Empty;
-                string serial = Device.Serial ?? string.Empty;
-                int port = Device.Port;
+        public string SubTitleText => DeviceStatusPresenter.SubTitle(Device.Source, Device.Serial, Device.Port, DisplayName);
 
-                string endpoint = !string.IsNullOrWhiteSpace(serial)
-                    ? serial
-                    : (port > 0 ? $"Port {port}" : string.Empty);
+        public string StatusBadgeText => DeviceStatusPresenter.StatusBadgeText(Status, Device.Status);
 
-                if (string.IsNullOrWhiteSpace(endpoint))
-                {
-                    return !string.IsNullOrWhiteSpace(source) ? source : "ADB Cục bộ";
-                }
-
-                if (!string.IsNullOrWhiteSpace(source) && 
-                    !source.Equals(DisplayName, StringComparison.OrdinalIgnoreCase) &&
-                    !source.Equals(endpoint, StringComparison.OrdinalIgnoreCase))
-                {
-                    return $"{source} • {endpoint}";
-                }
-
-                return endpoint;
-            }
-        }
-
-        public string StatusBadgeText => Status switch
-        {
-            BotStatus.Running => "Đang chạy",
-            BotStatus.Starting => "Đang bật",
-            BotStatus.Paused => "Tạm dừng",
-            BotStatus.Stopping => "Đang tắt",
-            BotStatus.Error => "Lỗi",
-            BotStatus.Stopped => "Đã dừng",
-            _ => Device.Status == DeviceStatus.Ready ? "Sẵn sàng" : "Ngoại tuyến"
-        };
-
-        public string StatusBadgeColor => Status switch
-        {
-            BotStatus.Running => "#4caf50",
-            BotStatus.Starting => "#2196f3",
-            BotStatus.Paused => "#ff9800",
-            BotStatus.Error => "#f44336",
-            BotStatus.Stopping => "#9e9e9e",
-            _ => Device.Status == DeviceStatus.Ready ? "#4caf50" : "#757575"
-        };
+        public string StatusBadgeColor => DeviceStatusPresenter.StatusBadgeColor(Status, Device.Status);
 
         public bool ShowStartButton => Status is BotStatus.Idle or BotStatus.Stopped or BotStatus.Error;
         public bool ShowStopButton => !ShowStartButton;
