@@ -114,9 +114,18 @@ namespace CvAut
             Sleep(_adb.FramePacer.AdjustDelay(Math.Clamp(options.NextTroopDelayMs, 0, 10000)), token);
         }
 
-        public static Point AvoidPotionArea(Point point)
+        /// <summary>
+        /// Vertical bound that keeps drop taps clear of the potion / spell area.
+        /// The 500 constant belongs to the MBR 732-high coordinate space, so it must be
+        /// scaled by height, never offset by a difference between two resolutions.
+        /// </summary>
+        public static int PotionCapY(int screenHeight) => (int)Math.Round(500 * (screenHeight / 732.0));
+
+        public static Point AvoidPotionArea(Point point) => AvoidPotionArea(point, BuilderBaseAttackLayout.ScreenHeight);
+
+        public static Point AvoidPotionArea(Point point, int screenHeight)
         {
-            int potionCapY = 500 + Math.Max(0, BuilderBaseAttackLayout.ScreenHeight - 732);
+            int potionCapY = PotionCapY(screenHeight);
             if (point.Y > potionCapY)
             {
                 int x = point.X < 460 ? 460 : point.X;
