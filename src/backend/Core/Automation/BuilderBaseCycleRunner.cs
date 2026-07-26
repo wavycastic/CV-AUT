@@ -275,7 +275,9 @@ internal sealed class BuilderBaseCycleRunner
 
         if (upgradeWall)
         {
-            required.UnionWith(new[] { @"walls\wall", @"ui\icon_wall" });
+            // Lấy trực tiếp từ updater để audit kiểm đúng bộ template luồng nâng tường dùng,
+            // thay vì hai template khác mà luồng này không hề tham chiếu.
+            required.UnionWith(BuilderBaseWallUpdater.GetRequiredTemplates());
         }
 
         string[] missing = required.Where(template => !TemplateAssetLoader.Exists(_templatesPath, template)).ToArray();
