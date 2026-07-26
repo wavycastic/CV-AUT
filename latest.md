@@ -1,13 +1,13 @@
 # CI digest
 
-- commit: `714da0ed7448db6874f9361e4c85f5c64bcb0175`
+- commit: `fe35434daf72227424cb9b0c89a06649abd8329b`
 - ref: `refs/heads/fix/frontend-startup-device-scan`
-- build exit code: `1`
-- test exit code: `skipped`
+- build exit code: `0`
+- test exit code: `0`
 
-## Compiler errors (1)
+## Compiler errors (0)
 ```
-D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\MainWindowShellTests.cs(80,26): error CS0103: The name 'DashboardDeviceState' does not exist in the current context [D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\Simplimixi.Frontend.Tests.csproj]
+none
 ```
 
 ## Compiler warnings (0, first 40)
@@ -15,3 +15,8 @@ D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\MainWindowShellTests.cs(80,26
 none
 ```
 
+## Test results
+```
+Passed!  - Failed:     0, Passed:    76, Skipped:     0, Total:    76, Duration: 8 s - Simplimixi.Frontend.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   142, Skipped:     0, Total:   142, Duration: 24 s - Simplimixi.Backend.Tests.dll (net10.0)
+```
