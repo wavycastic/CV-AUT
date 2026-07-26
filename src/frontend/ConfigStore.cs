@@ -151,42 +151,35 @@ namespace CvAut
             return path;
         }
 
+        /// <summary>
+        /// Reads opt-in notification settings from the <c>notifications</c> object of the active
+        /// profile config — the same object <see cref="CvAut.Services.ProfileConfigSnapshotProvider"/>
+        /// and the backend snapshot reader consume, so the UI and the senders can never disagree.
+        /// </summary>
         public NotificationSettings LoadNotificationSettings()
         {
-            string path = Path.Combine(_profileRoot, "notifications.json");
-            try
+            JsonObject notifications = GetOrCreateObject(LoadActiveConfig(), "notifications");
+            return new NotificationSettings
             {
-                if (File.Exists(path) && JsonNode.Parse(File.ReadAllText(path)) is JsonObject o)
-                {
-                    return new NotificationSettings
-                    {
-                        Enabled = TryGetBool(o["enabled"], false),
-                        WebhookUrl = TryGetString(o["webhook_url"], string.Empty),
-                        NotifyOnError = TryGetBool(o["notify_on_error"], true),
-                        NotifyOnStopped = TryGetBool(o["notify_on_stopped"], false),
-                        NotifyOnStarted = TryGetBool(o["notify_on_started"], false),
-                    };
-                }
-            }
-            catch
-            {
-                // Fall through to defaults.
-            }
-
-            return new NotificationSettings();
+                Enabled = TryGetBool(notifications["enabled"], false),
+                WebhookUrl = TryGetString(notifications["webhook_url"], string.Empty),
+                NotifyOnError = TryGetBool(notifications["notify_on_error"], true),
+                NotifyOnStopped = TryGetBool(notifications["notify_on_stopped"], false),
+                NotifyOnStarted = TryGetBool(notifications["notify_on_started"], false),
+            };
         }
 
+        /// <summary>Persists notification settings into the active profile config.</summary>
         public void SaveNotificationSettings(NotificationSettings settings)
         {
-            var o = new JsonObject
-            {
-                ["enabled"] = settings.Enabled,
-                ["webhook_url"] = settings.WebhookUrl,
-                ["notify_on_error"] = settings.NotifyOnError,
-                ["notify_on_stopped"] = settings.NotifyOnStopped,
-                ["notify_on_started"] = settings.NotifyOnStarted,
-            };
-            File.WriteAllText(Path.Combine(_profileRoot, "notifications.json"), o.ToJsonString(JsonOptions));
+            JsonObject config = LoadActiveConfig();
+            JsonObject notifications = GetOrCreateObject(config, "notifications");
+            notifications["enabled"] = settings.Enabled;
+            notifications["webhook_url"] = settings.WebhookUrl;
+            notifications["notify_on_error"] = settings.NotifyOnError;
+            notifications["notify_on_stopped"] = settings.NotifyOnStopped;
+            notifications["notify_on_started"] = settings.NotifyOnStarted;
+            SaveActiveConfig(config);
         }
 
         public void DeleteProfile(string name)
