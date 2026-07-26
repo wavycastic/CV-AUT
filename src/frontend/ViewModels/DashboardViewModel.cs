@@ -80,22 +80,13 @@ namespace CvAut.ViewModels
             "Tất cả", "BlueStacks", "LDPlayer", "MEmu"
         };
 
+        /// <summary>
+        /// Detection command injected by the shell host. Assigning it is deliberately
+        /// side-effect free: the first scan is started explicitly by the shell once its window is
+        /// loaded (<c>MainWindowViewModel.StartInitialDeviceScan</c>), not from this setter.
+        /// </summary>
+        [ObservableProperty]
         private IAsyncRelayCommand? _detectDevicesCommand;
-
-        public IAsyncRelayCommand? DetectDevicesCommand
-        {
-            get => _detectDevicesCommand;
-            set
-            {
-                if (SetProperty(ref _detectDevicesCommand, value))
-                {
-                    if (value is not null && value.CanExecute(null))
-                    {
-                        value.Execute(null);
-                    }
-                }
-            }
-        }
 
         partial void OnSelectedEmulatorFilterChanged(string value)
         {
