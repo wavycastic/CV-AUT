@@ -25,24 +25,75 @@ internal sealed class TrainingVision
         double threshold,
         out Point center,
         Rect? roi = null)
+        => TryMatchWithScore(subdirectory, name, image, threshold, out center, out _, out _, roi);
+
+    /// <summary>
+    /// Same matching logic as <see cref="TryMatch"/>, but also reports the best correlation score
+    /// and why the match failed.
+    /// <para>
+    /// Callers that turn a failure into a user-visible log line should use this method. A bare
+    /// <c>false</c> cannot tell a missing template file apart from a search region that is smaller
+    /// than the template or from a score that merely sat below the threshold, and naming the wrong
+    /// cause sends debugging in the wrong direction.
+    /// </para>
+    /// </summary>
+    public bool TryMatchWithScore(
+        string subdirectory,
+        string name,
+        Mat image,
+        double threshold,
+        out Point center,
+        out double score,
+        out string diagnostic,
+        Rect? roi = null)
     {
         center = default;
+        score = 0;
         string templateName = Path.Combine(subdirectory, name);
-        if (image.Empty() || !TemplateAssetLoader.Exists(_root, templateName)) return false;
+
+        if (image.Empty())
+        {
+            diagnostic = "image_empty";
+            return false;
+        }
+
+        if (!TemplateAssetLoader.Exists(_root, templateName))
+        {
+            diagnostic = "template_file_missing";
+            return false;
+        }
+
         using Mat template = TemplateAssetLoader.Load(_root, templateName, ImreadModes.Color);
-        if (template.Empty()) return false;
+        if (template.Empty())
+        {
+            diagnostic = "template_unreadable";
+            return false;
+        }
 
         Rect searchRect = roi ?? new Rect(0, 0, image.Width, image.Height);
         searchRect = ImageUtils.ClampRect(searchRect, image.Width, image.Height);
-        if (searchRect.Width < template.Width || searchRect.Height < template.Height) return false;
+        if (searchRect.Width < template.Width || searchRect.Height < template.Height)
+        {
+            diagnostic = $"roi_smaller_than_template roi={searchRect.Width}x{searchRect.Height} template={template.Width}x{template.Height}";
+            return false;
+        }
+
         using Mat searchArea = new(image, searchRect);
         using Mat result = new();
         Cv2.MatchTemplate(searchArea, template, result, TemplateMatchModes.CCoeffNormed);
-        Cv2.MinMaxLoc(result, out _, out double score, out _, out Point maxLocation);
+        Cv2.MinMaxLoc(result, out _, out score, out _, out Point maxLocation);
         center = new Point(
             searchRect.X + maxLocation.X + template.Width / 2,
             searchRect.Y + maxLocation.Y + template.Height / 2);
-        return score >= threshold;
+
+        if (score >= threshold)
+        {
+            diagnostic = "matched";
+            return true;
+        }
+
+        diagnostic = "score_below_threshold";
+        return false;
     }
 
     public bool TryMatchRoot(
