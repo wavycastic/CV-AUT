@@ -12,6 +12,17 @@ internal sealed class ArmyStateDetector
     internal static readonly Rect ArmySpaceRoi = Rect.FromLTRB(750, 195, 826, 225);
     internal static readonly Rect SpellSpaceRoi = Rect.FromLTRB(731, 398, 810, 464);
 
+    /// <summary>
+    /// Correlation score required to accept an army, spell or siege icon.
+    /// <para>
+    /// This used to be 0.92, which rejected armies that were in fact complete. Every other match in
+    /// this subsystem runs at 0.60-0.80, and a normalised cross-correlation of 0.92 on a colour icon
+    /// leaves no room for the level badge, the troop count overlay or emulator rescaling. The
+    /// validation failures now log the observed score, so this value can be tuned from evidence.
+    /// </para>
+    /// </summary>
+    private const double IconMatchThreshold = 0.80;
+
     private readonly IADBHelper _adb;
     private readonly TrainingVision _vision;
     private readonly HeroReadinessService _heroes;
@@ -41,10 +52,10 @@ internal sealed class ArmyStateDetector
         using Mat army = TrainingVision.Crop(screenshot, ArmyRoi);
         foreach (string troop in spec.Troops)
         {
-            if (!_vision.TryMatch("Army Troops", troop, army, 0.92, out _)
-                && !_vision.TryMatch("s_troops", troop, army, 0.92, out _))
+            if (!TryMatchTroopIcon(army, troop, out double score, out string diagnostic))
             {
-                Console.WriteLine($"[TRAIN] phase=validate_troops status=fail reason=troop_missing_{troop}");
+                Console.WriteLine(
+                    $"[TRAIN] phase=validate_troops status=fail reason=troop_missing_{troop} score={score:F2} threshold={IconMatchThreshold:F2} detail=\"{diagnostic}\"");
                 return false;
             }
         }
@@ -53,14 +64,41 @@ internal sealed class ArmyStateDetector
             && current == capacity;
     }
 
+    /// <summary>
+    /// Looks for a troop icon in the primary template folder and then in the fallback folder,
+    /// reporting the better of the two scores so the log explains which one came closest.
+    /// </summary>
+    private bool TryMatchTroopIcon(Mat army, string troop, out double score, out string diagnostic)
+    {
+        if (_vision.TryMatchWithScore("Army Troops", troop, army, IconMatchThreshold, out _, out score, out diagnostic))
+        {
+            return true;
+        }
+
+        if (_vision.TryMatchWithScore("s_troops", troop, army, IconMatchThreshold, out _, out double fallbackScore, out string fallbackDiagnostic))
+        {
+            score = fallbackScore;
+            diagnostic = fallbackDiagnostic;
+            return true;
+        }
+
+        if (fallbackScore > score)
+        {
+            score = fallbackScore;
+            diagnostic = fallbackDiagnostic;
+        }
+        return false;
+    }
+
     private bool DetectSpells(Mat screenshot, ArmySpec spec)
     {
         using Mat spells = TrainingVision.Crop(screenshot, SpellRoi);
         foreach (string spell in spec.Spells)
         {
-            if (!_vision.TryMatch("Spells", spell, spells, 0.92, out _))
+            if (!_vision.TryMatchWithScore("Spells", spell, spells, IconMatchThreshold, out _, out double score, out string diagnostic))
             {
-                Console.WriteLine($"[TRAIN] phase=validate_spells status=fail reason=spell_missing_{spell}");
+                Console.WriteLine(
+                    $"[TRAIN] phase=validate_spells status=fail reason=spell_missing_{spell} score={score:F2} threshold={IconMatchThreshold:F2} detail=\"{diagnostic}\"");
                 return false;
             }
         }
@@ -72,6 +110,12 @@ internal sealed class ArmyStateDetector
     private bool DetectSiege(Mat screenshot, ArmySpec spec)
     {
         using Mat siege = TrainingVision.Crop(screenshot, SiegeRoi);
-        return _vision.TryMatch("Siege Machines", spec.Siege, siege, 0.92, out _);
+        if (_vision.TryMatchWithScore("Siege Machines", spec.Siege, siege, IconMatchThreshold, out _, out double score, out string diagnostic))
+        {
+            return true;
+        }
+        Console.WriteLine(
+            $"[TRAIN] phase=validate_siege status=fail reason=siege_missing_{spec.Siege} score={score:F2} threshold={IconMatchThreshold:F2} detail=\"{diagnostic}\"");
+        return false;
     }
 }
