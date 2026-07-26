@@ -1,0 +1,23 @@
+Test run for D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\bin\Debug\net10.0-windows\Simplimixi.Frontend.Tests.dll (.NETCoreApp,Version=v10.0)
+Test run for D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\bin\Debug\net10.0-windows\Simplimixi.Backend.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+  Failed CvAut.Tests.NotificationTests.ConfigStore_NotificationSettings_RoundTrip [1 ms]
+  Error Message:
+   System.IO.IOException : The process cannot access the file 'D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\bin\Debug\net10.0-windows\Config\test_config.json' because it is being used by another process.
+  Stack Trace:
+     at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at System.IO.File.OpenHandle(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize)
+   at System.IO.File.WriteToFile(String path, FileMode mode, ReadOnlySpan`1 contents, Encoding encoding)
+   at System.IO.File.WriteAllText(String path, String contents, Encoding encoding)
+   at CvAut.Services.Configuration.ConfigStore.SaveActiveConfig(JsonObject config) in D:\a\CV-AUT\CV-AUT\src\frontend\Services\Configuration\ConfigStore.cs:line 67
+   at CvAut.Services.Configuration.ConfigStore.SaveNotificationSettings(NotificationSettings settings) in D:\a\CV-AUT\CV-AUT\src\frontend\Services\Configuration\ConfigStore.cs:line 182
+   at CvAut.Tests.NotificationTests.ConfigStore_NotificationSettings_RoundTrip() in D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\FrontendUnitTests.cs:line 540
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.33]     CvAut.Tests.NotificationTests.ConfigStore_NotificationSettings_RoundTrip [FAIL]
+
+Failed!  - Failed:     1, Passed:    76, Skipped:     0, Total:    77, Duration: 333 ms - Simplimixi.Frontend.Tests.dll (net10.0)
+
+Passed!  - Failed:     0, Passed:   142, Skipped:     0, Total:   142, Duration: 24 s - Simplimixi.Backend.Tests.dll (net10.0)
