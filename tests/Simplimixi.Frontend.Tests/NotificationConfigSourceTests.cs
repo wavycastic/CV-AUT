@@ -5,6 +5,7 @@ using CvAut;
 using CvAut.Configuration;
 using CvAut.Models;
 using CvAut.Services;
+using CvAut.Services.Configuration;
 using Xunit;
 
 namespace CvAut.Tests

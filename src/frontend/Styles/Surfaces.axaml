@@ -1,0 +1,46 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+>
+    <!-- Card: the standard raised container. -->
+    <Style Selector="Border.Card">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
+        <Setter Property="BoxShadow" Value="{DynamicResource ShadowCard}" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.2" />
+                <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.2" />
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.Card:pointerover">
+        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+        <Setter Property="BoxShadow" Value="0 0 12 0 #40d4af37" />
+    </Style>
+    <!-- Tile: compact stat container with subtle hover. -->
+    <Style Selector="Border.Tile">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusMd}" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="BoxShadow" Value="{DynamicResource ShadowTile}" />
+    </Style>
+    <Style Selector="Border.Tile:pointerover">
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+    </Style>
+
+    <!-- Tooltip dark gaming style -->
+    <Style Selector="ToolTip">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceAltBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusSm}" />
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="FontSize" Value="11" />
+    </Style>
+</Styles>

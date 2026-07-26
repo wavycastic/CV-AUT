@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using CvAut.Models;
 
-namespace CvAut
+namespace CvAut.Services.Configuration
 {
     /// <summary>
     /// JSON DOM config/profile store. AOT-safe: no reflection serializers, no assembly scanning.

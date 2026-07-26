@@ -1,0 +1,37 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+>
+    <!-- Auto-hide ScrollBars inside ScrollViewers -->
+    <Style Selector="ScrollViewer ScrollBar">
+        <Setter Property="Opacity" Value="0" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.2" />
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="ScrollViewer:pointerover ScrollBar">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="ScrollViewer ScrollBar:pointerover">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- Sleek Custom ScrollBar -->
+    <Style Selector="ScrollBar">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="#3a3a42" />
+    </Style>
+    <Style Selector="ScrollBar:vertical">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="MinWidth" Value="8" />
+    </Style>
+    <Style Selector="ScrollBar:horizontal">
+        <Setter Property="Height" Value="8" />
+        <Setter Property="MinHeight" Value="8" />
+    </Style>
+    <Style Selector="ScrollBar /template/ RepeatButton">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+</Styles>

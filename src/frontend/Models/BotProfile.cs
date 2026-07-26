@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace CvAut
+namespace CvAut.Models
 {
     public sealed class BotProfile
     {

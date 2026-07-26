@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 
-namespace CvAut
+namespace CvAut.Services
 {
     /// <summary>
     /// Captures everything the backend writes to <see cref="Console"/> and re-broadcasts

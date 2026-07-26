@@ -8,6 +8,7 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CvAut.Models;
+using CvAut.Services;
 using Avalonia;
 
 namespace CvAut.ViewModels
