@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace CvAut.Models
 {
@@ -12,10 +13,12 @@ namespace CvAut.Models
     /// Lookups are keyed on the trimmed lowercase value. Anything not listed here falls
     /// through unchanged, so an unmapped value shows up verbatim rather than disappearing.
     /// <para>
-    /// Two value shapes cannot be covered by a flat table and get their own handling:
+    /// Three value shapes cannot be covered by a flat table and get their own handling:
     /// reasons that embed a unit name (<c>troop_missing_dragon</c>) are matched by prefix,
-    /// and <c>detail</c> values that carry measurements (<c>ocr_low_confidence
-    /// confidence=0.00 digits=5</c>) keep everything after the leading token verbatim.
+    /// <c>detail</c> values that carry measurements (<c>ocr_low_confidence
+    /// confidence=0.00 digits=5</c>) keep everything after the leading token verbatim, and
+    /// arbitrary measurement fields are named through <see cref="TranslateFieldLabel"/>
+    /// rather than through a per-line sentence.
     /// </para>
     /// </remarks>
     internal static class LogVocabulary
@@ -161,14 +164,115 @@ namespace CvAut.Models
         };
 
         /// <summary>
-        /// Reason prefixes that carry a unit name after the underscore. A flat table can
-        /// never match these, because the tail is data rather than vocabulary.
+        /// Module tags, as they appear between the leading brackets of a log line. Without
+        /// this the user cannot tell which subsystem produced a row.
         /// </summary>
-        private static readonly (string Prefix, string Label)[] s_missingUnitReasons =
+        private static readonly Dictionary<string, string> s_module = new(StringComparer.OrdinalIgnoreCase)
         {
-            ("troop_missing_", "thiếu lính"),
-            ("spell_missing_", "thiếu"),
-            ("siege_missing_", "thiếu"),
+            ["APP"] = "Ứng dụng",
+            ["APP_LOG"] = "Ứng dụng",
+            ["FSM-CS"] = "Bot",
+            ["DEBUG"] = "Gỡ lỗi",
+            ["ADB"] = "Giả lập",
+            ["TRAIN"] = "Huấn luyện",
+            ["ATTACK-CS"] = "Tấn công",
+            ["SCOUT-CS"] = "Tìm làng",
+            ["BB-CS"] = "Làng đêm",
+            ["VISION"] = "Thị giác",
+            ["WALL"] = "Tường",
+            ["WALL DECISION"] = "Tường (quyết định)",
+            ["WALL RESULT"] = "Tường (kết quả)",
+            ["TREASURE HUNT"] = "Kho báu",
+            ["FRAME-PACER"] = "Nhịp khung",
+            ["CONFIG-CS"] = "Cấu hình",
+            ["LICENSE"] = "Bản quyền",
+        };
+
+        /// <summary>
+        /// Names for every measurement field the backend logs. These used to be dropped
+        /// entirely, which hid exactly the numbers a user watches during a run.
+        /// </summary>
+        private static readonly Dictionary<string, string> s_fieldLabels = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["stars"] = "số sao",
+            ["gold"] = "vàng",
+            ["elixir"] = "dầu",
+            ["dark_elixir"] = "dầu đen",
+            ["total"] = "tổng tài nguyên",
+            ["total_ok"] = "đủ dữ liệu",
+            ["trophies"] = "cúp",
+            ["score"] = "điểm khớp",
+            ["threshold"] = "ngưỡng",
+            ["best_scale"] = "tỉ lệ tốt nhất",
+            ["best_scale_score"] = "điểm ở tỉ lệ tốt nhất",
+            ["confidence"] = "độ tin cậy",
+            ["remaining"] = "còn lại",
+            ["tap_count"] = "số lần nhấn",
+            ["taps"] = "số lần nhấn",
+            ["total_taps"] = "tổng số lần nhấn",
+            ["attempt"] = "lần thử",
+            ["attempts"] = "số lần thử",
+            ["index"] = "vị trí",
+            ["slot"] = "ô lính",
+            ["count"] = "số lượng",
+            ["current"] = "hiện tại",
+            ["capacity"] = "sức chứa",
+            ["level"] = "cấp",
+            ["village"] = "làng",
+            ["mode"] = "chế độ",
+            ["strategy"] = "chiến thuật",
+            ["troop"] = "lính",
+            ["spell"] = "phép",
+            ["unit"] = "quân",
+            ["name"] = "tên",
+            ["template"] = "ảnh mẫu",
+            ["duration"] = "thời lượng",
+            ["duration_ms"] = "thời lượng (ms)",
+            ["elapsed_ms"] = "đã trôi qua (ms)",
+            ["baseline_ms"] = "nhịp nền (ms)",
+            ["wait_ms"] = "chờ (ms)",
+            ["timeout_ms"] = "giới hạn chờ (ms)",
+            ["attacks"] = "số trận",
+            ["candidates"] = "số vị trí ứng viên",
+            ["cost"] = "chi phí",
+            ["x"] = "x",
+            ["y"] = "y",
+            ["x1"] = "từ x",
+            ["y1"] = "từ y",
+            ["x2"] = "đến x",
+            ["y2"] = "đến y",
+            ["device"] = "thiết bị",
+            ["deviceid"] = "thiết bị",
+            ["port"] = "cổng",
+            ["package"] = "ứng dụng",
+            ["file"] = "tệp",
+            ["path"] = "đường dẫn",
+        };
+
+        /// <summary>
+        /// Fields whose values are large amounts and are unreadable without grouping.
+        /// </summary>
+        private static readonly HashSet<string> s_groupedNumberFields = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "gold", "elixir", "dark_elixir", "total", "cost", "trophies",
+        };
+
+        /// <summary>Fields whose value names a troop, spell or siege machine.</summary>
+        private static readonly HashSet<string> s_unitValuedFields = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "troop", "spell", "unit", "siege", "item",
+        };
+
+        /// <summary>
+        /// Vietnamese grouping for amounts: <c>368207</c> reads as <c>368.207</c>. Built by
+        /// hand rather than taken from the current culture, so the log looks the same on
+        /// every machine and under invariant globalization.
+        /// </summary>
+        private static readonly NumberFormatInfo s_amountFormat = new()
+        {
+            NumberGroupSeparator = ".",
+            NumberDecimalSeparator = ",",
+            NumberGroupSizes = new[] { 3 },
         };
 
         private static readonly Dictionary<string, string> s_reason = new()
@@ -217,6 +321,9 @@ namespace CvAut.Models
             ["army_space_not_full"] = "doanh trại chưa đầy",
             ["spell_space_unreadable"] = "không đọc được ô sức chứa phép",
             ["spell_space_not_full"] = "nhà phép chưa đầy",
+            ["troop_missing"] = "thiếu lính",
+            ["screenshot_failed"] = "chụp màn hình thất bại",
+            ["template_missing"] = "thiếu ảnh mẫu",
         };
 
         private static readonly Dictionary<string, string> s_details = new()
@@ -297,6 +404,78 @@ namespace CvAut.Models
         }
 
         /// <summary>
+        /// Names the subsystem a log line came from. Tags such as <c>FSM-CS WARNING</c> are
+        /// resolved by falling back to the leading word, so a severity suffix does not lose
+        /// the module name.
+        /// </summary>
+        public static string TranslateModule(string? module)
+        {
+            if (string.IsNullOrWhiteSpace(module)) return "Ứng dụng";
+
+            string trimmed = module.Trim();
+            if (s_module.TryGetValue(trimmed, out string? direct)) return direct;
+
+            int space = trimmed.LastIndexOf(' ');
+            if (space > 0)
+            {
+                string head = trimmed.Substring(0, space);
+                string tail = trimmed.Substring(space + 1).ToLowerInvariant();
+                string headLabel = s_module.TryGetValue(head, out string? mapped) ? mapped : head;
+
+                string? tailLabel = tail switch
+                {
+                    "warning" => "cảnh báo",
+                    "error" => "lỗi",
+                    "info" => null,
+                    _ => null
+                };
+
+                if (tailLabel is not null) return headLabel + " (" + tailLabel + ")";
+                if (s_module.ContainsKey(head)) return headLabel;
+            }
+
+            return trimmed;
+        }
+
+        /// <summary>
+        /// Names a measurement field. Returns null for unknown keys so the caller can show
+        /// the raw key instead of hiding the value.
+        /// </summary>
+        public static string? TranslateFieldLabel(string key)
+            => s_fieldLabels.TryGetValue(key, out string? label) ? label : null;
+
+        /// <summary>
+        /// Formats a field value for reading: resource amounts get thousands separators,
+        /// booleans become có/không, and unit-valued fields get their Vietnamese name.
+        /// Anything else is returned untouched, because in a diagnostic line the raw value
+        /// is the evidence.
+        /// </summary>
+        public static string FormatFieldValue(string key, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return value;
+
+            string trimmed = value.Trim();
+
+            if (s_groupedNumberFields.Contains(key) &&
+                long.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out long amount) &&
+                Math.Abs(amount) >= 1000)
+            {
+                return amount.ToString("#,##0", s_amountFormat);
+            }
+
+            if (s_unitValuedFields.Contains(key) &&
+                s_unit.TryGetValue(trimmed.ToLowerInvariant(), out string? unit))
+            {
+                return unit;
+            }
+
+            if (string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase)) return "có";
+            if (string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase)) return "không";
+
+            return trimmed;
+        }
+
+        /// <summary>
         /// Expands reasons such as <c>troop_missing_dragon</c>, where the unit name is part
         /// of the token. Returns null when the reason is not of that shape.
         /// </summary>
@@ -314,6 +493,17 @@ namespace CvAut.Models
 
             return null;
         }
+
+        /// <summary>
+        /// Reason prefixes that carry a unit name after the underscore. A flat table can
+        /// never match these, because the tail is data rather than vocabulary.
+        /// </summary>
+        private static readonly (string Prefix, string Label)[] s_missingUnitReasons =
+        {
+            ("troop_missing_", "thiếu lính"),
+            ("spell_missing_", "thiếu"),
+            ("siege_missing_", "thiếu"),
+        };
 
         /// <summary>
         /// Translates the <c>detail</c> field, which is a diagnostic token optionally followed
