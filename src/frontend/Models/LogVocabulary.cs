@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace CvAut.Models
@@ -10,6 +11,12 @@ namespace CvAut.Models
     /// <remarks>
     /// Lookups are keyed on the trimmed lowercase value. Anything not listed here falls
     /// through unchanged, so an unmapped value shows up verbatim rather than disappearing.
+    /// <para>
+    /// Two value shapes cannot be covered by a flat table and get their own handling:
+    /// reasons that embed a unit name (<c>troop_missing_dragon</c>) are matched by prefix,
+    /// and <c>detail</c> values that carry measurements (<c>ocr_low_confidence
+    /// confidence=0.00 digits=5</c>) keep everything after the leading token verbatim.
+    /// </para>
     /// </remarks>
     internal static class LogVocabulary
     {
@@ -17,7 +24,10 @@ namespace CvAut.Models
         {
             ["start"] = "bắt đầu",
             ["success"] = "thành công",
+            ["succeeded"] = "hoàn tất",
+            ["complete"] = "hoàn tất",
             ["fail"] = "thất bại",
+            ["failed"] = "thất bại",
             ["pending"] = "đang chờ",
             ["retry"] = "thử lại",
             ["skip"] = "bỏ qua",
@@ -31,6 +41,10 @@ namespace CvAut.Models
             ["already_set"] = "đã thiết lập",
             ["stopped"] = "đã dừng",
             ["stop_requested"] = "yêu cầu dừng",
+            ["send"] = "gửi",
+            ["check"] = "đang kiểm tra",
+            ["fallback"] = "dùng phương án dự phòng",
+            ["not_found"] = "không tìm thấy",
         };
 
         private static readonly Dictionary<string, string> s_action = new()
@@ -54,6 +68,10 @@ namespace CvAut.Models
             ["find_boat"] = "tìm thuyền",
             ["tap_boat"] = "nhấn thuyền",
             ["verify_switch"] = "xác nhận chuyển làng",
+            ["check_emulator"] = "kiểm tra giả lập",
+            ["prepare_attack"] = "chuẩn bị tấn công",
+            ["ensure_home"] = "bảo đảm đã về làng",
+            ["continue"] = "nhấn tiếp tục",
         };
 
         private static readonly Dictionary<string, string> s_phase = new()
@@ -90,6 +108,67 @@ namespace CvAut.Models
             ["find_template"] = "tìm mẫu",
             ["template_match"] = "khớp mẫu",
             ["pinch"] = "thu phóng",
+            ["startup"] = "khởi động ứng dụng",
+            ["worker_loop"] = "vòng lặp chính",
+            ["home_check"] = "kiểm tra đang ở làng",
+            ["camera_zoom"] = "thu phóng màn hình",
+            ["calibration"] = "hiệu chuẩn nhịp khung",
+            ["check_app"] = "kiểm tra ứng dụng",
+            ["launch_app"] = "mở ứng dụng",
+            ["collect_resources"] = "thu tài nguyên",
+            ["after_collect"] = "sau khi thu tài nguyên",
+            ["check"] = "kiểm tra",
+            ["scout"] = "tìm làng đối thủ",
+            ["scout_wait"] = "chờ tải làng đối thủ",
+            ["extract"] = "đọc tài nguyên làng đối thủ",
+            ["select_strategy"] = "chọn chiến thuật",
+            ["prepare"] = "chuẩn bị tấn công",
+            ["pipeline"] = "chuỗi tấn công",
+            ["battle_wait"] = "chờ trận đấu",
+            ["battle_stats"] = "thống kê trận đấu",
+            ["return_home"] = "về làng",
+            ["validate"] = "xác thực đội hình",
+            ["validate_troops"] = "xác thực lính",
+            ["validate_spells"] = "xác thực phép",
+            ["validate_siege"] = "xác thực xe công thành",
+            ["validate_remaining"] = "đếm quân còn lại",
+        };
+
+        /// <summary>Attack pipeline stages, reported in the <c>stage</c> field.</summary>
+        private static readonly Dictionary<string, string> s_stage = new()
+        {
+            ["preparation"] = "chuẩn bị",
+            ["troop_deployment"] = "thả lính",
+            ["hero_ability"] = "chiêu tướng",
+            ["spell_deployment"] = "thả phép",
+            ["battle_completion"] = "kết thúc trận",
+        };
+
+        /// <summary>
+        /// Unit names. Used both for the <c>item</c> field and for the unit embedded in
+        /// missing-unit reasons. Values that are not unit names (a template path, for
+        /// example) fall through unchanged.
+        /// </summary>
+        private static readonly Dictionary<string, string> s_unit = new()
+        {
+            ["dragon"] = "rồng",
+            ["electro_dragon"] = "rồng điện",
+            ["balloon"] = "bóng bay",
+            ["rage"] = "phép cuồng nộ",
+            ["freeze"] = "phép đóng băng",
+            ["slammer"] = "búa công thành",
+            ["siege_machine"] = "xe công thành",
+        };
+
+        /// <summary>
+        /// Reason prefixes that carry a unit name after the underscore. A flat table can
+        /// never match these, because the tail is data rather than vocabulary.
+        /// </summary>
+        private static readonly (string Prefix, string Label)[] s_missingUnitReasons =
+        {
+            ("troop_missing_", "thiếu lính"),
+            ("spell_missing_", "thiếu"),
+            ("siege_missing_", "thiếu"),
         };
 
         private static readonly Dictionary<string, string> s_reason = new()
@@ -126,6 +205,18 @@ namespace CvAut.Models
             ["tunnel_template_not_found"] = "không tìm thấy mẫu đường hầm",
             ["missing_file"] = "thiếu tệp mẫu",
             ["pinch_unsupported"] = "cử chỉ thu phóng không hỗ trợ",
+            ["below_threshold"] = "điểm nhận diện dưới ngưỡng",
+            ["score_below_threshold"] = "điểm khớp dưới ngưỡng",
+            ["disabled"] = "đã tắt trong cấu hình",
+            ["already_foreground"] = "ứng dụng đang mở sẵn",
+            ["home_detected"] = "đã nhận diện được làng",
+            ["total"] = "xét theo tổng tài nguyên",
+            ["screenshot_empty"] = "không chụp được màn hình",
+            ["army_window_not_detected"] = "không nhận diện được cửa sổ quân",
+            ["army_space_unreadable"] = "không đọc được ô sức chứa quân",
+            ["army_space_not_full"] = "doanh trại chưa đầy",
+            ["spell_space_unreadable"] = "không đọc được ô sức chứa phép",
+            ["spell_space_not_full"] = "nhà phép chưa đầy",
         };
 
         private static readonly Dictionary<string, string> s_details = new()
@@ -135,6 +226,41 @@ namespace CvAut.Models
             ["device_connected_fallback"] = "đã kết nối thiết bị dự phòng",
             ["active_device_detected"] = "phát hiện thiết bị đang hoạt động",
             ["automation_started"] = "bắt đầu tự động hóa",
+            ["automation_core_initialized"] = "đã khởi tạo lõi tự động hóa",
+            ["single_account"] = "chế độ một tài khoản",
+            ["initial_zoomout"] = "thu nhỏ bản đồ lần đầu",
+            ["bluestacks_detected"] = "đã phát hiện BlueStacks",
+            ["bluestacks_adb_pinch"] = "thu phóng bằng adb",
+            ["already_foreground"] = "ứng dụng đang mở sẵn",
+            ["running"] = "đang chạy",
+            ["connected"] = "đã kết nối",
+            ["loading"] = "đang tải",
+            ["ready"] = "đã sẵn sàng",
+            ["waiting"] = "đang chờ",
+            ["collecting_resources"] = "đang thu tài nguyên",
+            ["result_screen_detected"] = "đã thấy bảng kết quả",
+            ["target"] = "làng mục tiêu",
+            ["target_accepted"] = "đã chấp nhận làng mục tiêu",
+        };
+
+        /// <summary>
+        /// Leading tokens of the <c>detail</c> field. These come from the template matcher
+        /// and the fraction reader, and each one names a distinct failure cause.
+        /// </summary>
+        private static readonly Dictionary<string, string> s_detail = new()
+        {
+            ["matched"] = "đã khớp",
+            ["image_empty"] = "ảnh chụp rỗng",
+            ["template_file_missing"] = "thiếu tệp ảnh mẫu",
+            ["template_unreadable"] = "không đọc được tệp ảnh mẫu",
+            ["roi_smaller_than_template"] = "vùng quét nhỏ hơn ảnh mẫu",
+            ["score_below_threshold"] = "điểm khớp dưới ngưỡng",
+            ["read"] = "đã đọc được",
+            ["ocr_no_result"] = "OCR không đọc ra số nào",
+            ["ocr_low_confidence"] = "OCR đọc được nhưng không đủ tin cậy",
+            ["ocr_too_few_digits"] = "OCR ra quá ít chữ số",
+            ["ocr_odd_digit_count"] = "OCR ra số chữ số lẻ nên không tách được hai số",
+            ["split_failed"] = "không tách được hai số",
         };
 
         /// <summary>
@@ -145,11 +271,21 @@ namespace CvAut.Models
         {
             if (string.IsNullOrWhiteSpace(value)) return value;
 
+            string lower = value.ToLowerInvariant().Trim();
+
+            if (key == "reason")
+            {
+                string? missingUnit = TranslateMissingUnitReason(lower);
+                if (missingUnit is not null) return missingUnit;
+            }
+
             var table = key switch
             {
                 "status" => s_status,
                 "action" => s_action,
                 "phase" => s_phase,
+                "stage" => s_stage,
+                "item" => s_unit,
                 "reason" => s_reason,
                 "details" => s_details,
                 _ => null
@@ -157,8 +293,48 @@ namespace CvAut.Models
 
             if (table is null) return value;
 
-            string lower = value.ToLowerInvariant().Trim();
             return table.TryGetValue(lower, out string? translated) ? translated : value;
+        }
+
+        /// <summary>
+        /// Expands reasons such as <c>troop_missing_dragon</c>, where the unit name is part
+        /// of the token. Returns null when the reason is not of that shape.
+        /// </summary>
+        private static string? TranslateMissingUnitReason(string reason)
+        {
+            foreach ((string prefix, string label) in s_missingUnitReasons)
+            {
+                if (reason.Length > prefix.Length && reason.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    string unit = reason.Substring(prefix.Length);
+                    string unitText = s_unit.TryGetValue(unit, out string? mapped) ? mapped : unit;
+                    return label + " " + unitText;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Translates the <c>detail</c> field, which is a diagnostic token optionally followed
+        /// by its own measurements (<c>ocr_low_confidence confidence=0.00 digits=5</c>). Only
+        /// the leading token is translated: the numbers are the evidence and must survive
+        /// untouched. An unknown token leaves the whole value alone.
+        /// </summary>
+        public static string? TranslateDetail(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return value;
+
+            string trimmed = value.Trim();
+            int split = trimmed.IndexOf(' ');
+            string head = split < 0 ? trimmed : trimmed.Substring(0, split);
+
+            if (!s_detail.TryGetValue(head.ToLowerInvariant(), out string? translated))
+            {
+                return value;
+            }
+
+            return split < 0 ? translated : translated + " " + trimmed.Substring(split + 1);
         }
 
         /// <summary>

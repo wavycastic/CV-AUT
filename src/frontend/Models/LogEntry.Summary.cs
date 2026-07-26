@@ -58,6 +58,9 @@ namespace CvAut.Models
                 string? action = LogVocabulary.Translate("action", Action);
                 string? reason = LogVocabulary.Translate("reason", Reason);
                 string? details = LogVocabulary.Translate("details", GetField("details"));
+                string? stage = LogVocabulary.Translate("stage", GetField("stage"));
+                string? item = LogVocabulary.Translate("item", GetField("item"));
+                string? detail = LogVocabulary.TranslateDetail(GetField("detail"));
 
                 var sb = new StringBuilder();
 
@@ -154,6 +157,12 @@ namespace CvAut.Models
                     sb.Append($" (bước {step})");
                 }
 
+                // 3b. Append pipeline stage. Without it every pipeline line reads the same.
+                if (!string.IsNullOrWhiteSpace(stage))
+                {
+                    sb.Append($" [chặng {stage.ToLowerInvariant()}]");
+                }
+
                 // 4. Append reason do/vì
                 if (!string.IsNullOrWhiteSpace(reason))
                 {
@@ -168,10 +177,23 @@ namespace CvAut.Models
                     }
                 }
 
-                // 5. Append details
+                // 5. Append the subject the line is about, when the backend named one.
+                if (!string.IsNullOrWhiteSpace(item))
+                {
+                    sb.Append($" (đối tượng: {item})");
+                }
+
+                // 6. Append details
                 if (!string.IsNullOrWhiteSpace(details))
                 {
                     sb.Append($" \u2014 {details}");
+                }
+
+                // 7. Append the diagnostic detail last: it carries the measurements that
+                // explain the line, so it reads best as a trailing clause.
+                if (!string.IsNullOrWhiteSpace(detail))
+                {
+                    sb.Append($" \u2014 {detail}");
                 }
 
                 if (sb.Length == 0)
