@@ -1,14 +1,15 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CvAut.Configuration;
 using CvAut.Models;
+using CvAut.Services;
 using CvAut.Services.Sessions;
 
 namespace CvAut.ViewModels
@@ -96,6 +97,7 @@ namespace CvAut.ViewModels
         }
 
         private readonly IConfigStore _configStore;
+        private readonly IProfileConfigSnapshotProvider _configSnapshots;
         private readonly CvAut.Services.Emulators.IEmulatorDiscovery? _discovery;
 
         [ObservableProperty]
@@ -114,12 +116,13 @@ namespace CvAut.ViewModels
         /// writes the selected device into the active config and builds a fresh session — the
         /// session is only realised on Start so Detect stays side-effect-light (item 8).
         /// </summary>
-        public DeviceViewModel(Device device, Func<Device, string, IDeviceSession>? startHandler = null, IConfigStore? configStore = null, CvAut.Services.Emulators.IEmulatorDiscovery? discovery = null)
+        public DeviceViewModel(Device device, Func<Device, string, IDeviceSession>? startHandler = null, IConfigStore? configStore = null, CvAut.Services.Emulators.IEmulatorDiscovery? discovery = null, IProfileConfigSnapshotProvider? configSnapshots = null)
         {
             Device = device;
             _startHandler = startHandler;
             _stats = new SessionStatsViewModel();
             _configStore = configStore ?? new ConfigStore();
+            _configSnapshots = configSnapshots ?? new ProfileConfigSnapshotProvider(_configStore);
             _discovery = discovery;
             LoadSelectedPlayMode();
         }
@@ -192,8 +195,8 @@ namespace CvAut.ViewModels
                 {
                     // Phase 3: each device gets its own config file whose device_connection points at
                     // this device, so concurrent sessions never share a host/port or clobber each other.
-                    string configPath = _configStore.PrepareDeviceConfig(Device.ProfileKey, Device.Host, Device.Port, Device.EmulatorType, Device.EmulatorPath, Device.EmulatorInstance);
-                    ApplySelectedPlayModeTo(configPath);
+                    // The provider prepares that file and stamps the selected play mode into it.
+                    string configPath = _configSnapshots.PrepareDevice(Device, SelectedVillagePlayMode);
                     IDeviceSession session = _startHandler(Device, configPath);
                     AttachSession(session);
                 }
@@ -323,43 +326,19 @@ namespace CvAut.ViewModels
             }
         }
 
-        /// <summary>Writes the current play-mode token into a specific config file (the per-device config
-        /// prepared for Start), without touching the active profile.</summary>
-        private void ApplySelectedPlayModeTo(string configPath)
-        {
-            try
-            {
-                if (System.IO.File.Exists(configPath) &&
-                    System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(configPath)) is System.Text.Json.Nodes.JsonObject cfg)
-                {
-                    cfg["play_mode"] = Models.PlayMode.ToToken(SelectedPlayMode);
-                    System.IO.File.WriteAllText(configPath, cfg.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-                }
-            }
-            catch
-            {
-                // Best effort — Start proceeds with whatever the prepared config already holds.
-            }
-        }
-
-        private string GetProfileName()
-        {
-            return Device.ProfileKey;
-        }
+        /// <summary>The UI label mapped onto the typed play mode the config layer persists.</summary>
+        private VillagePlayMode SelectedVillagePlayMode
+            => ProfileConfigSnapshotProvider.ParsePlayMode(Models.PlayMode.ToToken(SelectedPlayMode));
 
         private void LoadSelectedPlayMode()
         {
-            string profileName = GetProfileName();
+            string profileName = Device.ProfileKey;
             try
             {
                 if (_configStore.Profiles.Any(p => string.Equals(p.Name, profileName, StringComparison.OrdinalIgnoreCase)))
                 {
-                    _configStore.LoadProfile(profileName);
-                    var config = _configStore.LoadActiveConfig();
-                    if (config.TryGetPropertyValue("play_mode", out var val) && val is not null)
-                    {
-                        SelectedPlayMode = Models.PlayMode.ToDisplay(val.ToString());
-                    }
+                    SelectedPlayMode = Models.PlayMode.ToDisplay(
+                        ProfileConfigSnapshotProvider.ToToken(_configSnapshots.LoadPlayMode(profileName)));
                 }
             }
             catch
@@ -370,20 +349,11 @@ namespace CvAut.ViewModels
 
         partial void OnSelectedPlayModeChanged(string value)
         {
-            string profileName = GetProfileName();
             try
             {
-                if (!_configStore.Profiles.Any(p => string.Equals(p.Name, profileName, StringComparison.OrdinalIgnoreCase)))
-                {
-                    _configStore.LoadProfile("Default");
-                    var template = _configStore.LoadActiveConfig();
-                    _configStore.SaveProfileAs(profileName, template);
-                }
-
-                _configStore.LoadProfile(profileName);
-                var config = _configStore.LoadActiveConfig();
-                config["play_mode"] = Models.PlayMode.ToToken(value);
-                _configStore.SaveActiveConfig(config);
+                _configSnapshots.SavePlayMode(
+                    Device.ProfileKey,
+                    ProfileConfigSnapshotProvider.ParsePlayMode(Models.PlayMode.ToToken(value)));
             }
             catch
             {
