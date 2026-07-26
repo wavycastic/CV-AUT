@@ -1,0 +1,63 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.Dashboard.DashboardDeviceListToolbarView"
+    x:DataType="vm:DashboardViewModel"
+>
+    <Design.DataContext><vm:DashboardViewModel /></Design.DataContext>
+
+    <!-- Row above the list: instance count on the left, the launch/stop segment on the right. -->
+    <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <materialIcons:MaterialIcon Kind="Apps" Width="15" Height="15"
+                                        Foreground="{DynamicResource AppAccentBrush}"/>
+            <TextBlock Text="Instance tìm thấy" Classes="labelStrong" VerticalAlignment="Center"/>
+        </StackPanel>
+        <Border Grid.Column="1" Height="28" CornerRadius="8"
+                Background="{DynamicResource AppConsoleBrush}"
+                BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1"
+                HorizontalAlignment="Right" VerticalAlignment="Center">
+            <Grid ColumnDefinitions="Auto,Auto,Auto">
+                <!-- Start -->
+                <Button Grid.Column="0"
+                        Classes="seg-start"
+                        Classes.active-start="{Binding IsRunning}"
+                        Command="{Binding StartAllCommand}"
+                        Height="26" CornerRadius="0"
+                        Padding="10,0"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <materialIcons:MaterialIcon Kind="Play" Width="12" Height="12" VerticalAlignment="Center"/>
+                        <TextBlock Text="Khởi chạy" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Vertical divider -->
+                <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource AppBorderStrongBrush}" />
+
+                <!-- Stop -->
+                <Button Grid.Column="2"
+                        Classes="seg-end"
+                        Classes.active-stop="{Binding IsStopped}"
+                        Command="{Binding StopAllCommand}"
+                        Height="26" CornerRadius="0"
+                        Padding="10,0"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <materialIcons:MaterialIcon Kind="Stop" Width="12" Height="12" VerticalAlignment="Center"/>
+                        <TextBlock Text="Dừng" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
