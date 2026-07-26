@@ -1,0 +1,8 @@
+Test run for D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\bin\Debug\net10.0-windows\Simplimixi.Frontend.Tests.dll (.NETCoreApp,Version=v10.0)
+Test run for D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\bin\Debug\net10.0-windows\Simplimixi.Backend.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:    77, Skipped:     0, Total:    77, Duration: 117 ms - Simplimixi.Frontend.Tests.dll (net10.0)
+
+Passed!  - Failed:     0, Passed:   142, Skipped:     0, Total:   142, Duration: 24 s - Simplimixi.Backend.Tests.dll (net10.0)
