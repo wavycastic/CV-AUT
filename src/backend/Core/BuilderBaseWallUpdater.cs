@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using OpenCvSharp;
 using Point = OpenCvSharp.Point;
@@ -17,11 +18,25 @@ namespace CvAut
 
         private const double ReadyThreshold = 0.70;
         private const double UpgradeThreshold = 0.72;
+
+        /// <summary>
+        /// Ngưỡng cho icon tường trong menu thợ xây. Đây là icon UI nên dùng mức thấp hơn
+        /// template tường, ngang với ButtonThreshold của luồng đánh.
+        /// </summary>
+        private const double MenuIconThreshold = 0.62;
+
         private const int MaxWallCandidatesPerCycle = 4;
+        private const string MenuIconTemplate = @"ui\icon_wall";
         private static readonly Point BuilderMenuPoint = new(738, 36);
         private static readonly Rect BuilderMenuRoi = Rect.FromLTRB(570, 70, 1060, 650);
         private static readonly Rect UpgradeButtonRoi = Rect.FromLTRB(420, 430, 1180, 850);
         private static readonly Point DismissPoint = new(140, 606);
+
+        /// <summary>
+        /// Tiền tố của template ready. Bộ asset đã hiệu chỉnh có nhiều biến thể ảnh cho cùng một
+        /// mức giá (wall_/wall1_/wall2_/wall3_) ứng với các kiểu tường khác nhau hiện trong menu.
+        /// </summary>
+        private static readonly string[] ReadyTemplatePrefixes = { "wall", "wall1", "wall2", "wall3" };
 
         private static readonly WallOption[] Options =
         {
@@ -39,6 +54,22 @@ namespace CvAut
             _navigator = navigator;
         }
 
+        /// <summary>
+        /// Bộ template mà luồng nâng tường thực sự phụ thuộc, để asset audit kiểm đúng thứ cần kiểm.
+        /// Chỉ gồm biến thể chuẩn "wall_" vì wall1_/wall2_/wall3_ là tùy chọn, không phải mức giá nào cũng có.
+        /// </summary>
+        public static IReadOnlyList<string> GetRequiredTemplates()
+        {
+            var templates = new List<string> { MenuIconTemplate };
+            foreach (WallOption option in Options)
+            {
+                templates.Add(ReadyTemplate(option, "wall"));
+                templates.Add(UpgradeTemplate(option));
+            }
+
+            return templates;
+        }
+
         public bool TryUpgradeOne(CancellationToken token)
         {
             Console.WriteLine("[BB-WALL] phase=upgrade status=start limit=1");
@@ -51,40 +82,54 @@ namespace CvAut
             _adb.Tap(BuilderMenuPoint.X, BuilderMenuPoint.Y);
             if (Sleep(900, token)) return false;
 
-            if (!IsBuilderMenuLikelyOpen())
-            {
-                Console.WriteLine("[BB-WALL] phase=builder_menu status=fail reason=menu_not_open_after_tap");
-                Dismiss(token);
-                return false;
-            }
-
+            var exhausted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int candidatesTried = 0;
-            foreach (WallOption option in Options)
+            while (true)
             {
+                if (token.IsCancellationRequested) return false;
+
                 if (candidatesTried >= MaxWallCandidatesPerCycle)
                 {
                     Console.WriteLine($"[BB-WALL] phase=upgrade status=skip reason=max_candidates_reached tried={candidatesTried}");
-                    break;
+                    Dismiss(token);
+                    return false;
                 }
-                string readyTemplate = $@"walls\builder_hall\{option.Resource}\ready\wall_ready_{option.Resource}{option.Cost}";
-                if (!TryFind(readyTemplate, ReadyThreshold, BuilderMenuRoi, out Point readyCenter, out double readyScore))
+
+                // Một ảnh chụp cho cả vòng quét, để mọi quyết định dựa trên cùng một thời điểm.
+                using Mat? menuShot = _adb.TakeScreenshot();
+                if (menuShot == null || menuShot.Empty())
                 {
-                    continue;
+                    Console.WriteLine("[BB-WALL] phase=builder_menu status=fail reason=screenshot_unavailable");
+                    Dismiss(token);
+                    return false;
+                }
+
+                bool menuOpen = TryFind(menuShot, MenuIconTemplate, MenuIconThreshold, BuilderMenuRoi, out _, out _);
+                if (!TryFindReadyCandidate(menuShot, exhausted, out WallOption? option, out string readyTemplate, out Point readyCenter, out double readyScore))
+                {
+                    Console.WriteLine(menuOpen
+                        ? "[BB-WALL] phase=upgrade status=skip reason=no_ready_wall_found"
+                        : "[BB-WALL] phase=builder_menu status=fail reason=menu_not_open_after_tap");
+                    Dismiss(token);
+                    return false;
                 }
 
                 candidatesTried++;
-                Console.WriteLine($"[BB-WALL] phase=ready status=success resource={option.Resource} cost={option.Cost} score={readyScore:F2} center=({readyCenter.X},{readyCenter.Y}) candidate={candidatesTried}");
+                exhausted.Add(CandidateKey(option!));
+                Console.WriteLine($"[BB-WALL] phase=ready status=success resource={option!.Resource} cost={option.Cost} template=\"{readyTemplate}\" score={readyScore:F2} center=({readyCenter.X},{readyCenter.Y}) candidate={candidatesTried}");
                 _adb.Tap(readyCenter.X, readyCenter.Y);
                 if (Sleep(900, token)) return false;
 
-                string upgradeTemplate = $@"walls\builder_hall\{option.Resource}\upgrade\{option.Resource}_wall_upgrade{option.Cost}";
-                if (!TryFind(upgradeTemplate, UpgradeThreshold, UpgradeButtonRoi, out Point upgradeCenter, out double upgradeScore))
+                string upgradeTemplate = UpgradeTemplate(option);
+                if (!TryFindOnFreshScreenshot(upgradeTemplate, UpgradeThreshold, UpgradeButtonRoi, out Point upgradeCenter, out double upgradeScore))
                 {
                     Console.WriteLine($"[BB-WALL] phase=upgrade status=skip resource={option.Resource} cost={option.Cost} reason=matching_upgrade_button_not_found candidate={candidatesTried}");
                     Dismiss(token);
                     if (Sleep(300, token)) return false;
                     _adb.Tap(BuilderMenuPoint.X, BuilderMenuPoint.Y);
                     if (Sleep(500, token)) return false;
+
+                    // Vòng kế tiếp chụp lại và tự xác nhận menu đã mở lại qua icon tường.
                     continue;
                 }
 
@@ -92,7 +137,7 @@ namespace CvAut
                 _adb.Tap(upgradeCenter.X, upgradeCenter.Y);
                 if (Sleep(1500, token)) return false;
 
-                bool upgradeStillVisible = TryFind(upgradeTemplate, UpgradeThreshold, UpgradeButtonRoi, out _, out double afterScore);
+                bool upgradeStillVisible = TryFindOnFreshScreenshot(upgradeTemplate, UpgradeThreshold, UpgradeButtonRoi, out _, out double afterScore);
                 Dismiss(token);
                 if (upgradeStillVisible)
                 {
@@ -103,29 +148,57 @@ namespace CvAut
                 Console.WriteLine($"[BB-WALL] phase=upgrade status=success resource={option.Resource} cost={option.Cost} count=1");
                 return true;
             }
-
-            Console.WriteLine("[BB-WALL] phase=upgrade status=skip reason=no_ready_wall_found");
-            Dismiss(token);
-            return false;
         }
 
-        private bool IsBuilderMenuLikelyOpen()
+        private bool TryFindReadyCandidate(
+            Mat screenshot,
+            HashSet<string> exhausted,
+            out WallOption? option,
+            out string template,
+            out Point center,
+            out double score)
         {
-            foreach (WallOption option in Options)
+            foreach (WallOption candidate in Options)
             {
-                string readyTemplate = $@"walls\builder_hall\{option.Resource}\ready\wall_ready_{option.Resource}{option.Cost}";
-                if (TryFind(readyTemplate, ReadyThreshold - 0.08, BuilderMenuRoi, out _, out _)) return true;
+                if (exhausted.Contains(CandidateKey(candidate))) continue;
+                foreach (string prefix in ReadyTemplatePrefixes)
+                {
+                    string readyTemplate = ReadyTemplate(candidate, prefix);
+                    if (!TryFind(screenshot, readyTemplate, ReadyThreshold, BuilderMenuRoi, out center, out score)) continue;
+                    option = candidate;
+                    template = readyTemplate;
+                    return true;
+                }
             }
+
+            option = null;
+            template = string.Empty;
+            center = default;
+            score = 0;
             return false;
         }
 
-        private bool TryFind(string template, double threshold, Rect roi, out Point center, out double score)
+        private static string CandidateKey(WallOption option) => $"{option.Resource}:{option.Cost}";
+
+        private static string ReadyTemplate(WallOption option, string prefix)
+            => $@"walls\builder_hall\{option.Resource}\ready\{prefix}_ready_{option.Resource}{option.Cost}";
+
+        private static string UpgradeTemplate(WallOption option)
+            => $@"walls\builder_hall\{option.Resource}\upgrade\{option.Resource}_wall_upgrade{option.Cost}";
+
+        private bool TryFindOnFreshScreenshot(string template, double threshold, Rect roi, out Point center, out double score)
         {
             center = default;
             score = 0;
             using Mat? screenshot = _adb.TakeScreenshot();
             if (screenshot == null || screenshot.Empty()) return false;
 
+            return TryFind(screenshot, template, threshold, roi, out center, out score);
+        }
+
+        private bool TryFind(Mat screenshot, string template, double threshold, Rect roi, out Point center, out double score)
+        {
+            center = default;
             Point? found = _vision.FindElement(screenshot, template, threshold, roi, out score);
             if (found == null) return false;
             center = found.Value;
