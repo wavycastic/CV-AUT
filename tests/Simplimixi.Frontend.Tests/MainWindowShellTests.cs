@@ -14,10 +14,9 @@ namespace CvAut.Tests
     /// <summary>
     /// Covers app-scoped shell state that the window chrome binds to.
     ///
-    /// Note: constructing MainWindowViewModel starts a real device scan, because assigning
-    /// DetectDevicesCommand to the dashboard executes it from the setter. These tests therefore
-    /// stay on state that scan never touches — asserting on ActiveDevice or the dashboard state
-    /// here would race with it.
+    /// Constructing MainWindowViewModel no longer starts a device scan: the startup scan is
+    /// triggered by the shell view through StartInitialDeviceScan. These tests therefore never
+    /// call that method, which keeps them off real ADB.
     /// </summary>
     public class MainWindowShellTests
     {
@@ -70,6 +69,17 @@ namespace CvAut.Tests
 
             vm.CloseLicenseCommand.Execute(null);
             Assert.False(vm.IsLicenseOpen);
+        }
+
+        [Fact]
+        public void Construction_WiresTheDetectCommand_WithoutRunningIt()
+        {
+            MainWindowViewModel vm = NewShell();
+
+            Assert.Same(vm.DetectDevicesCommand, vm.Dashboard.DetectDevicesCommand);
+            Assert.Equal(DashboardDeviceState.Idle, vm.Dashboard.State);
+            Assert.Empty(vm.Devices);
+            Assert.Null(vm.ActiveDevice);
         }
     }
 }
