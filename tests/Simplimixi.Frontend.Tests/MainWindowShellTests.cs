@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using CvAut;
+using CvAut.Models;
 using CvAut.Services;
 using CvAut.Services.Configuration;
 using CvAut.Services.Emulators;
