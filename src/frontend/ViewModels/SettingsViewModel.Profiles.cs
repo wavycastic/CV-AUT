@@ -131,12 +131,14 @@ namespace CvAut.ViewModels
 
         public void LoadSelectedProfileDirectly(string name, string playMode = "")
         {
-            ProfileName = name;
             _mainVillage.Reload();
             _nightVillage.Reload();
             _clanGames.Reload();
             _clanCapital.Reload();
             RefreshProfiles();
+
+            // After RefreshProfiles, which rewrites ProfileName to the active profile name.
+            ProfileName = name;
 
             SelectedPlayMode = string.IsNullOrEmpty(playMode) ? PlayMode.MainVillageLabel : playMode;
             RebuildTabsByPlayMode(SelectedPlayMode);

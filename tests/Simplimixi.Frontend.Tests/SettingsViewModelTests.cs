@@ -91,6 +91,7 @@ namespace CvAut.Tests
             Assert.Single(vm.Tabs);
             Assert.Equal("Kinh đô hội", vm.Tabs[0].Title);
             Assert.Equal(PlayMode.ClanCapitalLabel, vm.SelectedPlayMode);
+            Assert.Equal("device_127.0.0.1_5556", vm.ProfileName);
             Assert.Equal("Đã tải cấu hình device_127.0.0.1_5556", vm.Status);
         }
 
