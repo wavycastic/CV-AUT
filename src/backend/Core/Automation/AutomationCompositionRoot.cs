@@ -74,11 +74,6 @@ internal static class AutomationCompositionRoot
         var builderBaseClockTower = new BuilderBaseClockTower(adb, vision, builderBaseNavigator);
         var builderBaseWallUpdater = new BuilderBaseWallUpdater(adb, vision, builderBaseNavigator);
 
-        // Constructed only for parity with the previous constructor: no caller resolves
-        // the maintenance service today, but its construction is kept so that any
-        // initialisation it performs still happens at the same point in start-up.
-        _ = new BuilderBaseMaintenance(adb, vision, builderBaseNavigator, templatesPath);
-
         var homeDetector = new HomeBaseDetector(adb, vision, popups);
         var scouting = new ScoutingFlow(adb, vision, popups);
         var battleWatcher = new BattleCompletionWatcher(adb, vision, popups);
