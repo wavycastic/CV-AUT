@@ -68,22 +68,6 @@ internal sealed class StatsRepository : IStatsRepository
         File.WriteAllText(path, stats.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    public void UpdateBuilderBaseMaintenanceStats(int villageIdx, BuilderBaseMaintenanceResult result)
-    {
-        int total = result.SuggestedUpgrades + result.ResearchStarted + result.HeroUpgrades;
-        if (total <= 0) return;
-        string path = StatsFilePath(villageIdx);
-        JsonObject stats = LoadStatsFromDisk(path);
-        JsonObject bb = stats["builder_base"] as JsonObject ?? new JsonObject();
-        bb["suggested_upgrades"] = GetJsonInt(bb, "suggested_upgrades") + result.SuggestedUpgrades;
-        bb["research_started"] = GetJsonInt(bb, "research_started") + result.ResearchStarted;
-        bb["hero_upgrades"] = GetJsonInt(bb, "hero_upgrades") + result.HeroUpgrades;
-        bb["last_update_ts"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        stats["builder_base"] = bb;
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, stats.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-    }
-
     public int GetStarsFromScreen()
     {
         Thread.Sleep(500);
