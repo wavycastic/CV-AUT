@@ -1,0 +1,65 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels.Settings"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.Settings.MainVillageWallUpgradeView"
+    x:DataType="vm:MainVillageViewModel"
+>
+    <Design.DataContext><vm:MainVillageViewModel /></Design.DataContext>
+
+    <Border Classes="Card" Padding="12,10">
+        <StackPanel Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <materialIcons:MaterialIcon Kind="Wall" Width="16" Height="16" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="Cấu hình nâng tường" Classes="subhead" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <Border Classes="Tile" Padding="8,6">
+                <CheckBox Height="24" Content="Bật tự động nâng tường" IsChecked="{Binding UpgradeWall}" />
+            </Border>
+
+            <StackPanel Spacing="6" IsEnabled="{Binding UpgradeWall}">
+                <TextBlock Text="Bot tự tìm các Wall được đề xuất trong Builder menu bằng template ảnh. Không cần chọn cấp tường." Classes="muted" TextWrapping="Wrap" Margin="0,2,0,4" />
+                <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <materialIcons:MaterialIcon Kind="Wall" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Số Wall tối đa mỗi lần" Classes="label" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <NumericUpDown Value="{Binding WallBatchLimit}" Minimum="1" Maximum="10" Height="32" />
+                </StackPanel>
+                <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <materialIcons:MaterialIcon Kind="Coins" Width="14" Height="14" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Bắt đầu dùng Vàng khi trên" Classes="label" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <NumericUpDown Value="{Binding WallGoldThreshold}" Minimum="0" Maximum="20000000" Height="32" FormatString="N0" />
+                </StackPanel>
+                <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <materialIcons:MaterialIcon Kind="Water" Width="14" Height="14" Foreground="{DynamicResource AppElixirBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Bắt đầu dùng Dầu hồng khi trên" Classes="label" Foreground="{DynamicResource AppElixirBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <NumericUpDown Value="{Binding WallElixirThreshold}" Minimum="0" Maximum="20000000" Height="32" FormatString="N0" />
+                </StackPanel>
+                <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <materialIcons:MaterialIcon Kind="ShieldLock" Width="14" Height="14" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Vàng giữ lại" Classes="label" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <NumericUpDown Value="{Binding WallGoldReserve}" Minimum="0" Maximum="20000000" Height="32" FormatString="N0" />
+                </StackPanel>
+                <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <materialIcons:MaterialIcon Kind="ShieldLock" Width="14" Height="14" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Dầu hồng giữ lại" Classes="label" Foreground="{DynamicResource AppWarningBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <NumericUpDown Value="{Binding WallElixirReserve}" Minimum="0" Maximum="20000000" Height="32" FormatString="N0" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

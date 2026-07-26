@@ -1,0 +1,43 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels.Settings"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.Settings.MainVillageSurrenderView"
+    x:DataType="vm:MainVillageViewModel"
+>
+    <Design.DataContext><vm:MainVillageViewModel /></Design.DataContext>
+
+    <Border Classes="Card" Padding="12,10">
+        <StackPanel Spacing="8">
+            <StackPanel Spacing="2">
+                <TextBlock Text="Đầu hàng thông minh" Classes="subhead" />
+                <TextBlock Text="Tự thoát trậ nếu lượng tài nguyên cướp được quá thấp." Classes="muted" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Border Classes="Tile" Padding="8,6">
+                <CheckBox Height="24" Content="Bật đầu hàng thông minh" IsChecked="{Binding SmartSurrenderEnabled}" />
+            </Border>
+
+            <StackPanel Spacing="6" IsEnabled="{Binding SmartSurrenderEnabled}">
+                <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <materialIcons:MaterialIcon Kind="ClockOutline" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Sau số giây" Classes="label" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <NumericUpDown Value="{Binding SmartSurrenderSeconds}" Minimum="0" Maximum="180" Height="32" />
+                </StackPanel>
+                <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <materialIcons:MaterialIcon Kind="ShieldAlertOutline" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Ngưỡng tài nguyên thấp" Classes="label" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <NumericUpDown Value="{Binding SmartSurrenderLowResourceThreshold}" Minimum="0" Maximum="1000000" Height="32" FormatString="N0" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>
