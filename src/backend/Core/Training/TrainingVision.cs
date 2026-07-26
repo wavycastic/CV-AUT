@@ -182,20 +182,63 @@ internal sealed class TrainingVision
         => TryMatch(string.Empty, templateName, image, threshold, out center, roi);
 
     public bool TryReadFraction(Mat image, Rect roi, out int current, out int capacity)
+        => TryReadFraction(image, roi, out current, out capacity, out _);
+
+    /// <summary>
+    /// Reads a "current/capacity" indicator, also reporting what the OCR produced and why the
+    /// reading was rejected.
+    /// <para>
+    /// The engine returns the whole region as one integer, so the digits of both numbers arrive
+    /// concatenated and are split down the middle. That split is only meaningful when both numbers
+    /// have the same digit count, which is why an odd digit count is rejected outright. A caller
+    /// that turns this rejection into a decision as consequential as wiping the training queue
+    /// needs to know which of these cases it hit, so every rejection names itself.
+    /// </para>
+    /// </summary>
+    public bool TryReadFraction(Mat image, Rect roi, out int current, out int capacity, out string diagnostic)
     {
         current = 0;
         capacity = 0;
         if (!_vision.TryExtractNumericalMetrics(image, roi, out int value, out double confidence, useRgbThresh: true)
             && !_vision.TryExtractNumericalMetrics(image, roi, out value, out confidence))
         {
+            diagnostic = "ocr_no_result";
             return false;
         }
 
-        string digits = value.ToString();
-        if (confidence < 0.50 || digits.Length < 2 || digits.Length % 2 != 0) return false;
+        string digits = value.ToString(CultureInfo.InvariantCulture);
+
+        if (confidence < 0.50)
+        {
+            diagnostic = FormattableString.Invariant(
+                $"ocr_low_confidence confidence={confidence:F2} digits={digits}");
+            return false;
+        }
+
+        if (digits.Length < 2)
+        {
+            diagnostic = FormattableString.Invariant(
+                $"ocr_too_few_digits confidence={confidence:F2} digits={digits}");
+            return false;
+        }
+
+        if (digits.Length % 2 != 0)
+        {
+            diagnostic = FormattableString.Invariant(
+                $"ocr_odd_digit_count confidence={confidence:F2} digits={digits}");
+            return false;
+        }
+
         int half = digits.Length / 2;
-        return int.TryParse(digits[..half], out current)
-            && int.TryParse(digits[half..], out capacity);
+        if (!int.TryParse(digits[..half], out current) || !int.TryParse(digits[half..], out capacity))
+        {
+            diagnostic = FormattableString.Invariant($"split_failed confidence={confidence:F2} digits={digits}");
+            return false;
+        }
+
+        diagnostic = FormattableString.Invariant(
+            $"read confidence={confidence:F2} digits={digits} current={current} capacity={capacity}");
+        return true;
     }
 
     public int? ReadNumber(Mat image, Rect roi, int minimum = 0)

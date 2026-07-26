@@ -38,7 +38,13 @@ internal sealed class ArmyStateDetector
     {
         if (token.IsCancellationRequested) return new ArmyState(false, false, false, false);
         using Mat? screenshot = _adb.TakeScreenshot();
-        if (screenshot == null || screenshot.Empty()) return new ArmyState(false, false, false, false);
+        if (screenshot == null || screenshot.Empty())
+        {
+            // Reporting everything as not ready makes the caller wipe and rebuild the whole army,
+            // so a failed capture must never reach that decision silently.
+            Console.WriteLine("[TRAIN] phase=validate status=fail reason=screenshot_empty");
+            return new ArmyState(false, false, false, false);
+        }
 
         bool armyReady = DetectArmy(screenshot, spec);
         bool spellsReady = DetectSpells(screenshot, spec);
@@ -59,9 +65,22 @@ internal sealed class ArmyStateDetector
                 return false;
             }
         }
-        return _vision.TryReadFraction(screenshot, ArmySpaceRoi, out int current, out int capacity)
-            && current > 0
-            && current == capacity;
+
+        if (!_vision.TryReadFraction(screenshot, ArmySpaceRoi, out int current, out int capacity, out string spaceDiagnostic))
+        {
+            Console.WriteLine(
+                $"[TRAIN] phase=validate_troops status=fail reason=army_space_unreadable detail=\"{spaceDiagnostic}\"");
+            return false;
+        }
+
+        if (current <= 0 || current != capacity)
+        {
+            Console.WriteLine(FormattableString.Invariant(
+                $"[TRAIN] phase=validate_troops status=fail reason=army_space_not_full current={current} capacity={capacity} detail=\"{spaceDiagnostic}\""));
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -102,9 +121,22 @@ internal sealed class ArmyStateDetector
                 return false;
             }
         }
-        return _vision.TryReadFraction(screenshot, SpellSpaceRoi, out int current, out int capacity)
-            && current > 0
-            && current == capacity;
+
+        if (!_vision.TryReadFraction(screenshot, SpellSpaceRoi, out int current, out int capacity, out string spaceDiagnostic))
+        {
+            Console.WriteLine(
+                $"[TRAIN] phase=validate_spells status=fail reason=spell_space_unreadable detail=\"{spaceDiagnostic}\"");
+            return false;
+        }
+
+        if (current <= 0 || current != capacity)
+        {
+            Console.WriteLine(FormattableString.Invariant(
+                $"[TRAIN] phase=validate_spells status=fail reason=spell_space_not_full current={current} capacity={capacity} detail=\"{spaceDiagnostic}\""));
+            return false;
+        }
+
+        return true;
     }
 
     private bool DetectSiege(Mat screenshot, ArmySpec spec)
