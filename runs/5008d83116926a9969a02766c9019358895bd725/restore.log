@@ -1,3 +1,5 @@
   Determining projects to restore...
-  Restored D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj (in 8.41 sec).
-Attempting to cancel the build...
+  Restored D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj (in 4.57 sec).
+  Restored D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\Simplimixi.Backend.Tests.csproj (in 6.95 sec).
+  Restored D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\Simplimixi.Frontend.Tests.csproj (in 18.23 sec).
+  Restored D:\a\CV-AUT\CV-AUT\src\frontend\Simplimixi.csproj (in 23.84 sec).
