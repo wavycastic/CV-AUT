@@ -1,0 +1,39 @@
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:CvAut.ViewModels.Settings"
+    xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    x:Class="CvAut.Views.Settings.MainVillageAttackView"
+    x:DataType="vm:MainVillageViewModel"
+>
+    <Design.DataContext><vm:MainVillageViewModel /></Design.DataContext>
+
+    <Border Classes="Card" Padding="12,10">
+        <StackPanel Spacing="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <materialIcons:MaterialIcon Kind="Sword" Width="16" Height="16" Foreground="{DynamicResource AppDangerBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="Cấu hình tấn công" Classes="subhead" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <StackPanel Spacing="3">
+                    <TextBlock Text="Tên cấu hình" Classes="label" />
+                    <ComboBox ItemsSource="{Binding AttackCatalog}" SelectedItem="{Binding AttackName}" HorizontalAlignment="Stretch" Height="32" />
+                </StackPanel>
+                <StackPanel Spacing="3">
+                    <TextBlock Text="Logic mục tiêu" Classes="label" />
+                    <ComboBox ItemsSource="{Binding TargetLogics}" SelectedItem="{Binding TargetLogic}" HorizontalAlignment="Stretch" Height="32" />
+                </StackPanel>
+            </StackPanel>
+
+            <Border Classes="Tile" Padding="8,6">
+                <StackPanel Spacing="6">
+                    <CheckBox Height="24" Content="Tự động xin quân" IsChecked="{Binding AutoDonateEnabled}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Border>
+</UserControl>
