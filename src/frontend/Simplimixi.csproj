@@ -15,8 +15,12 @@
     <ApplicationIcon>..\..\assets\AppIcon\SimpliMixi.ico</ApplicationIcon>
     <!-- Compiled bindings are required for Native AOT (no runtime XAML reflection). -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <!--
+      Sources are picked up by the SDK glob (**\*.cs minus bin/obj) and .axaml by
+      Avalonia's own default items. Do not reintroduce a hand-written <Compile>
+      list: it has to be edited for every new or moved file and a missing entry
+      surfaces as an unrelated "type or namespace not found" error.
+    -->
   </PropertyGroup>
 
   <!--
@@ -64,74 +68,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\backend\Simplimixi.Backend.csproj" />
-  </ItemGroup>
-
-  <!-- Avalonia app sources (FE only — Program.cs here replaces the headless Core/Program.cs). -->
-  <ItemGroup>
-    <Compile Include="Program.cs" />
-    <Compile Include="App.axaml.cs" />
-    <Compile Include="ViewLocator.cs" />
-    <Compile Include="AppLog.cs" />
-    <Compile Include="Converters\LogLevelToBrushConverter.cs" />
-    <Compile Include="ConfigStore.cs" />
-    <Compile Include="ConfigSchemaDefaults.cs" />
-    <Compile Include="BotProfile.cs" />
-    <Compile Include="IConfigStore.cs" />
-    <Compile Include="AttackCatalog.cs" />
-    <Compile Include="ViewModels\ViewModelBase.cs" />
-    <Compile Include="ViewModels\MainWindowViewModel.cs" />
-    <Compile Include="ViewModels\DashboardViewModel.cs" />
-    <Compile Include="ViewModels\DeviceViewModel.cs" />
-    <Compile Include="ViewModels\DeviceStatusPresenter.cs" />
-    <Compile Include="ViewModels\EmulatorIconLoader.cs" />
-    <Compile Include="ViewModels\SessionStatsViewModel.cs" />
-    <Compile Include="ViewModels\TopBarViewModel.cs" />
-    <Compile Include="ViewModels\SidebarViewModel.cs" />
-    <Compile Include="ViewModels\SettingsViewModel.cs" />
-    <Compile Include="ViewModels\AdvancedViewModel.cs" />
-    <Compile Include="ViewModels\LogsViewModel.cs" />
-    <Compile Include="ViewModels\LicenseViewModel.cs" />
-    <Compile Include="ViewModels\Settings\MainVillageViewModel.cs" />
-    <Compile Include="ViewModels\Settings\NightVillageViewModel.cs" />
-    <Compile Include="ViewModels\Settings\ClanGamesViewModel.cs" />
-    <Compile Include="ViewModels\Settings\ClanCapitalViewModel.cs" />
-    <Compile Include="Views\MainWindow.axaml.cs" />
-    <Compile Include="Views\DashboardView.axaml.cs" />
-    <Compile Include="Views\SettingsView.axaml.cs" />
-    <Compile Include="Views\AdvancedView.axaml.cs" />
-    <Compile Include="Views\LogsView.axaml.cs" />
-    <Compile Include="Views\LicenseView.axaml.cs" />
-    <Compile Include="Views\HeaderView.axaml.cs" />
-    <Compile Include="Views\StatusBarView.axaml.cs" />
-    <Compile Include="Views\BottomNavView.axaml.cs" />
-    <Compile Include="Views\DeviceListItemView.axaml.cs" />
-    <Compile Include="Views\Settings\MainVillageView.axaml.cs" />
-    <Compile Include="Views\Settings\NightVillageView.axaml.cs" />
-    <Compile Include="Views\Settings\ClanGamesView.axaml.cs" />
-    <Compile Include="Views\Settings\ClanCapitalView.axaml.cs" />
-    <Compile Include="Models\BotStatus.cs" />
-    <Compile Include="Models\PlayMode.cs" />
-    <Compile Include="Models\NotificationSettings.cs" />
-    <Compile Include="Models\DashboardDeviceState.cs" />
-    <Compile Include="Models\Device.cs" />
-    <Compile Include="Models\LogEntry.cs" />
-    <Compile Include="Models\SessionStats.cs" />
-    <Compile Include="Services\AppStateService.cs" />
-    <Compile Include="Services\AppPreferences.cs" />
-    <Compile Include="Services\Sessions\IDeviceSession.cs" />
-    <Compile Include="Services\Sessions\IDeviceSessionManager.cs" />
-    <Compile Include="Services\Sessions\AutomationRunnerSession.cs" />
-    <Compile Include="Services\Sessions\MockDeviceSession.cs" />
-    <Compile Include="Services\Notifications\INotificationService.cs" />
-    <Compile Include="Services\Sessions\DeviceSessionManager.cs" />
-    <Compile Include="Services\Emulators\IEmulatorDiscovery.cs" />
-    <Compile Include="Services\Emulators\IDeviceScanner.cs" />
-    <Compile Include="Services\Emulators\CommonPorts.cs" />
-    <Compile Include="Services\Emulators\AdbConnector.cs" />
-    <Compile Include="Services\Emulators\AdbEndpoint.cs" />
-    <Compile Include="Services\Emulators\Scanners\AdbConnectedDeviceScanner.cs" />
-    <Compile Include="Services\Emulators\Scanners\BlueStacksScanner.cs" />
-    <Compile Include="Services\Emulators\Scanners\VendorScanners.cs" />
   </ItemGroup>
 
   <ItemGroup>

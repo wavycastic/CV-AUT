@@ -1,7 +1,7 @@
 using System;
 using System.Text.Json.Nodes;
 
-namespace CvAut
+namespace CvAut.Services.Configuration
 {
     /// <summary>
     /// Default value schema for a bot config document, plus migrations from retired key names.

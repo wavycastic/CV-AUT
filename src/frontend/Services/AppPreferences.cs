@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using CvAut.Configuration;
 using CvAut.Models;
+using CvAut.Services.Configuration;
 
 namespace CvAut.Services
 {

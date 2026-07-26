@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using CvAut.Services;
+using CvAut.Services.Configuration;
 using CvAut.Services.Emulators;
 using CvAut.ViewModels;
 using CvAut.ViewModels.Settings;

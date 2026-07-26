@@ -1,5 +1,6 @@
 using Avalonia;
 using System;
+using CvAut.Services;
 
 namespace CvAut
 {

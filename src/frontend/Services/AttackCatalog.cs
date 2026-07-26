@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace CvAut
+namespace CvAut.Services
 {
     public static class AttackCatalog
     {

@@ -1,11 +1,18 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using CvAut.Models;
+using CvAut.Services.Configuration;
 using CvAut.ViewModels.Settings;
 
 namespace CvAut.ViewModels
 {
+    /// <summary>
+    /// Settings page view model. This file covers construction and the tab strip, whose contents
+    /// depend on the selected play mode. The rest is split by feature:
+    /// <c>SettingsViewModel.Profiles.cs</c> (profile CRUD and config sync),
+    /// <c>SettingsViewModel.Notifications.cs</c> (Discord webhook form) and
+    /// <c>SettingsViewModel.InstanceMode.cs</c> (per-device dialog contract).
+    /// </summary>
     public partial class SettingsViewModel : ViewModelBase
     {
         private readonly IConfigStore _configStore;
@@ -13,21 +20,12 @@ namespace CvAut.ViewModels
         private readonly NightVillageViewModel _nightVillage;
         private readonly ClanGamesViewModel _clanGames;
         private readonly ClanCapitalViewModel _clanCapital;
-        private bool _syncingProfiles;
 
         [ObservableProperty] private string _title = "Cài đặt";
         [ObservableProperty] private string _profileName = "Default";
         [ObservableProperty] private string _status = "Đã tải cấu hình";
         [ObservableProperty] private BotProfile? _selectedProfile;
         [ObservableProperty] private SettingsTab? _selectedTab;
-
-        // Opt-in notifications (Discord webhook). Disabled by default; URL is user-supplied.
-        [ObservableProperty] private bool _notifyEnabled;
-        [ObservableProperty] private string _webhookUrl = string.Empty;
-        [ObservableProperty] private bool _notifyOnError = true;
-        [ObservableProperty] private bool _notifyOnStopped;
-        [ObservableProperty] private bool _notifyOnStarted;
-        [ObservableProperty] private string _notifyStatus = string.Empty;
 
         public ObservableCollection<SettingsTab> Tabs { get; } = new();
         public ObservableCollection<BotProfile> Profiles { get; } = new();
@@ -91,182 +89,6 @@ namespace CvAut.ViewModels
             OnPropertyChanged(nameof(HasTabs));
         }
 
-        [RelayCommand]
-        private void LoadProfile()
-        {
-            LoadSelectedProfile();
-        }
-
-        partial void OnSelectedProfileChanged(BotProfile? value)
-        {
-            if (!_syncingProfiles && value is not null && value.Name != _configStore.ActiveProfileName)
-            {
-                LoadSelectedProfile();
-            }
-        }
-
-        private void LoadSelectedProfile()
-        {
-            if (SelectedProfile is null)
-            {
-                return;
-            }
-
-            _configStore.LoadProfile(SelectedProfile.Name);
-            ProfileName = _configStore.ActiveProfileName;
-            _mainVillage.Reload();
-            _nightVillage.Reload();
-            _clanGames.Reload();
-            _clanCapital.Reload();
-            RefreshProfiles();
-            SyncPlayModeFromConfig();
-            Status = "Đã tải cấu hình " + ProfileName;
-        }
-
-        [RelayCommand]
-        private void SaveNewProfile()
-        {
-            var config = _configStore.LoadActiveConfig();
-            _mainVillage.ApplyTo(config);
-            _nightVillage.ApplyTo(config);
-            _clanGames.ApplyTo(config);
-            _clanCapital.ApplyTo(config);
-            _configStore.SaveProfileAs(ProfileName, config);
-            RefreshProfiles();
-            Status = "Đã lưu cấu hình " + _configStore.ActiveProfileName;
-        }
-
-        [RelayCommand]
-        private void UpdateProfile()
-        {
-            var config = _configStore.LoadActiveConfig();
-            _mainVillage.ApplyTo(config);
-            _nightVillage.ApplyTo(config);
-            _clanGames.ApplyTo(config);
-            _clanCapital.ApplyTo(config);
-            _configStore.SaveActiveConfig(config);
-            RefreshProfiles();
-            Status = "Đã cập nhật cấu hình " + _configStore.ActiveProfileName;
-        }
-
-        [RelayCommand]
-        private void DeleteProfile()
-        {
-            if (SelectedProfile is null)
-            {
-                return;
-            }
-
-            string deletedName = SelectedProfile.Name;
-            _configStore.DeleteProfile(deletedName);
-            RefreshProfiles();
-            _mainVillage.Reload();
-            _nightVillage.Reload();
-            _clanGames.Reload();
-            _clanCapital.Reload();
-            Status = "Đã xóa cấu hình " + deletedName;
-        }
-
-        private void LoadNotificationSettings()
-        {
-            var s = _configStore.LoadNotificationSettings();
-            NotifyEnabled = s.Enabled;
-            WebhookUrl = s.WebhookUrl;
-            NotifyOnError = s.NotifyOnError;
-            NotifyOnStopped = s.NotifyOnStopped;
-            NotifyOnStarted = s.NotifyOnStarted;
-        }
-
-        [RelayCommand]
-        private void SaveNotifications()
-        {
-            var s = new Models.NotificationSettings
-            {
-                Enabled = NotifyEnabled,
-                WebhookUrl = (WebhookUrl ?? string.Empty).Trim(),
-                NotifyOnError = NotifyOnError,
-                NotifyOnStopped = NotifyOnStopped,
-                NotifyOnStarted = NotifyOnStarted,
-            };
-            _configStore.SaveNotificationSettings(s);
-            NotifyStatus = s.IsActionable ? "Đã lưu — thông báo bật." : (s.Enabled ? "Đã lưu — cần URL webhook https hợp lệ." : "Đã lưu — thông báo tắt.");
-        }
-
-        private void SyncPlayModeFromConfig()
-        {
-            try
-            {
-                var config = _configStore.LoadActiveConfig();
-                if (config.TryGetPropertyValue("play_mode", out var val) && val is not null)
-                {
-                    SelectedPlayMode = PlayMode.ToDisplay(val.ToString());
-                }
-                else
-                {
-                    SelectedPlayMode = PlayMode.MainVillageLabel;
-                }
-            }
-            catch
-            {
-                SelectedPlayMode = PlayMode.MainVillageLabel;
-            }
-        }
-
-        private void RefreshProfiles()
-        {
-            _syncingProfiles = true;
-            try
-            {
-                Profiles.Clear();
-                foreach (BotProfile profile in _configStore.Profiles)
-                {
-                    Profiles.Add(profile);
-                    if (profile.Name == _configStore.ActiveProfileName)
-                    {
-                        SelectedProfile = profile;
-                        ProfileName = profile.Name;
-                    }
-                }
-            }
-            finally
-            {
-                _syncingProfiles = false;
-            }
-        }
-
-        [ObservableProperty]
-        private bool _isInstanceMode;
-
-        /// <summary>
-        /// Raised when the instance-mode Save/Cancel buttons are pressed. The dialog renders this
-        /// SettingsViewModel directly (inside MainWindow's overlay, NOT under DashboardView), so
-        /// the buttons must bind to commands on THIS view model. DashboardViewModel wires these
-        /// events to its own save/cancel flow.
-        /// </summary>
-        public event System.Action? InstanceSaveRequested;
-        public event System.Action? InstanceCancelRequested;
-
-        [RelayCommand]
-        private void InstanceSave() => InstanceSaveRequested?.Invoke();
-
-        [RelayCommand]
-        private void InstanceCancel() => InstanceCancelRequested?.Invoke();
-
-        public void LoadSelectedProfileDirectly(string name, string playMode = "")
-        {
-            ProfileName = name;
-            _mainVillage.Reload();
-            _nightVillage.Reload();
-            _clanGames.Reload();
-            _clanCapital.Reload();
-            RefreshProfiles();
-
-            SelectedPlayMode = string.IsNullOrEmpty(playMode) ? PlayMode.MainVillageLabel : playMode;
-            RebuildTabsByPlayMode(SelectedPlayMode);
-
-            Status = "Đã tải cấu hình " + name;
-        }
-
         private SettingsTab CreateTabForPlayMode(string playMode)
         {
             string token = Models.PlayMode.ToToken(playMode);
@@ -277,33 +99,6 @@ namespace CvAut.ViewModels
                 "clan_capital" => new SettingsTab("Kinh đô hội", "HomeModern", _clanCapital),
                 _ => new SettingsTab("Làng chính", "Home", _mainVillage)
             };
-        }
-
-        public void UpdateProfileDirectly()
-        {
-            var config = _configStore.LoadActiveConfig();
-            config["play_mode"] = PlayMode.ToToken(SelectedPlayMode);
-            _mainVillage.ApplyTo(config);
-            _nightVillage.ApplyTo(config);
-            _clanGames.ApplyTo(config);
-            _clanCapital.ApplyTo(config);
-            _configStore.SaveActiveConfig(config);
-            RefreshProfiles();
-            Status = "Đã cập nhật cấu hình " + _configStore.ActiveProfileName;
-        }
-    }
-
-    public sealed partial class SettingsTab : ObservableObject
-    {
-        public string Title { get; }
-        public string IconKind { get; }
-        public ViewModelBase Page { get; }
-
-        public SettingsTab(string title, string iconKind, ViewModelBase page)
-        {
-            Title = title;
-            IconKind = iconKind;
-            Page = page;
         }
     }
 }
