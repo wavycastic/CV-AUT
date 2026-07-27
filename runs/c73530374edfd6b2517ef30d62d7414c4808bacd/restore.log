@@ -1,0 +1,9 @@
+  Determining projects to restore...
+D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj : warning NU1603: Simplimixi.Backend depends on OpenCvSharp4.runtime.linux-x64 (>= 4.9.0.20240103) but OpenCvSharp4.runtime.linux-x64 4.9.0.20240103 was not found. OpenCvSharp4.runtime.linux-x64 4.10.0.20240717 was resolved instead. [D:\a\CV-AUT\CV-AUT\CV-AUT.slnx]
+  Restored D:\a\CV-AUT\CV-AUT\src\backend\Simplimixi.Backend.csproj (in 5.84 sec).
+D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\Simplimixi.Frontend.Tests.csproj : warning NU1603: Simplimixi.Backend depends on OpenCvSharp4.runtime.linux-x64 (>= 4.9.0.20240103) but OpenCvSharp4.runtime.linux-x64 4.9.0.20240103 was not found. OpenCvSharp4.runtime.linux-x64 4.10.0.20240717 was resolved instead. [D:\a\CV-AUT\CV-AUT\CV-AUT.slnx]
+D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\Simplimixi.Backend.Tests.csproj : warning NU1603: Simplimixi.Backend depends on OpenCvSharp4.runtime.linux-x64 (>= 4.9.0.20240103) but OpenCvSharp4.runtime.linux-x64 4.9.0.20240103 was not found. OpenCvSharp4.runtime.linux-x64 4.10.0.20240717 was resolved instead. [D:\a\CV-AUT\CV-AUT\CV-AUT.slnx]
+  Restored D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\Simplimixi.Backend.Tests.csproj (in 27.36 sec).
+  Restored D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\Simplimixi.Frontend.Tests.csproj (in 27.39 sec).
+D:\a\CV-AUT\CV-AUT\src\frontend\Simplimixi.csproj : warning NU1603: Simplimixi.Backend depends on OpenCvSharp4.runtime.linux-x64 (>= 4.9.0.20240103) but OpenCvSharp4.runtime.linux-x64 4.9.0.20240103 was not found. OpenCvSharp4.runtime.linux-x64 4.10.0.20240717 was resolved instead. [D:\a\CV-AUT\CV-AUT\CV-AUT.slnx]
+  Restored D:\a\CV-AUT\CV-AUT\src\frontend\Simplimixi.csproj (in 29.54 sec).
