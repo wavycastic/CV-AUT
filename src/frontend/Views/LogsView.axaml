@@ -42,7 +42,7 @@
                     </ListBox.Styles>
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="models:LogEntry">
-                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
+                            <Grid ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="10">
                                 <!-- Timestamp -->
                                 <TextBlock Grid.Column="0" Text="{Binding TimeText}" 
                                            FontSize="12" Foreground="#80A0A0A0" VerticalAlignment="Top" />
@@ -52,9 +52,15 @@
                                            FontSize="13" FontWeight="Bold"
                                            Foreground="{Binding Level, Converter={StaticResource LevelToBrush}}" 
                                            VerticalAlignment="Top" Width="18" TextAlignment="Center"/>
-                                
+
+                                <!-- Subsystem the line came from -->
+                                <TextBlock Grid.Column="2" Text="{Binding FormattedModuleLabel}"
+                                           FontSize="11.5" Foreground="#A0A0A0A0"
+                                           VerticalAlignment="Top" MinWidth="96"
+                                           TextTrimming="CharacterEllipsis" />
+
                                 <!-- Message / Summary -->
-                                <TextBlock Grid.Column="2" Text="{Binding Summary}" 
+                                <TextBlock Grid.Column="3" Text="{Binding Summary}" 
                                            FontSize="12.5" 
                                            LineHeight="18"
                                            Foreground="{Binding Level, Converter={StaticResource LevelToBrush}}" 
