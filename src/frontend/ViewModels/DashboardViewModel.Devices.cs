@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using CvAut.Models;
 
@@ -44,8 +45,7 @@ namespace CvAut.ViewModels
                 }
             }
 
-            OnPropertyChanged(nameof(IsRunning));
-            OnPropertyChanged(nameof(IsStopped));
+            NotifyDevicesChanged();
         }
 
         private void OnDevicesCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -93,60 +93,90 @@ namespace CvAut.ViewModels
             OnPropertyChanged(nameof(ShowGridPane));
             OnPropertyChanged(nameof(IsRunning));
             OnPropertyChanged(nameof(IsStopped));
+            OnPropertyChanged(nameof(RunnableDeviceCount));
+            OnPropertyChanged(nameof(DeviceSummaryText));
+            OnPropertyChanged(nameof(SelectedDeviceCount));
+            OnPropertyChanged(nameof(RunnableSelectedCount));
+            OnPropertyChanged(nameof(StoppableSelectedCount));
+            OnPropertyChanged(nameof(FleetSelectionText));
+            OnPropertyChanged(nameof(FleetStartHint));
+            OnPropertyChanged(nameof(FleetStopHint));
             StartAllCommand.NotifyCanExecuteChanged();
             StopAllCommand.NotifyCanExecuteChanged();
+            SelectAllDevicesCommand.NotifyCanExecuteChanged();
+            ClearDeviceSelectionCommand.NotifyCanExecuteChanged();
         }
 
-        private bool CanStartAll() => Devices?.Any(device => device.IsSelected && device.CanStart) == true;
+        private bool CanSelectAllDevices() => Devices?.Any(device => !device.IsSelected) == true;
 
-        [RelayCommand(CanExecute = nameof(CanStartAll))]
-        private void StartAll()
+        [RelayCommand(CanExecute = nameof(CanSelectAllDevices))]
+        private void SelectAllDevices()
         {
             if (Devices is null)
+            {
+                return;
+            }
+
+            foreach (DeviceViewModel device in Devices)
+            {
+                device.IsSelected = true;
+            }
+        }
+
+        private bool CanClearDeviceSelection() => Devices?.Any(device => device.IsSelected) == true;
+
+        [RelayCommand(CanExecute = nameof(CanClearDeviceSelection))]
+        private void ClearDeviceSelection()
+        {
+            if (Devices is null)
+            {
+                return;
+            }
+
+            foreach (DeviceViewModel device in Devices)
+            {
+                device.IsSelected = false;
+            }
+        }
+
+        private bool CanStartAll() => RunnableSelectedCount > 0;
+
+        [RelayCommand(CanExecute = nameof(CanStartAll))]
+        private async Task StartAllAsync()
+        {
+            DeviceViewModel[] devices = Devices?
+                .Where(device => device.IsSelected && device.CanStart)
+                .ToArray() ?? Array.Empty<DeviceViewModel>();
+
+            if (devices.Length == 0)
             {
                 return;
             }
 
             _hasBeenStopped = false;
-
-            foreach (var device in Devices)
-            {
-                if (device.IsSelected && device.CanStart)
-                {
-                    device.StartCommand.Execute(null);
-                }
-            }
-
-            OnPropertyChanged(nameof(IsRunning));
-            OnPropertyChanged(nameof(IsStopped));
-            StartAllCommand.NotifyCanExecuteChanged();
-            StopAllCommand.NotifyCanExecuteChanged();
+            NotifyDevicesChanged();
+            await Task.WhenAll(devices.Select(device => device.StartCommand.ExecuteAsync(null)));
+            NotifyDevicesChanged();
         }
 
-        private bool CanStopAll() => Devices?.Any(device => device.IsSelected && device.CanStop) == true;
+        private bool CanStopAll() => StoppableSelectedCount > 0;
 
         [RelayCommand(CanExecute = nameof(CanStopAll))]
-        private void StopAll()
+        private async Task StopAllAsync()
         {
-            if (Devices is null)
+            DeviceViewModel[] devices = Devices?
+                .Where(device => device.IsSelected && device.CanStop)
+                .ToArray() ?? Array.Empty<DeviceViewModel>();
+
+            if (devices.Length == 0)
             {
                 return;
             }
 
             _hasBeenStopped = true;
-
-            foreach (var device in Devices)
-            {
-                if (device.IsSelected && device.CanStop)
-                {
-                    device.StopCommand.Execute(null);
-                }
-            }
-
-            OnPropertyChanged(nameof(IsRunning));
-            OnPropertyChanged(nameof(IsStopped));
-            StartAllCommand.NotifyCanExecuteChanged();
-            StopAllCommand.NotifyCanExecuteChanged();
+            NotifyDevicesChanged();
+            await Task.WhenAll(devices.Select(device => device.StopCommand.ExecuteAsync(null)));
+            NotifyDevicesChanged();
         }
 
         [RelayCommand]

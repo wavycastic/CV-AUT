@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading.Tasks;
 using System.Text.Json.Nodes;
 using CvAut;
 using CvAut.Models;
@@ -115,6 +116,25 @@ namespace CvAut.Tests
 
             Assert.True(viewModel.DeviceCanStart);
             Assert.True(viewModel.CanStart);
+            Assert.Equal("Sẵn sàng", viewModel.StatusBadgeText);
+            Assert.Contains("dùng instance đang mở", viewModel.DeviceStatusText);
+        }
+
+        [Fact]
+        public void OfflineAutoStartInstance_ExplainsThatItCanBeWoken()
+        {
+            var viewModel = new DeviceViewModel(new Device(
+                "127.0.0.1",
+                5556,
+                "BlueStacks",
+                "BlueStacks",
+                DeviceStatus.Offline,
+                emulatorType: "BlueStacks",
+                emulatorPath: @"C:\Program Files\BlueStacks_nxt\HD-Player.exe"));
+
+            Assert.Equal("Có thể bật", viewModel.StatusBadgeText);
+            Assert.Equal("#eab308", viewModel.StatusBadgeColor);
+            Assert.Contains("tự bật lại", viewModel.DeviceStatusText);
         }
     }
 
@@ -313,6 +333,70 @@ namespace CvAut.Tests
             ready.Status = BotStatus.Running;
             Assert.False(dashboard.StartAllCommand.CanExecute(null));
             Assert.True(dashboard.StopAllCommand.CanExecute(null));
+        }
+
+        [Fact]
+        public void FleetSelectionCommands_UpdateSummaryAndEligibility()
+        {
+            var dashboard = NewDashboard();
+            var ready = Dev(5556);
+            var blocked = new DeviceViewModel(
+                new Device("127.0.0.1", 5558, "ADB", "ADB", DeviceStatus.Offline));
+            ready.IsSelected = false;
+            blocked.IsSelected = false;
+            dashboard.DeviceCount = 2;
+            dashboard.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { ready, blocked });
+
+            Assert.Equal("1/2 thiết bị có thể chạy", dashboard.DeviceSummaryText);
+            Assert.Equal("Chưa chọn thiết bị", dashboard.FleetSelectionText);
+            Assert.True(dashboard.SelectAllDevicesCommand.CanExecute(null));
+
+            dashboard.SelectAllDevicesCommand.Execute(null);
+
+            Assert.Equal(2, dashboard.SelectedDeviceCount);
+            Assert.Equal(1, dashboard.RunnableSelectedCount);
+            Assert.Equal("2 đã chọn • 1 có thể chạy", dashboard.FleetSelectionText);
+            Assert.Equal("Khởi chạy 1 thiết bị đã chọn.", dashboard.FleetStartHint);
+
+            dashboard.ClearDeviceSelectionCommand.Execute(null);
+
+            Assert.Equal(0, dashboard.SelectedDeviceCount);
+            Assert.False(dashboard.StartAllCommand.CanExecute(null));
+        }
+
+        [Fact]
+        public async Task FleetCommands_StartAndStopSelectedDevicesTogether()
+        {
+            var dashboard = NewDashboard();
+            var firstSession = new CvAut.Services.Sessions.MockDeviceSession("127.0.0.1:5556");
+            var secondSession = new CvAut.Services.Sessions.MockDeviceSession("127.0.0.1:5558");
+            string firstRoot = Path.Combine(Path.GetTempPath(), "cvaut_fleet_" + System.Guid.NewGuid().ToString("N"));
+            string secondRoot = Path.Combine(Path.GetTempPath(), "cvaut_fleet_" + System.Guid.NewGuid().ToString("N"));
+            var first = new DeviceViewModel(
+                new Device("127.0.0.1", 5556, "Mock5556", "Mock", DeviceStatus.Ready),
+                (_, _) => firstSession,
+                new ConfigStore(firstRoot));
+            var second = new DeviceViewModel(
+                new Device("127.0.0.1", 5558, "Mock5558", "Mock", DeviceStatus.Ready),
+                (_, _) => secondSession,
+                new ConfigStore(secondRoot));
+            dashboard.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { first, second });
+
+            await dashboard.StartAllCommand.ExecuteAsync(null);
+
+            Assert.Equal(BotStatus.Running, firstSession.Status);
+            Assert.Equal(BotStatus.Running, secondSession.Status);
+
+            // Session events are dispatched onto the Avalonia UI thread. Mirror the observed
+            // state here so the aggregate stop command can be exercised in this headless test.
+            first.Status = BotStatus.Running;
+            second.Status = BotStatus.Running;
+            Assert.Equal(2, dashboard.StoppableSelectedCount);
+
+            await dashboard.StopAllCommand.ExecuteAsync(null);
+
+            Assert.Equal(BotStatus.Stopped, firstSession.Status);
+            Assert.Equal(BotStatus.Stopped, secondSession.Status);
         }
 
         [Fact]
