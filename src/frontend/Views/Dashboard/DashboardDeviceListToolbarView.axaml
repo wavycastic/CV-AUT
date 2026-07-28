@@ -11,53 +11,63 @@
 >
     <Design.DataContext><vm:DashboardViewModel /></Design.DataContext>
 
-    <!-- Row above the list: discovered instances on the left, fleet actions on the right. -->
-    <Grid ColumnDefinitions="*,Auto">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <materialIcons:MaterialIcon Kind="Apps" Width="16" Height="16"
-                                        Foreground="{DynamicResource AppAccentBrush}"/>
-            <TextBlock Text="Thiết bị đã phát hiện" Classes="labelStrong" FontSize="12" VerticalAlignment="Center"/>
-        </StackPanel>
-        <Border Grid.Column="1" Height="34" CornerRadius="8"
-                Background="{DynamicResource AppConsoleBrush}"
-                BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1"
-                HorizontalAlignment="Right" VerticalAlignment="Center">
-            <Grid ColumnDefinitions="Auto,Auto,Auto">
-                <!-- Start -->
-                <Button Grid.Column="0"
-                        Classes="seg-start"
-                        Classes.active-start="{Binding IsRunning}"
-                        Command="{Binding StartAllCommand}"
-                        Height="32" CornerRadius="0"
-                        Padding="12,0"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center"
-                        VerticalContentAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                        <materialIcons:MaterialIcon Kind="Play" Width="14" Height="14" VerticalAlignment="Center"/>
-                        <TextBlock Text="Khởi chạy" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
+    <StackPanel Spacing="8">
+        <!-- Primary fleet actions. -->
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <materialIcons:MaterialIcon Kind="Apps" Width="16" Height="16"
+                                            Foreground="{DynamicResource AppAccentBrush}"/>
+                <TextBlock Text="Thiết bị đã phát hiện" Classes="labelStrong" FontSize="12" VerticalAlignment="Center"/>
+            </StackPanel>
 
-                <!-- Vertical divider -->
-                <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource AppBorderStrongBrush}" />
+            <Border Grid.Column="1" Height="34" CornerRadius="8"
+                    Background="{DynamicResource AppConsoleBrush}"
+                    BorderBrush="{DynamicResource AppBorderStrongBrush}" BorderThickness="1"
+                    HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Grid ColumnDefinitions="Auto,Auto,Auto">
+                    <Button Grid.Column="0"
+                            Classes="seg-start"
+                            Classes.active-start="{Binding IsRunning}"
+                            Command="{Binding StartAllCommand}"
+                            ToolTip.Tip="{Binding FleetStartHint}"
+                            Height="32" CornerRadius="0" Padding="12,0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <materialIcons:MaterialIcon Kind="Play" Width="14" Height="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="Khởi chạy" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
 
-                <!-- Stop -->
-                <Button Grid.Column="2"
-                        Classes="seg-end"
-                        Classes.active-stop="{Binding IsStopped}"
-                        Command="{Binding StopAllCommand}"
-                        Height="32" CornerRadius="0"
-                        Padding="12,0"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center"
-                        VerticalContentAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                        <materialIcons:MaterialIcon Kind="Stop" Width="14" Height="14" VerticalAlignment="Center"/>
-                        <TextBlock Text="Dừng" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-            </Grid>
-        </Border>
-    </Grid>
+                    <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource AppBorderStrongBrush}" />
+
+                    <Button Grid.Column="2"
+                            Classes="seg-end"
+                            Classes.active-stop="{Binding IsStopped}"
+                            Command="{Binding StopAllCommand}"
+                            ToolTip.Tip="{Binding FleetStopHint}"
+                            Height="32" CornerRadius="0" Padding="12,0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <materialIcons:MaterialIcon Kind="Stop" Width="14" Height="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="Dừng" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Selection is independent from ListBox focus: the yellow check marks are the run targets. -->
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+            <TextBlock Grid.Column="0" Text="{Binding FleetSelectionText}" Classes="caption"
+                       FontSize="11" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Classes="ghost" Command="{Binding SelectAllDevicesCommand}"
+                    Content="Chọn tất cả" Height="30" Padding="8,0" FontSize="11"/>
+            <Button Grid.Column="2" Classes="ghost" Command="{Binding ClearDeviceSelectionCommand}"
+                    Content="Bỏ chọn" Height="30" Padding="8,0" FontSize="11"/>
+        </Grid>
+    </StackPanel>
 </UserControl>

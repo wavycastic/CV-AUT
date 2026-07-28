@@ -67,7 +67,7 @@
                                                       BorderThickness="0"
                                                       Padding="0" Width="32" Height="32" 
                                                       VerticalAlignment="Center" HorizontalAlignment="Center" 
-                                                      ToolTip.Tip="Chọn thiết bị"/>
+                                                      ToolTip.Tip="{Binding SelectionHint}"/>
 
                                         <!-- Configure button -->
                                         <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ConfigureDeviceCommand}" CommandParameter="{Binding}" Padding="0" Width="32" Height="32" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Cấu hình">

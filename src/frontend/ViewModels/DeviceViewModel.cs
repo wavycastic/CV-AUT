@@ -76,7 +76,7 @@ namespace CvAut.ViewModels
         /// hint instead of a bare enum name. Bound in <c>DeviceListItemView</c> /
         /// <c>DevicePanelView</c>.
         /// </summary>
-        public string DeviceStatusText => DeviceStatusPresenter.DeviceStatusText(Device.Status);
+        public string DeviceStatusText => DeviceStatusPresenter.DeviceStatusText(Device.Status, Device.CanAutoStart);
 
         /// <summary>Session lifecycle status, mirrored from <see cref="IDeviceSession.StatusChanged"/>.</summary>
         [ObservableProperty]
@@ -93,6 +93,7 @@ namespace CvAut.ViewModels
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(StartCommand))]
         [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+        [NotifyPropertyChangedFor(nameof(SelectionHint))]
         private bool _isSelected = true;
 
         public string DisplayStatus => DeviceStatusPresenter.DisplayStatus(Status);
@@ -104,9 +105,13 @@ namespace CvAut.ViewModels
         /// </summary>
         public string SubTitleText => DeviceStatusPresenter.SubTitle(Device.Source, Device.Serial, Device.Port, DisplayName);
 
-        public string StatusBadgeText => DeviceStatusPresenter.StatusBadgeText(Status, Device.Status);
+        public string StatusBadgeText => DeviceStatusPresenter.StatusBadgeText(Status, Device.Status, Device.CanAutoStart);
 
-        public string StatusBadgeColor => DeviceStatusPresenter.StatusBadgeColor(Status, Device.Status);
+        public string StatusBadgeColor => DeviceStatusPresenter.StatusBadgeColor(Status, Device.Status, Device.CanAutoStart);
+
+        public string SelectionHint => IsSelected
+            ? "Bỏ chọn instance này"
+            : "Chọn instance này để chạy";
 
         public bool ShowStartButton => Status is BotStatus.Idle or BotStatus.Stopped or BotStatus.Error;
         public bool ShowStopButton => !ShowStartButton;
