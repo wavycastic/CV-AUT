@@ -117,6 +117,34 @@
         <Setter Property="Opacity" Value="0.8" />
     </Style>
 
+    <!--
+        Primary emphasis for the fleet Start action. Declared BEFORE the active-start block on
+        purpose: once the fleet is running, active-start must win and repaint the half green.
+    -->
+    <Style Selector="Button.seg-start.primary-cta">
+        <Setter Property="Foreground" Value="{DynamicResource AppAccentTextBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.seg-start.primary-cta /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource AppAccentTextBrush}" />
+    </Style>
+    <Style Selector="Button.seg-start.primary-cta:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource AppAccentTextBrush}" />
+    </Style>
+    <Style Selector="Button.seg-start.primary-cta:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppAccentHoverBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource AppAccentTextBrush}" />
+    </Style>
+    <!-- Disabled must drop the accent fill, otherwise a dead button still reads as the CTA. -->
+    <Style Selector="Button.seg-start.primary-cta:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+    </Style>
+    <Style Selector="Button.seg-start.primary-cta:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+    </Style>
+
     <!-- Segmented pill active states (Green for Running / Red for Stopped) -->
     <Style Selector="Button.seg-start.active-start">
         <Setter Property="Foreground" Value="{DynamicResource AppSuccessTextBrush}" />
@@ -147,6 +175,27 @@
     <Style Selector="Button.seg-end.active-stop /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{DynamicResource AppDangerSoftBrush}" />
         <Setter Property="TextElement.Foreground" Value="{DynamicResource AppDangerTextBrush}" />
+    </Style>
+
+    <!--
+        Chip button: low-emphasis but still visibly a button. Used for the selection helpers
+        next to the fleet counters, where a flat text link read as a static label.
+    -->
+    <Style Selector="Button.chip">
+        <Setter Property="Background" Value="{DynamicResource AppConsoleBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Foreground" Value="{DynamicResource AppTextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AppSurfaceHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBorderBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.chip:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}" />
+        <Setter Property="Opacity" Value="0.55" />
     </Style>
 
     <!-- Ghost button: transparent, used for nav / icon-only actions -->

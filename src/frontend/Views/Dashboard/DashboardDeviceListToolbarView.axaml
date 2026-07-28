@@ -17,7 +17,8 @@
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <materialIcons:MaterialIcon Kind="Apps" Width="16" Height="16"
                                             Foreground="{DynamicResource AppAccentBrush}"/>
-                <TextBlock Text="Thiết bị đã phát hiện" Classes="labelStrong" FontSize="12" VerticalAlignment="Center"/>
+                <!-- The header card already reports what was detected; this block is about what will run. -->
+                <TextBlock Text="Instance sẽ chạy" Classes="labelStrong" FontSize="12" VerticalAlignment="Center"/>
             </StackPanel>
 
             <Border Grid.Column="1" Height="34" CornerRadius="8"
@@ -26,7 +27,7 @@
                     HorizontalAlignment="Right" VerticalAlignment="Center">
                 <Grid ColumnDefinitions="Auto,Auto,Auto">
                     <Button Grid.Column="0"
-                            Classes="seg-start"
+                            Classes="seg-start primary-cta"
                             Classes.active-start="{Binding IsRunning}"
                             Command="{Binding StartAllCommand}"
                             ToolTip.Tip="{Binding FleetStartHint}"
@@ -64,10 +65,12 @@
         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
             <TextBlock Grid.Column="0" Text="{Binding FleetSelectionText}" Classes="caption"
                        FontSize="11" VerticalAlignment="Center"/>
-            <Button Grid.Column="1" Classes="ghost" Command="{Binding SelectAllDevicesCommand}"
-                    Content="Chọn tất cả" Height="30" Padding="8,0" FontSize="11"/>
-            <Button Grid.Column="2" Classes="ghost" Command="{Binding ClearDeviceSelectionCommand}"
-                    Content="Bỏ chọn" Height="30" Padding="8,0" FontSize="11"/>
+            <Button Grid.Column="1" Classes="chip" Command="{Binding SelectAllDevicesCommand}"
+                    Content="Chọn tất cả" Height="28" Padding="10,0" FontSize="11"
+                    ToolTip.Tip="Chọn toàn bộ instance trong danh sách"/>
+            <Button Grid.Column="2" Classes="chip" Command="{Binding ClearDeviceSelectionCommand}"
+                    Content="Bỏ chọn" Height="28" Padding="10,0" FontSize="11"
+                    ToolTip.Tip="Bỏ chọn toàn bộ instance"/>
         </Grid>
     </StackPanel>
 </UserControl>

@@ -347,7 +347,9 @@ namespace CvAut.Tests
             dashboard.DeviceCount = 2;
             dashboard.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { ready, blocked });
 
-            Assert.Equal("1/2 thiết bị có thể chạy", dashboard.DeviceSummaryText);
+            // The header caption reports detection only; runnable/selected counts belong to the
+            // fleet line so the two adjacent rows no longer repeat each other.
+            Assert.Equal("Đã phát hiện 2 instance", dashboard.DeviceSummaryText);
             Assert.Equal("Chưa chọn thiết bị", dashboard.FleetSelectionText);
             Assert.True(dashboard.SelectAllDevicesCommand.CanExecute(null));
 
@@ -362,6 +364,44 @@ namespace CvAut.Tests
 
             Assert.Equal(0, dashboard.SelectedDeviceCount);
             Assert.False(dashboard.StartAllCommand.CanExecute(null));
+        }
+
+        [Fact]
+        public void DeviceSummaryText_ReportsDetectionCountOnly()
+        {
+            var dashboard = NewDashboard();
+
+            Assert.Equal("Chưa phát hiện instance nào", dashboard.DeviceSummaryText);
+
+            dashboard.DeviceCount = 1;
+            Assert.Equal("Đã phát hiện 1 instance", dashboard.DeviceSummaryText);
+
+            dashboard.DeviceCount = 3;
+            Assert.Equal("Đã phát hiện 3 instance", dashboard.DeviceSummaryText);
+
+            // The runnable ratio must not leak back into the header caption.
+            Assert.DoesNotContain("có thể chạy", dashboard.DeviceSummaryText);
+        }
+
+        [Fact]
+        public void DeviceListHintText_CallsOutBlockedInstancesOnlyWhenPresent()
+        {
+            var dashboard = NewDashboard();
+            var ready = Dev(5556);
+            dashboard.DeviceCount = 1;
+            dashboard.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { ready });
+
+            Assert.Contains("Dấu tích vàng", dashboard.DeviceListHintText);
+            Assert.Contains("tự bật khi Khởi chạy", dashboard.DeviceListHintText);
+
+            // An offline instance with no emulator executable cannot be auto-started, so the hint
+            // has to say so instead of promising a launch that will never happen.
+            var blocked = new DeviceViewModel(
+                new Device("127.0.0.1", 5558, "ADB", "ADB", DeviceStatus.Offline));
+            dashboard.DeviceCount = 2;
+            dashboard.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { ready, blocked });
+
+            Assert.Contains("không thể tự bật", dashboard.DeviceListHintText);
         }
 
         [Fact]
