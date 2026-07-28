@@ -384,24 +384,18 @@ namespace CvAut.Tests
         }
 
         [Fact]
-        public void DeviceListHintText_CallsOutBlockedInstancesOnlyWhenPresent()
+        public void ShowStatusLabel_HidesIdleWordingAndReturnsOnceSessionIsLive()
         {
-            var dashboard = NewDashboard();
-            var ready = Dev(5556);
-            dashboard.DeviceCount = 1;
-            dashboard.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { ready });
+            var device = Dev(5556);
 
-            Assert.Contains("Dấu tích vàng", dashboard.DeviceListHintText);
-            Assert.Contains("tự bật khi Khởi chạy", dashboard.DeviceListHintText);
+            // Idle: every row would otherwise repeat the same readiness pill, so only the dot shows.
+            Assert.False(device.ShowStatusLabel);
 
-            // An offline instance with no emulator executable cannot be auto-started, so the hint
-            // has to say so instead of promising a launch that will never happen.
-            var blocked = new DeviceViewModel(
-                new Device("127.0.0.1", 5558, "ADB", "ADB", DeviceStatus.Offline));
-            dashboard.DeviceCount = 2;
-            dashboard.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { ready, blocked });
+            device.Status = BotStatus.Running;
+            Assert.True(device.ShowStatusLabel);
 
-            Assert.Contains("không thể tự bật", dashboard.DeviceListHintText);
+            device.Status = BotStatus.Idle;
+            Assert.False(device.ShowStatusLabel);
         }
 
         [Fact]
