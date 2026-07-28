@@ -21,15 +21,16 @@ namespace CvAut.ViewModels
     /// </summary>
     public partial class DeviceViewModel
     {
-        // Start is allowed when the bot is idle/stopped AND the device is either Ready
-        // (ADB online now) or Installed (emulator executable known — Start will trigger
-        // EmulatorBootstrapper to launch it and wait for ADB). Unauthorized/Offline/Unknown
-        // stay blocked: the bot cannot reach a usable ADB shell from those states.
+        // Start is allowed when the bot is idle/stopped and either ADB is already online,
+        // the emulator install is known, or an offline ADB endpoint still carries a known
+        // emulator executable. In the latter two cases EmulatorBootstrapper launches/restarts
+        // the exact instance and waits for ADB; an already-ready instance is reused as-is.
         public bool CanStart => Status is BotStatus.Idle or BotStatus.Stopped
-            && Device.Status is DeviceStatus.Ready or DeviceStatus.Installed;
+            && DeviceCanStart;
 
         /// <summary>Device-side start eligibility, independent of bot status (for UI hints).</summary>
-        public bool DeviceCanStart => Device.Status is DeviceStatus.Ready or DeviceStatus.Installed;
+        public bool DeviceCanStart => Device.Status is DeviceStatus.Ready or DeviceStatus.Installed
+            || (Device.Status == DeviceStatus.Offline && Device.CanAutoStart);
         public bool CanPause => Status is BotStatus.Running;
         public bool CanResume => Status is BotStatus.Paused;
         public bool CanStop => Status is BotStatus.Running or BotStatus.Paused or BotStatus.Starting;

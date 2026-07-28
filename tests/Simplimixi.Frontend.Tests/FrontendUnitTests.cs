@@ -77,6 +77,47 @@ namespace CvAut.Tests
         }
     }
 
+    public class DeviceStartEligibilityTests
+    {
+        [Fact]
+        public void OfflineEmulator_WithKnownExecutable_CanStart()
+        {
+            var device = new Device(
+                "127.0.0.1",
+                5556,
+                "BlueStacks",
+                "BlueStacks",
+                DeviceStatus.Offline,
+                emulatorType: "BlueStacks",
+                emulatorPath: @"C:\Program Files\BlueStacks_nxt\HD-Player.exe",
+                emulatorInstance: "Pie64");
+            var viewModel = new DeviceViewModel(device);
+
+            Assert.True(viewModel.DeviceCanStart);
+            Assert.True(viewModel.CanStart);
+        }
+
+        [Fact]
+        public void OfflineAdbEndpoint_WithoutKnownExecutable_CannotStart()
+        {
+            var viewModel = new DeviceViewModel(
+                new Device("127.0.0.1", 5556, "ADB", "ADB", DeviceStatus.Offline));
+
+            Assert.False(viewModel.DeviceCanStart);
+            Assert.False(viewModel.CanStart);
+        }
+
+        [Fact]
+        public void ReadyDevice_CanStartWithoutLaunchingEmulator()
+        {
+            var viewModel = new DeviceViewModel(
+                new Device("127.0.0.1", 5556, "BlueStacks", "BlueStacks", DeviceStatus.Ready));
+
+            Assert.True(viewModel.DeviceCanStart);
+            Assert.True(viewModel.CanStart);
+        }
+    }
+
     public class ConfigStoreTests
     {
         private static ConfigStore NewIsolatedStore()
@@ -253,6 +294,43 @@ namespace CvAut.Tests
             dev.Status = CvAut.Models.BotStatus.Stopped;
             Assert.False(d.IsRunning);
             Assert.True(d.IsStopped);
+        }
+
+        [Fact]
+        public void FleetCommands_TrackSelectedDeviceEligibility()
+        {
+            var dashboard = NewDashboard();
+            var ready = Dev(5556);
+            dashboard.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { ready });
+
+            Assert.True(dashboard.StartAllCommand.CanExecute(null));
+            Assert.False(dashboard.StopAllCommand.CanExecute(null));
+
+            ready.IsSelected = false;
+            Assert.False(dashboard.StartAllCommand.CanExecute(null));
+
+            ready.IsSelected = true;
+            ready.Status = BotStatus.Running;
+            Assert.False(dashboard.StartAllCommand.CanExecute(null));
+            Assert.True(dashboard.StopAllCommand.CanExecute(null));
+        }
+
+        [Fact]
+        public void FleetStart_AllowsSelectedOfflineEmulatorWithKnownExecutable()
+        {
+            var dashboard = NewDashboard();
+            var offline = new DeviceViewModel(new Device(
+                "127.0.0.1",
+                5556,
+                "BlueStacks",
+                "BlueStacks",
+                DeviceStatus.Offline,
+                emulatorType: "BlueStacks",
+                emulatorPath: @"C:\Program Files\BlueStacks_nxt\HD-Player.exe",
+                emulatorInstance: "Pie64"));
+            dashboard.AttachDevices(new System.Collections.ObjectModel.ObservableCollection<DeviceViewModel> { offline });
+
+            Assert.True(dashboard.StartAllCommand.CanExecute(null));
         }
 
         [Fact]

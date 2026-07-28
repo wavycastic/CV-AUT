@@ -36,7 +36,7 @@
 
             <ComboBox Grid.Column="2" ItemsSource="{Binding EmulatorFilters}"
                       SelectedItem="{Binding SelectedEmulatorFilter}"
-                      MinWidth="112" Height="32" FontSize="11" Padding="9,4"
+                      MinWidth="112" Height="34" FontSize="12" Padding="9,4"
                       VerticalAlignment="Center"/>
 
             <Button Grid.Column="3" Command="{Binding DetectDevicesCommand}" Classes="ghost"

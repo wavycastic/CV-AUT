@@ -11,7 +11,7 @@ namespace CvAut.ViewModels
     /// </summary>
     public partial class DashboardViewModel
     {
-        public string DeviceSummaryText => $"{ReadyCount} sẵn sàng trên {DeviceCount} phát hiện";
+        public string DeviceSummaryText => $"{ReadyCount}/{DeviceCount} thiết bị sẵn sàng";
 
         public bool IsIdle => State == DashboardDeviceState.Idle;
         public bool IsDetecting => State == DashboardDeviceState.Detecting;
