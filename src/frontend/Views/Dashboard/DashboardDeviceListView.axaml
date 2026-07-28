@@ -26,7 +26,7 @@
                 Background="{DynamicResource AppSurfaceBrush}"
                 BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
                 CornerRadius="{DynamicResource RadiusMd}" Padding="10">
-            <Grid RowDefinitions="Auto,*,Auto">
+            <Grid RowDefinitions="Auto,*">
                 <dashboard:DashboardDeviceListToolbarView Grid.Row="0" Margin="0,0,0,10" />
 
                 <Grid Grid.Row="1">
@@ -41,11 +41,12 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="vm:DeviceViewModel">
                                 <!--
-                                    Two-line row. The window is fixed at 480px, so name + endpoint +
-                                    play mode + badge + actions cannot share one line without the
-                                    endpoint and the play mode label both getting ellipsised.
+                                    One aligned row: selection and identity on the left, play mode and
+                                    per-row actions on the right, both blocks vertically centred across
+                                    the two text lines. Dropping the idle status pill freed the width
+                                    that previously pushed the play mode onto its own line.
                                 -->
-                                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" RowDefinitions="Auto,Auto" RowSpacing="4" VerticalAlignment="Center">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" RowDefinitions="Auto,Auto" RowSpacing="2" VerticalAlignment="Center">
                                     <!--
                                         Selection Toggle leads the row: it chooses run targets, so it must not
                                         sit among the per-row icon actions where it reads as a status stamp.
@@ -63,18 +64,26 @@
                                     <!-- Emulator Icon -->
                                     <Image Grid.RowSpan="2" Grid.Column="1" Source="{Binding EmulatorIcon}" Width="18" Height="18" 
                                            VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <!-- Device Name -->
-                                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource AppTextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}"/>
-                                    <!-- Status Pill Badge -->
-                                    <Border Grid.Row="0" Grid.Column="3" CornerRadius="12" Background="#12ffffff" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" Padding="8,3" VerticalAlignment="Center" Margin="6,0,6,0"
-                                            ToolTip.Tip="{Binding DeviceStatusText}">
-                                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                                            <Ellipse Width="6" Height="6" Fill="{Binding StatusBadgeColor}" VerticalAlignment="Center"/>
-                                            <TextBlock Text="{Binding StatusBadgeText}" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Border>
+                                    <!--
+                                        Name line. The status dot is always present, but its wording only
+                                        appears once a session is live. Before that every row would repeat
+                                        the same idle readiness pill, which said nothing the list did not
+                                        already imply; the dot colour plus the tooltip still carry it.
+                                    -->
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Spacing="6"
+                                                VerticalAlignment="Center" ToolTip.Tip="{Binding DeviceStatusText}">
+                                        <Ellipse Width="7" Height="7" Fill="{Binding StatusBadgeColor}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource AppTextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding StatusBadgeText}" IsVisible="{Binding ShowStatusLabel}" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+
+                                    <!-- Endpoint -->
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding SubTitleText}" Classes="caption" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SubTitleText}"/>
+
+                                    <!-- Play Mode Dropdown -->
+                                    <ComboBox Grid.RowSpan="2" Grid.Column="3" ItemsSource="{Binding PlayModes}" SelectedItem="{Binding SelectedPlayMode}" MinWidth="122" Height="30" FontSize="11" Padding="8,0" VerticalAlignment="Center" Margin="10,0,6,0" ToolTip.Tip="Chế độ chơi áp dụng cho instance này"/>
                                     <!-- Action Buttons. Selection lives at the head of the row, not here. -->
-                                    <StackPanel Grid.Row="0" Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                    <StackPanel Grid.RowSpan="2" Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                                         <!-- Configure button -->
                                         <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ConfigureDeviceCommand}" CommandParameter="{Binding}" Padding="0" Width="30" Height="30" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Cấu hình">
                                             <materialIcons:MaterialIcon Kind="Cog" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
@@ -85,15 +94,6 @@
                                             <materialIcons:MaterialIcon Kind="ScriptText" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
                                         </Button>
                                     </StackPanel>
-
-                                    <!--
-                                        Second line: endpoint and play mode get the full remaining width,
-                                        so neither "BlueStacks • Port 5555" nor "Làng chính" is truncated.
-                                    -->
-                                    <Grid Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                        <TextBlock Grid.Column="0" Text="{Binding SubTitleText}" Classes="caption" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SubTitleText}"/>
-                                        <ComboBox Grid.Column="1" ItemsSource="{Binding PlayModes}" SelectedItem="{Binding SelectedPlayMode}" MinWidth="124" Height="28" FontSize="11" Padding="8,0" VerticalAlignment="Center" ToolTip.Tip="Chế độ chơi áp dụng cho instance này"/>
-                                    </Grid>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -102,24 +102,6 @@
                     <dashboard:DashboardDeviceListEmptyState VerticalAlignment="Center" HorizontalAlignment="Center"
                                                              IsVisible="{Binding ShowEmptyNoDevices}" />
                 </Grid>
-
-                <!--
-                    The list rarely fills the pane, so the leftover space carries the one rule that is
-                    not self-evident from the row: what the yellow check actually decides.
-                -->
-                <Border Grid.Row="2" Margin="0,10,0,0" Padding="10,8"
-                        CornerRadius="{DynamicResource RadiusSm}"
-                        Background="{DynamicResource AppConsoleBrush}"
-                        BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1"
-                        IsVisible="{Binding DeviceCount}">
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <materialIcons:MaterialIcon Kind="CheckCircle" Width="13" Height="13"
-                                                    Foreground="{DynamicResource AppAccentBrush}"
-                                                    VerticalAlignment="Top" Margin="0,1,0,0"/>
-                        <TextBlock Text="{Binding DeviceListHintText}" Classes="caption" FontSize="11"
-                                   TextWrapping="Wrap" MaxWidth="360"/>
-                    </StackPanel>
-                </Border>
             </Grid>
         </Border>
     </Grid>

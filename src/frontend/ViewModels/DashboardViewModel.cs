@@ -58,12 +58,10 @@ namespace CvAut.ViewModels
         private DashboardDeviceState _state = DashboardDeviceState.Idle;
 
         [NotifyPropertyChangedFor(nameof(DeviceSummaryText))]
-        [NotifyPropertyChangedFor(nameof(DeviceListHintText))]
         [ObservableProperty]
         private int _deviceCount;
 
         [NotifyPropertyChangedFor(nameof(DeviceSummaryText))]
-        [NotifyPropertyChangedFor(nameof(DeviceListHintText))]
         [ObservableProperty]
         private int _readyCount;
 

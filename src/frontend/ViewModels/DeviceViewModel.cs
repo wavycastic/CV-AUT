@@ -88,6 +88,9 @@ namespace CvAut.ViewModels
         [NotifyPropertyChangedFor(nameof(DisplayStatusColor))]
         [NotifyPropertyChangedFor(nameof(ShowStartButton))]
         [NotifyPropertyChangedFor(nameof(ShowStopButton))]
+        [NotifyPropertyChangedFor(nameof(StatusBadgeText))]
+        [NotifyPropertyChangedFor(nameof(StatusBadgeColor))]
+        [NotifyPropertyChangedFor(nameof(ShowStatusLabel))]
         private BotStatus _status = BotStatus.Idle;
 
         [ObservableProperty]
@@ -108,6 +111,15 @@ namespace CvAut.ViewModels
         public string StatusBadgeText => DeviceStatusPresenter.StatusBadgeText(Status, Device.Status, Device.CanAutoStart);
 
         public string StatusBadgeColor => DeviceStatusPresenter.StatusBadgeColor(Status, Device.Status, Device.CanAutoStart);
+
+        /// <summary>
+        /// Whether the status badge should spell out its wording. Before the bot is started every
+        /// row would otherwise repeat the same idle readiness label ("Có thể bật"), which is noise:
+        /// the row is already listed because it can run. In that case the coloured dot plus
+        /// <see cref="DeviceStatusText"/> as a tooltip carries the same information without the
+        /// repeated pill. Once a session is live the wording is real news, so it comes back.
+        /// </summary>
+        public bool ShowStatusLabel => Status is not BotStatus.Idle;
 
         public string SelectionHint => IsSelected
             ? "Bỏ chọn instance này"
