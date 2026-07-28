@@ -16,7 +16,25 @@ namespace CvAut.ViewModels
         public int RunnableSelectedCount => Devices?.Count(device => device.IsSelected && device.CanStart) ?? 0;
         public int StoppableSelectedCount => Devices?.Count(device => device.IsSelected && device.CanStop) ?? 0;
 
-        public string DeviceSummaryText => $"{RunnableDeviceCount}/{DeviceCount} thiết bị có thể chạy";
+        /// <summary>
+        /// Header caption. Deliberately reports detection only: the runnable/selected counts are
+        /// owned by <see cref="FleetSelectionText"/> right below it, and repeating them here made
+        /// two adjacent lines say the same thing.
+        /// </summary>
+        public string DeviceSummaryText => DeviceCount switch
+        {
+            0 => "Chưa phát hiện instance nào",
+            1 => "Đã phát hiện 1 instance",
+            _ => $"Đã phát hiện {DeviceCount} instance",
+        };
+
+        /// <summary>
+        /// Footer hint under the device list. States the one rule the row itself cannot show:
+        /// the yellow check picks run targets, and an offline instance can still be auto-started.
+        /// </summary>
+        public string DeviceListHintText => RunnableDeviceCount < DeviceCount
+            ? "Dấu tích vàng chọn instance sẽ chạy. Instance ngoại tuyến không tìm thấy đường dẫn giả lập thì không thể tự bật."
+            : "Dấu tích vàng chọn instance sẽ chạy. Instance chưa mở sẽ được tự bật khi Khởi chạy.";
 
         public string FleetSelectionText => SelectedDeviceCount switch
         {

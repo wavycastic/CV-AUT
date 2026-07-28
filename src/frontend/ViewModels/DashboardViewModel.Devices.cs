@@ -95,6 +95,7 @@ namespace CvAut.ViewModels
             OnPropertyChanged(nameof(IsStopped));
             OnPropertyChanged(nameof(RunnableDeviceCount));
             OnPropertyChanged(nameof(DeviceSummaryText));
+            OnPropertyChanged(nameof(DeviceListHintText));
             OnPropertyChanged(nameof(SelectedDeviceCount));
             OnPropertyChanged(nameof(RunnableSelectedCount));
             OnPropertyChanged(nameof(StoppableSelectedCount));
