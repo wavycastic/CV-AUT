@@ -92,7 +92,7 @@
                                 <materialIcons:MaterialIcon Kind="{Binding IconKind}" Width="16" Height="16"
                                                             VerticalAlignment="Center"
                                                             Foreground="{Binding $parent[Button].Foreground}" />
-                                <TextBlock Text="{Binding Title}" FontSize="11"
+                                <TextBlock Text="{Binding Title}" FontSize="12"
                                            VerticalAlignment="Center"
                                            Foreground="{Binding $parent[Button].Foreground}" />
                             </StackPanel>

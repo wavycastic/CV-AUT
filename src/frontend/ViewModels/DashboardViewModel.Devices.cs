@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Text;
 using CommunityToolkit.Mvvm.Input;
 using CvAut.Models;
@@ -83,8 +84,7 @@ namespace CvAut.ViewModels
                     }
                 }
 
-                OnPropertyChanged(nameof(IsRunning));
-                OnPropertyChanged(nameof(IsStopped));
+                NotifyDevicesChanged();
             }
         }
 
@@ -93,9 +93,13 @@ namespace CvAut.ViewModels
             OnPropertyChanged(nameof(ShowGridPane));
             OnPropertyChanged(nameof(IsRunning));
             OnPropertyChanged(nameof(IsStopped));
+            StartAllCommand.NotifyCanExecuteChanged();
+            StopAllCommand.NotifyCanExecuteChanged();
         }
 
-        [RelayCommand]
+        private bool CanStartAll() => Devices?.Any(device => device.IsSelected && device.CanStart) == true;
+
+        [RelayCommand(CanExecute = nameof(CanStartAll))]
         private void StartAll()
         {
             if (Devices is null)
@@ -115,9 +119,13 @@ namespace CvAut.ViewModels
 
             OnPropertyChanged(nameof(IsRunning));
             OnPropertyChanged(nameof(IsStopped));
+            StartAllCommand.NotifyCanExecuteChanged();
+            StopAllCommand.NotifyCanExecuteChanged();
         }
 
-        [RelayCommand]
+        private bool CanStopAll() => Devices?.Any(device => device.IsSelected && device.CanStop) == true;
+
+        [RelayCommand(CanExecute = nameof(CanStopAll))]
         private void StopAll()
         {
             if (Devices is null)
@@ -137,6 +145,8 @@ namespace CvAut.ViewModels
 
             OnPropertyChanged(nameof(IsRunning));
             OnPropertyChanged(nameof(IsStopped));
+            StartAllCommand.NotifyCanExecuteChanged();
+            StopAllCommand.NotifyCanExecuteChanged();
         }
 
         [RelayCommand]
