@@ -11,7 +11,29 @@ namespace CvAut.ViewModels
     /// </summary>
     public partial class DashboardViewModel
     {
-        public string DeviceSummaryText => $"{ReadyCount}/{DeviceCount} thiết bị sẵn sàng";
+        public int RunnableDeviceCount => Devices?.Count(device => device.DeviceCanStart) ?? ReadyCount;
+        public int SelectedDeviceCount => Devices?.Count(device => device.IsSelected) ?? 0;
+        public int RunnableSelectedCount => Devices?.Count(device => device.IsSelected && device.CanStart) ?? 0;
+        public int StoppableSelectedCount => Devices?.Count(device => device.IsSelected && device.CanStop) ?? 0;
+
+        public string DeviceSummaryText => $"{RunnableDeviceCount}/{DeviceCount} thiết bị có thể chạy";
+
+        public string FleetSelectionText => SelectedDeviceCount switch
+        {
+            0 => "Chưa chọn thiết bị",
+            _ => $"{SelectedDeviceCount} đã chọn • {RunnableSelectedCount} có thể chạy",
+        };
+
+        public string FleetStartHint => SelectedDeviceCount switch
+        {
+            0 => "Chọn ít nhất một thiết bị để khởi chạy.",
+            _ when RunnableSelectedCount == 0 => "Các thiết bị đã chọn chưa thể khởi chạy.",
+            _ => $"Khởi chạy {RunnableSelectedCount} thiết bị đã chọn.",
+        };
+
+        public string FleetStopHint => StoppableSelectedCount == 0
+            ? "Không có thiết bị đã chọn nào đang chạy."
+            : $"Dừng {StoppableSelectedCount} thiết bị đã chọn.";
 
         public bool IsIdle => State == DashboardDeviceState.Idle;
         public bool IsDetecting => State == DashboardDeviceState.Detecting;

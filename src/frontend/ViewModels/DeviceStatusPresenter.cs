@@ -15,12 +15,13 @@ namespace CvAut.ViewModels
         /// so a closed-but-installed emulator (or an unauthorized/offline one) shows a clear
         /// hint instead of a bare enum name.
         /// </summary>
-        internal static string DeviceStatusText(DeviceStatus status) => status switch
+        internal static string DeviceStatusText(DeviceStatus status, bool canAutoStart) => status switch
         {
-            DeviceStatus.Ready => "Sẵn sàng",
-            DeviceStatus.Installed => "Đã cài đặt \u2014 Chạy để khởi động giả lập",
-            DeviceStatus.Unauthorized => "ADB chưa được ủy quyền \u2014 hãy chấp nhận yêu cầu gỡ lỗi USB trên giả lập",
-            DeviceStatus.Offline => "ADB ngoại tuyến \u2014 khởi động lại giả lập hoặc ADB",
+            DeviceStatus.Ready => "Sẵn sàng — sẽ dùng instance đang mở",
+            DeviceStatus.Installed => "Giả lập chưa chạy — Khởi chạy sẽ tự bật instance này",
+            DeviceStatus.Unauthorized => "ADB chưa được ủy quyền — hãy chấp nhận yêu cầu gỡ lỗi USB trên giả lập",
+            DeviceStatus.Offline when canAutoStart => "Giả lập hoặc ADB đang ngoại tuyến — Khởi chạy sẽ tự bật lại instance này",
+            DeviceStatus.Offline => "ADB ngoại tuyến — không tìm thấy trình giả lập để tự khởi động",
             _ => "Không xác định",
         };
 
@@ -46,7 +47,7 @@ namespace CvAut.ViewModels
             _ => "Gray"
         };
 
-        internal static string StatusBadgeText(BotStatus status, DeviceStatus deviceStatus) => status switch
+        internal static string StatusBadgeText(BotStatus status, DeviceStatus deviceStatus, bool canAutoStart) => status switch
         {
             BotStatus.Running => "Đang chạy",
             BotStatus.Starting => "Đang bật",
@@ -54,17 +55,27 @@ namespace CvAut.ViewModels
             BotStatus.Stopping => "Đang tắt",
             BotStatus.Error => "Lỗi",
             BotStatus.Stopped => "Đã dừng",
-            _ => deviceStatus == DeviceStatus.Ready ? "Sẵn sàng" : "Ngoại tuyến"
+            _ => deviceStatus switch
+            {
+                DeviceStatus.Ready => "Sẵn sàng",
+                DeviceStatus.Installed => "Có thể bật",
+                DeviceStatus.Offline when canAutoStart => "Có thể bật",
+                DeviceStatus.Unauthorized => "Chưa ủy quyền",
+                _ => "Ngoại tuyến",
+            }
         };
 
-        internal static string StatusBadgeColor(BotStatus status, DeviceStatus deviceStatus) => status switch
+        internal static string StatusBadgeColor(BotStatus status, DeviceStatus deviceStatus, bool canAutoStart) => status switch
         {
             BotStatus.Running => "#4caf50",
             BotStatus.Starting => "#2196f3",
             BotStatus.Paused => "#ff9800",
             BotStatus.Error => "#f44336",
             BotStatus.Stopping => "#9e9e9e",
-            _ => deviceStatus == DeviceStatus.Ready ? "#4caf50" : "#757575"
+            _ when deviceStatus == DeviceStatus.Ready => "#4caf50",
+            _ when deviceStatus == DeviceStatus.Installed || (deviceStatus == DeviceStatus.Offline && canAutoStart) => "#eab308",
+            _ when deviceStatus == DeviceStatus.Unauthorized => "#f97316",
+            _ => "#757575"
         };
 
         /// <summary>
