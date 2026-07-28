@@ -28,14 +28,6 @@ namespace CvAut.ViewModels
             _ => $"Đã phát hiện {DeviceCount} instance",
         };
 
-        /// <summary>
-        /// Footer hint under the device list. States the one rule the row itself cannot show:
-        /// the yellow check picks run targets, and an offline instance can still be auto-started.
-        /// </summary>
-        public string DeviceListHintText => RunnableDeviceCount < DeviceCount
-            ? "Dấu tích vàng chọn instance sẽ chạy. Instance ngoại tuyến không tìm thấy đường dẫn giả lập thì không thể tự bật."
-            : "Dấu tích vàng chọn instance sẽ chạy. Instance chưa mở sẽ được tự bật khi Khởi chạy.";
-
         public string FleetSelectionText => SelectedDeviceCount switch
         {
             0 => "Chưa chọn thiết bị",
