@@ -47,14 +47,15 @@
                                     <!-- Device Name -->
                                     <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource AppTextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                     <!-- Subtitle Info -->
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SubTitleText}" Classes="caption" FontSize="10" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SubTitleText}" Classes="caption" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                     <!-- Play Mode Dropdown -->
-                                    <ComboBox Grid.RowSpan="2" Grid.Column="2" ItemsSource="{Binding PlayModes}" SelectedItem="{Binding SelectedPlayMode}" Width="98" Height="26" FontSize="11" Padding="5,2" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <ComboBox Grid.RowSpan="2" Grid.Column="2" ItemsSource="{Binding PlayModes}" SelectedItem="{Binding SelectedPlayMode}" Width="98" Height="32" FontSize="12" Padding="6,2" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <!-- Status Pill Badge -->
-                                    <Border Grid.RowSpan="2" Grid.Column="3" CornerRadius="10" Background="#12ffffff" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" Padding="6,2" VerticalAlignment="Center" Margin="0,0,8,0">
-                                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                    <Border Grid.RowSpan="2" Grid.Column="3" CornerRadius="12" Background="#12ffffff" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" Padding="8,3" VerticalAlignment="Center" Margin="0,0,8,0"
+                                            ToolTip.Tip="{Binding DeviceStatusText}">
+                                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                                             <Ellipse Width="6" Height="6" Fill="{Binding StatusBadgeColor}" VerticalAlignment="Center"/>
-                                            <TextBlock Text="{Binding StatusBadgeText}" FontSize="10" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding StatusBadgeText}" FontSize="11" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Border>
                                     <!-- Action Buttons -->
@@ -64,17 +65,17 @@
                                                       IsChecked="{Binding IsSelected}" 
                                                       Background="Transparent"
                                                       BorderThickness="0"
-                                                      Padding="0" Width="26" Height="26" 
+                                                      Padding="0" Width="32" Height="32" 
                                                       VerticalAlignment="Center" HorizontalAlignment="Center" 
                                                       ToolTip.Tip="Chọn thiết bị"/>
 
                                         <!-- Configure button -->
-                                        <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ConfigureDeviceCommand}" CommandParameter="{Binding}" Padding="0" Width="26" Height="26" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Cấu hình">
+                                        <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ConfigureDeviceCommand}" CommandParameter="{Binding}" Padding="0" Width="32" Height="32" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Cấu hình">
                                             <materialIcons:MaterialIcon Kind="Cog" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
                                         </Button>
 
                                         <!-- Logs button -->
-                                        <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ShowDeviceLogsCommand}" CommandParameter="{Binding}" Padding="0" Width="26" Height="26" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Nhật ký">
+                                        <Button Classes="ghost" Command="{Binding #DeviceList.DataContext.ShowDeviceLogsCommand}" CommandParameter="{Binding}" Padding="0" Width="32" Height="32" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip.Tip="Nhật ký">
                                             <materialIcons:MaterialIcon Kind="ScriptText" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}"/>
                                         </Button>
                                     </StackPanel>
