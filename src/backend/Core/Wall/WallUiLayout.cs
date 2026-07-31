@@ -16,6 +16,10 @@ namespace CvAut
         internal static readonly Point PanelCheckPoint = new(800, 750);
         // Builder suggestions button at the top center
         internal static readonly Point BuilderMenuPoint = new(738, 36);
+        // Regular-builder icon and x/y builder counter in the Main Village header.
+        // Calibrated from 1600x900 screenshots and the legacy normalized builders_icon ROI.
+        internal static readonly Rect RegularBuilderIconRoi = new(700, 10, 110, 90);
+        internal static readonly Rect BuilderCountRoi = new(790, 29, 65, 30);
         // Safe point at the edge of the map, tapped to dismiss leftover menus/popups
         internal static readonly Point HomeMenuPoint = new(140, 606);
         // Swipe coordinates used to scroll the builder suggestions panel
@@ -37,6 +41,8 @@ namespace CvAut
         internal const int RedCostPixelCountThreshold = 120;
         // Template match threshold for finding walls (kept high to avoid matching other objects)
         internal const double WallSearchThreshold = 0.90;
+        internal const double RegularBuilderIconThreshold = 0.95;
+        internal const double BuilderCountMinimumConfidence = 0.60;
         internal const int SwipeDurationMs = 600;
         internal const double MaxCostMismatchRatio = 1.15;
         internal const int SupportedScreenshotWidth = 1600;
