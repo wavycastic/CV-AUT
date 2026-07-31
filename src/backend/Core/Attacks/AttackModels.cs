@@ -6,9 +6,9 @@ namespace CvAut;
 
 internal sealed class AttackDelayConfig
 {
-    public int TroopDeployDelayMs { get; init; } = 60;
-    public int RageSpellDelayMs { get; init; } = 650;
-    public int FreezeSpellDelayMs { get; init; } = 850;
+    public int TroopDeployDelayMs { get; init; } = 35;
+    public int RageSpellDelayMs { get; init; } = 350;
+    public int FreezeSpellDelayMs { get; init; } = 450;
     public int GrandWardenAbilityDelayMs { get; init; } = 2500;
 }
 

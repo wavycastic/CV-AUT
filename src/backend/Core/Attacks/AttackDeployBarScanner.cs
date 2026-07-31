@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using OpenCvSharp;
 
@@ -37,9 +39,14 @@ internal sealed class AttackDeployBarScanner
     {
         Console.WriteLine("[ATTACK-CS] phase=scan_bar status=start");
         using Mat? screenshot = _adb.TakeScreenshot();
-        if (screenshot == null || screenshot.Empty()) return AttackDeployBarSnapshot.Empty;
+        if (screenshot == null || screenshot.Empty())
+        {
+            Console.WriteLine("[ATTACK-CS WARNING] phase=scan_bar status=fail reason=screenshot_empty");
+            return AttackDeployBarSnapshot.Empty;
+        }
 
         var tabs = new Dictionary<string, Point>(StringComparer.OrdinalIgnoreCase);
+        var scores = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         var eventTroops = new List<EventTroopTab>();
         var categories = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -61,29 +68,60 @@ internal sealed class AttackDeployBarScanner
         foreach ((string key, string template) in categories)
         {
             double threshold = key is "rage" or "freeze" ? 0.45 : MatchThreshold;
-            Point? point = FindWithFallback(screenshot, key, template, threshold, out _);
+            Point? point = FindWithFallback(screenshot, key, template, threshold, out double score);
             if (point == null || IsDuplicate(point.Value, tabs, key)) continue;
             tabs[key] = point.Value;
+            scores[key] = score;
         }
 
-        Rect wide = Rect.FromLTRB(0, 650, screenshot.Width, screenshot.Height);
-        Point? siege = _vision.FindElement(screenshot, "troops/siege_with_troops", MatchThreshold, DeployBarRoi, out _)
-            ?? _vision.FindElement(screenshot, "troops/icon_siege", 0.42, wide, out _)
-            ?? _vision.FindElement(screenshot, "troops/empty_siege", 0.42, wide, out _);
-        if (siege != null) tabs["siege_machine"] = siege.Value;
+        Point? siege = _vision.FindElement(screenshot, "troops/siege_with_troops", MatchThreshold, DeployBarRoi, out double siegeScore);
+        if (siege != null && !IsDuplicate(siege.Value, tabs, "siege_machine"))
+        {
+            tabs["siege_machine"] = siege.Value;
+            scores["siege_machine"] = siegeScore;
+        }
 
         foreach ((string key, string template, int count) in EnumerateEventTemplates())
         {
-            Point? point = _vision.FindElement(screenshot, template, MatchThreshold, DeployBarRoi, out _);
+            Point? point = _vision.FindElement(screenshot, template, MatchThreshold, DeployBarRoi, out double score);
             if (point == null || IsDuplicate(point.Value, tabs, key)) continue;
             tabs[key] = point.Value;
+            scores[key] = score;
             eventTroops.Add(new EventTroopTab(key, point.Value, count));
         }
 
-        foreach (string key in required.Where(key => !tabs.ContainsKey(key)))
-            Console.WriteLine($"[ATTACK-CS WARNING] phase=scan_bar status=missing item={key} reason=required_tab_not_found");
+        string[] missing = required.Where(key => !tabs.ContainsKey(key)).ToArray();
+        string debug = missing.Length > 0 ? DumpScanDebug(screenshot) : "not_captured";
+        foreach (string key in missing)
+            Console.WriteLine($"[ATTACK-CS WARNING] phase=scan_bar status=missing item={key} reason=required_tab_not_found debug_image=\"{debug}\"");
+
+        string tabSummary = tabs.Count == 0
+            ? "none"
+            : string.Join(';', tabs
+                .OrderBy(pair => pair.Value.X)
+                .Select(pair => FormattableString.Invariant(
+                    $"{pair.Key}@{pair.Value.X},{pair.Value.Y}#{scores.GetValueOrDefault(pair.Key):F2}")));
+        Console.WriteLine($"[ATTACK-CS] phase=scan_bar status=success found={tabs.Count} tabs=\"{tabSummary}\" missing=\"{(missing.Length == 0 ? "none" : string.Join(',', missing))}\" debug_image=\"{debug}\"");
 
         return new AttackDeployBarSnapshot(tabs, eventTroops);
+    }
+
+    private static string DumpScanDebug(Mat screenshot)
+    {
+        try
+        {
+            string directory = Path.Combine("logs", "attack_scan_debug");
+            Directory.CreateDirectory(directory);
+            string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture);
+            Rect roi = ImageUtils.ClampRect(DeployBarRoi, screenshot.Width, screenshot.Height);
+            using Mat crop = new(screenshot, roi);
+            string path = Path.Combine(directory, $"{stamp}_deploy_bar.png");
+            return Cv2.ImWrite(path, crop) ? path.Replace('\\', '/') : "capture_failed:write";
+        }
+        catch (Exception ex)
+        {
+            return $"capture_failed:{ex.GetType().Name}";
+        }
     }
 
     private Point? FindWithFallback(Mat screenshot, string key, string template, double threshold, out double score)
@@ -107,7 +145,7 @@ internal sealed class AttackDeployBarScanner
         return null;
     }
 
-    private static bool IsDuplicate(Point candidate, IReadOnlyDictionary<string, Point> tabs, string candidateName)
+    internal static bool IsDuplicate(Point candidate, IReadOnlyDictionary<string, Point> tabs, string candidateName)
     {
         foreach ((string name, Point point) in tabs)
         {
