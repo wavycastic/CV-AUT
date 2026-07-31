@@ -43,8 +43,8 @@ internal sealed class Attacks : IAttackStageOperations
         _coordinateProvider = new DefaultAttackCoordinateProvider(coordinates);
         _scanner = new AttackDeployBarScanner(adb, vision, root);
         var countReader = new TroopCountReader(adb, vision);
-        _troops = new AttackTroopDeploymentStrategy(adb, _delays, countReader);
-        _spells = new AttackSpellDeploymentStrategy(adb, _delays);
+        _troops = new AttackTroopDeploymentStrategy(adb, _delays, countReader, _scanner);
+        _spells = new AttackSpellDeploymentStrategy(adb, _delays, countReader, _scanner);
         _heroes = new AttackHeroDeploymentService(adb, _delays);
         _pipeline = new AttackPipeline(this);
     }
@@ -76,7 +76,12 @@ internal sealed class Attacks : IAttackStageOperations
         => _troops.DeployTroop(troopKey.ToLowerInvariant(), token);
 
     public void EnsureTroopFullyDeployed(string troopKey, CancellationToken token = default)
-        => _troops.EnsureFullyDeployed(troopKey.ToLowerInvariant(), token);
+    {
+        string key = troopKey.ToLowerInvariant();
+        bool electro = key == "e_drag";
+        AttackDeployBarSnapshot currentBar = _scanner.Scan(electro, Array.Empty<string>());
+        _troops.EnsureFullyDeployed(key, currentBar, token);
+    }
 
     public void DeploySpells(string spellKey, CancellationToken token = default)
         => _spells.DeploySpell(spellKey.ToLowerInvariant(), token);
@@ -125,7 +130,9 @@ internal sealed class Attacks : IAttackStageOperations
     AttackStageResult IAttackStageOperations.Complete(AttackContext context)
     {
         string primary = context.NormalizedStrategy == "ElectroDragon_Attack" ? "e_drag" : "dragon";
-        _troops.EnsureFullyDeployed(primary, context.CancellationToken);
+        bool electro = primary == "e_drag";
+        AttackDeployBarSnapshot currentBar = _scanner.Scan(electro, Array.Empty<string>());
+        _troops.EnsureFullyDeployed(primary, currentBar, context.CancellationToken);
         return context.IsCancellationRequested ? AttackStageResult.Cancelled() : AttackStageResult.Success();
     }
 
@@ -139,6 +146,6 @@ internal sealed class Attacks : IAttackStageOperations
 
     private static IReadOnlyCollection<string> RequiredTabs(bool electro)
         => electro
-            ? new[] { "e_drag", "balloon", "rage", "freeze", "siege_machine" }
-            : new[] { "dragon", "balloon", "rage", "freeze", "siege_machine" };
+            ? new[] { "e_drag", "balloon", "rage", "freeze" }
+            : new[] { "dragon", "balloon", "rage", "freeze" };
 }
