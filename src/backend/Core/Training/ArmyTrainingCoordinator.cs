@@ -48,6 +48,7 @@ internal sealed class ArmyTrainingCoordinator
         TrainingReadiness readiness = _policy.Evaluate(state);
         if (readiness.IsReady)
         {
+            Console.WriteLine("[TRAIN] phase=smart_train status=skip reason=army_ready");
             Close();
             return true;
         }

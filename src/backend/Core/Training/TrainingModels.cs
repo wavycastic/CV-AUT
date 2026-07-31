@@ -9,10 +9,17 @@ internal sealed record ArmySpec(
     string[] Spells,
     string Siege);
 
+internal enum TrainingDetectionState
+{
+    Unknown,
+    NotReady,
+    Ready
+}
+
 internal sealed record ArmyState(
-    bool ArmyReady,
-    bool SpellsReady,
-    bool SiegeReady,
+    TrainingDetectionState Army,
+    TrainingDetectionState Spells,
+    TrainingDetectionState Siege,
     bool HeroesReady);
 
 internal sealed record TrainingReadiness(
