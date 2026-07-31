@@ -108,6 +108,15 @@ namespace CvAut.Backend.Tests
                 AttackTroopDeploymentStrategy.ResolveTapCount(detectedCount, availableCoordinates));
         }
 
+
+        [Theory]
+        [InlineData("reason=quantity_badge_absent tab=178,815", true)]
+        [InlineData("reason=no_candidate_accepted", false)]
+        public void TroopCleanup_OnlyTreatsExplicitMissingBadgeAsZero(string diagnostic, bool expected)
+        {
+            Assert.Equal(expected, AttackTroopDeploymentStrategy.IsQuantityBadgeAbsent(diagnostic));
+        }
+
         [Fact]
         public void DeployBarScanner_RejectsSiegeAtDragonLocation()
         {
