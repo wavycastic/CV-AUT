@@ -131,8 +131,16 @@ internal sealed class Attacks : IAttackStageOperations
     {
         string primary = context.NormalizedStrategy == "ElectroDragon_Attack" ? "e_drag" : "dragon";
         bool electro = primary == "e_drag";
-        AttackDeployBarSnapshot currentBar = _scanner.Scan(electro, Array.Empty<string>());
-        _troops.EnsureFullyDeployed(primary, currentBar, context.CancellationToken);
+        AttackDeployBarSnapshot currentBar = _scanner.Scan(
+            electro,
+            new[] { primary, "balloon" },
+            requiredOnly: true,
+            reportMissing: false);
+        foreach (string key in new[] { primary, "balloon" })
+        {
+            if (context.IsCancellationRequested) return AttackStageResult.Cancelled();
+            _troops.EnsureFullyDeployed(key, currentBar, context.CancellationToken);
+        }
         return context.IsCancellationRequested ? AttackStageResult.Cancelled() : AttackStageResult.Success();
     }
 

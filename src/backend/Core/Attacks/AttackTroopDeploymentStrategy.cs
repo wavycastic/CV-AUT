@@ -94,7 +94,17 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
         }
 
         bool includeElectroDragon = key.Equals("e_drag", StringComparison.OrdinalIgnoreCase);
-        AttackDeployBarSnapshot currentBar = _scanner.Scan(includeElectroDragon, new[] { key });
+        using Mat? scanFrame = _adb.TakeScreenshot();
+        if (scanFrame == null || scanFrame.Empty())
+        {
+            Console.WriteLine($"[ATTACK-CS WARNING] phase=deploy status=fail item={key} reason=screenshot_empty");
+            return false;
+        }
+        AttackDeployBarSnapshot currentBar = _scanner.Scan(
+            scanFrame,
+            includeElectroDragon,
+            new[] { key },
+            requiredOnly: true);
         if (!currentBar.Tabs.TryGetValue(key, out Point tab))
         {
             Console.WriteLine($"[ATTACK-CS WARNING] phase=deploy status=fail item={key} reason=tab_not_found");
@@ -110,7 +120,14 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
         }
         else
         {
-            detectedCount = ReadTroopCount(key, currentBar, points.Count, token, out confidence, out string countDiagnostic);
+            detectedCount = ReadTroopCount(
+                key,
+                currentBar,
+                points.Count,
+                token,
+                out confidence,
+                out string countDiagnostic,
+                scanFrame);
             if (detectedCount < 0)
             {
                 Console.WriteLine($"[ATTACK-CS WARNING] phase=deploy status=fail item={key} reason=count_unreadable confidence={confidence:F2} detail=\"{LogSafe(countDiagnostic)}\"");
@@ -128,22 +145,26 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
 
         Stopwatch watch = Stopwatch.StartNew();
         _adb.Tap(tab.X, tab.Y);
-        if (token.WaitHandle.WaitOne(_adb.FramePacer.AdjustDelay(100)))
+        if (token.WaitHandle.WaitOne(60))
         {
             Console.WriteLine($"[ATTACK-CS WARNING] phase=deploy status=cancelled item={key} reason=cancelled_after_tab_select");
             return false;
         }
         var taps = new List<Point>(tapCount);
         for (int index = 0; index < tapCount; index++) taps.Add(Jitter(points[index]));
-        _adb.TapSequenceSafeFast(taps, 8, _delays.TroopDeployDelayMs, token);
+        if (!DeployPacedTaps(key, taps, token)) return false;
         watch.Stop();
-        Console.WriteLine($"[ATTACK-CS] phase=deploy status=success item={key} detected_count={detectedCount} confidence={confidence:F2} tap_count={taps.Count} tab={tab.X},{tab.Y} direction={_direction} delay_ms={_delays.TroopDeployDelayMs} first={taps[0].X},{taps[0].Y} last={taps[^1].X},{taps[^1].Y} duration={watch.ElapsedMilliseconds}ms");
+        Console.WriteLine($"[ATTACK-CS] phase=deploy status=success item={key} detected_count={detectedCount} confidence={confidence:F2} tap_count={taps.Count} tab={tab.X},{tab.Y} direction={_direction} input_mode=single_command first={taps[0].X},{taps[0].Y} last={taps[^1].X},{taps[^1].Y} duration={watch.ElapsedMilliseconds}ms");
 
         if (!key.Equals("siege_machine", StringComparison.OrdinalIgnoreCase)
             && !token.IsCancellationRequested
-            && !token.WaitHandle.WaitOne(120))
+            && !token.WaitHandle.WaitOne(80))
         {
-            AttackDeployBarSnapshot refreshed = _scanner.Scan(includeElectroDragon, Array.Empty<string>());
+            AttackDeployBarSnapshot refreshed = _scanner.Scan(
+                includeElectroDragon,
+                new[] { key },
+                requiredOnly: true,
+                reportMissing: false);
             EnsureFullyDeployed(key, refreshed, token);
         }
         return !token.IsCancellationRequested;
@@ -152,40 +173,52 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
     public void EnsureFullyDeployed(string key, AttackDeployBarSnapshot currentBar, CancellationToken token)
     {
         if (token.IsCancellationRequested || _coordinates == null) return;
-        AttackDeployBarSnapshot verifiedBar = currentBar;
         bool includeElectroDragon = key.Equals("e_drag", StringComparison.OrdinalIgnoreCase);
-        for (int retry = 1; retry <= 2 && !verifiedBar.Tabs.ContainsKey(key); retry++)
-        {
-            if (token.WaitHandle.WaitOne(200)) return;
-            verifiedBar = _scanner.Scan(includeElectroDragon, Array.Empty<string>());
-        }
-        if (!verifiedBar.Tabs.TryGetValue(key, out Point tab))
-        {
-            Console.WriteLine($"[ATTACK-CS] phase=validate_remaining status=success item={key} remaining=0 reason=tab_absent_after_retries");
-            return;
-        }
         if (!_coordinates.FallbackTroops.TryGetValue(key, out IReadOnlyList<Point>? fallback) || fallback.Count == 0) return;
         if (!_coordinates.Troops.TryGetValue(key, out IReadOnlyList<Point>? planned) || planned.Count == 0) return;
-        if (token.WaitHandle.WaitOne(200)) return;
+        AttackDeployBarSnapshot probe = currentBar;
 
-        int remaining = ReadTroopCount(key, verifiedBar, planned.Count, token, out double confidence, out string countDiagnostic);
-        if (remaining < 0)
+        for (int round = 1; round <= 3 && !token.IsCancellationRequested; round++)
         {
-            Console.WriteLine($"[ATTACK-CS WARNING] phase=validate_remaining status=skip item={key} reason=ocr_unreadable confidence={confidence:F2} detail=\"{LogSafe(countDiagnostic)}\"");
-            return;
+            if (!probe.Tabs.TryGetValue(key, out Point tab))
+            {
+                Console.WriteLine($"[ATTACK-CS] phase=validate_remaining status=success item={key} remaining=0 reason=tab_absent round={round}");
+                return;
+            }
+
+            int remaining = ReadTroopCount(key, probe, planned.Count, token, out double confidence, out string countDiagnostic);
+            if (remaining < 0)
+            {
+                if (IsQuantityBadgeAbsent(countDiagnostic))
+                {
+                    Console.WriteLine($"[ATTACK-CS] phase=validate_remaining status=success item={key} remaining=0 reason=quantity_badge_absent round={round}");
+                    return;
+                }
+                Console.WriteLine($"[ATTACK-CS WARNING] phase=validate_remaining status=skip item={key} reason=ocr_unreadable confidence={confidence:F2} detail=\"{LogSafe(countDiagnostic)}\"");
+                return;
+            }
+            if (remaining == 0)
+            {
+                Console.WriteLine($"[ATTACK-CS] phase=validate_remaining status=success item={key} remaining=0 reason=ocr_zero confidence={confidence:F2} detail=\"{LogSafe(countDiagnostic)}\"");
+                return;
+            }
+
+            int tapCount = ResolveTapCount(remaining, fallback.Count);
+            Console.WriteLine($"[ATTACK-CS] phase=validate_remaining status=fallback item={key} remaining={remaining} confidence={confidence:F2} tap_count={tapCount} tab={tab.X},{tab.Y} round={round} detail=\"{LogSafe(countDiagnostic)}\"");
+            _adb.Tap(tab.X, tab.Y);
+            if (token.WaitHandle.WaitOne(60)) return;
+            var taps = new List<Point>(tapCount);
+            for (int index = 0; index < tapCount; index++) taps.Add(Jitter(fallback[index]));
+            if (!DeployPacedTaps(key, taps, token)) return;
+            if (token.WaitHandle.WaitOne(200)) return;
+            probe = _scanner.Scan(
+                includeElectroDragon,
+                new[] { key },
+                requiredOnly: true,
+                reportMissing: false);
         }
-        if (remaining == 0)
-        {
-            Console.WriteLine($"[ATTACK-CS] phase=validate_remaining status=success item={key} remaining=0 reason=ocr_zero confidence={confidence:F2} detail=\"{LogSafe(countDiagnostic)}\"");
-            return;
-        }
-        int tapCount = ResolveTapCount(remaining, fallback.Count);
-        Console.WriteLine($"[ATTACK-CS] phase=validate_remaining status=fallback item={key} remaining={remaining} confidence={confidence:F2} tap_count={tapCount} tab={tab.X},{tab.Y} detail=\"{LogSafe(countDiagnostic)}\"");
-        _adb.Tap(tab.X, tab.Y);
-        if (token.WaitHandle.WaitOne(_adb.FramePacer.AdjustDelay(100))) return;
-        var taps = new List<Point>(tapCount);
-        for (int index = 0; index < tapCount; index++) taps.Add(Jitter(fallback[index]));
-        _adb.TapSequenceSafeFast(taps, 8, _delays.TroopDeployDelayMs, token);
+
+        Console.WriteLine($"[ATTACK-CS WARNING] phase=validate_remaining status=skip item={key} reason=max_cleanup_rounds");
     }
 
     private void DeployIfPresent(string key, CancellationToken token)
@@ -198,10 +231,10 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
         if (_coordinates == null || !_bar.Tabs.TryGetValue(key, out Point tab)) return;
         if (!_coordinates.Troops.TryGetValue("dragon", out IReadOnlyList<Point>? points) || points.Count == 0) return;
         _adb.Tap(tab.X, tab.Y);
-        if (token.WaitHandle.WaitOne(_adb.FramePacer.AdjustDelay(100))) return;
+        if (token.WaitHandle.WaitOne(60)) return;
         var taps = new List<Point>(count);
         for (int index = 0; index < count; index++) taps.Add(Jitter(points[index % points.Count]));
-        _adb.TapSequenceSafeFast(taps, 8, _delays.TroopDeployDelayMs, token);
+        _ = DeployPacedTaps(key, taps, token);
     }
 
     private int ReadTroopCount(
@@ -210,7 +243,8 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
         int maximumExpected,
         CancellationToken token,
         out double confidence,
-        out string diagnostic)
+        out string diagnostic,
+        Mat? firstFrame = null)
     {
         confidence = 0;
         diagnostic = string.Empty;
@@ -221,13 +255,22 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
 
         for (int attempt = 1; attempt <= 3 && !token.IsCancellationRequested; attempt++)
         {
-            int value = _countReader.Read(
-                key,
-                bar.Tabs,
-                maximumExpected,
-                out double sampleConfidence,
-                out string sampleDiagnostic,
-                captureDebug: attempt == 3);
+            int value = attempt == 1 && firstFrame != null
+                ? _countReader.Read(
+                    firstFrame,
+                    key,
+                    bar.Tabs,
+                    maximumExpected,
+                    out double sampleConfidence,
+                    out string sampleDiagnostic,
+                    captureDebug: false)
+                : _countReader.Read(
+                    key,
+                    bar.Tabs,
+                    maximumExpected,
+                    out sampleConfidence,
+                    out sampleDiagnostic,
+                    captureDebug: attempt == 3);
             attemptDetails.Add($"attempt={attempt}:value={value}:confidence={sampleConfidence:F2}:{sampleDiagnostic}");
             Console.WriteLine($"[ATTACK-CS] phase=read_troop_count status=sample item={key} attempt={attempt} value={value} confidence={sampleConfidence:F2} max_expected={maximumExpected} detail=\"{LogSafe(sampleDiagnostic)}\"");
             if (value >= 0)
@@ -279,6 +322,16 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
         => detectedCount <= 0 || availableCoordinates <= 0
             ? 0
             : Math.Min(detectedCount, availableCoordinates);
+
+    internal static bool IsQuantityBadgeAbsent(string diagnostic)
+        => diagnostic.Contains("reason=quantity_badge_absent", StringComparison.Ordinal);
+
+    private bool DeployPacedTaps(string key, IReadOnlyList<Point> taps, CancellationToken token)
+    {
+        if (token.IsCancellationRequested || taps.Count == 0) return false;
+        _adb.TapSequence(taps);
+        return !token.IsCancellationRequested;
+    }
 
     private Point Jitter(Point point)
     {

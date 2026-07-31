@@ -35,15 +35,27 @@ internal sealed class AttackDeployBarScanner
         _templatesPath = templatesPath;
     }
 
-    public AttackDeployBarSnapshot Scan(bool includeElectroDragon, IReadOnlyCollection<string> required)
+    public AttackDeployBarSnapshot Scan(
+        bool includeElectroDragon,
+        IReadOnlyCollection<string> required,
+        bool requiredOnly = false,
+        bool reportMissing = true)
+    {
+        using Mat? screenshot = _adb.TakeScreenshot();
+        return screenshot == null || screenshot.Empty()
+            ? LogEmptyScreenshot()
+            : Scan(screenshot, includeElectroDragon, required, requiredOnly, reportMissing);
+    }
+
+    public AttackDeployBarSnapshot Scan(
+        Mat screenshot,
+        bool includeElectroDragon,
+        IReadOnlyCollection<string> required,
+        bool requiredOnly = false,
+        bool reportMissing = true)
     {
         Console.WriteLine("[ATTACK-CS] phase=scan_bar status=start");
-        using Mat? screenshot = _adb.TakeScreenshot();
-        if (screenshot == null || screenshot.Empty())
-        {
-            Console.WriteLine("[ATTACK-CS WARNING] phase=scan_bar status=fail reason=screenshot_empty");
-            return AttackDeployBarSnapshot.Empty;
-        }
+        if (screenshot == null || screenshot.Empty()) return LogEmptyScreenshot();
 
         var tabs = new Dictionary<string, Point>(StringComparer.OrdinalIgnoreCase);
         var scores = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
@@ -64,6 +76,13 @@ internal sealed class AttackDeployBarScanner
             ["rc"] = "heroes/rc"
         };
         if (includeElectroDragon) categories["e_drag"] = "troops/E_Drag";
+        if (requiredOnly)
+        {
+            var requested = new HashSet<string>(required, StringComparer.OrdinalIgnoreCase);
+            categories = categories
+                .Where(pair => requested.Contains(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+        }
 
         foreach ((string key, string template) in categories)
         {
@@ -74,14 +93,20 @@ internal sealed class AttackDeployBarScanner
             scores[key] = score;
         }
 
-        Point? siege = _vision.FindElement(screenshot, "troops/siege_with_troops", MatchThreshold, DeployBarRoi, out double siegeScore);
+        double siegeScore = 0;
+        bool scanSiege = !requiredOnly || required.Contains("siege_machine", StringComparer.OrdinalIgnoreCase);
+        Point? siege = scanSiege
+            ? _vision.FindElement(screenshot, "troops/siege_with_troops", MatchThreshold, DeployBarRoi, out siegeScore)
+            : null;
         if (siege != null && !IsDuplicate(siege.Value, tabs, "siege_machine"))
         {
             tabs["siege_machine"] = siege.Value;
             scores["siege_machine"] = siegeScore;
         }
 
-        foreach ((string key, string template, int count) in EnumerateEventTemplates())
+        foreach ((string key, string template, int count) in requiredOnly
+            ? Enumerable.Empty<(string Key, string Template, int Count)>()
+            : EnumerateEventTemplates())
         {
             Point? point = _vision.FindElement(screenshot, template, MatchThreshold, DeployBarRoi, out double score);
             if (point == null || IsDuplicate(point.Value, tabs, key)) continue;
@@ -90,7 +115,9 @@ internal sealed class AttackDeployBarScanner
             eventTroops.Add(new EventTroopTab(key, point.Value, count));
         }
 
-        string[] missing = required.Where(key => !tabs.ContainsKey(key)).ToArray();
+        string[] missing = reportMissing
+            ? required.Where(key => !tabs.ContainsKey(key)).ToArray()
+            : Array.Empty<string>();
         string debug = missing.Length > 0 ? DumpScanDebug(screenshot) : "not_captured";
         foreach (string key in missing)
             Console.WriteLine($"[ATTACK-CS WARNING] phase=scan_bar status=missing item={key} reason=required_tab_not_found debug_image=\"{debug}\"");
@@ -104,6 +131,12 @@ internal sealed class AttackDeployBarScanner
         Console.WriteLine($"[ATTACK-CS] phase=scan_bar status=success found={tabs.Count} tabs=\"{tabSummary}\" missing=\"{(missing.Length == 0 ? "none" : string.Join(',', missing))}\" debug_image=\"{debug}\"");
 
         return new AttackDeployBarSnapshot(tabs, eventTroops);
+    }
+
+    private static AttackDeployBarSnapshot LogEmptyScreenshot()
+    {
+        Console.WriteLine("[ATTACK-CS WARNING] phase=scan_bar status=fail reason=screenshot_empty");
+        return AttackDeployBarSnapshot.Empty;
     }
 
     private static string DumpScanDebug(Mat screenshot)

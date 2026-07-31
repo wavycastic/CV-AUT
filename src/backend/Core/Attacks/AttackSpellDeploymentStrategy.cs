@@ -52,15 +52,23 @@ internal sealed class AttackSpellDeploymentStrategy : ISpellDeploymentStrategy
     public AttackStageResult Deploy(AttackContext context)
     {
         CancellationToken token = context.CancellationToken;
-        if (token.WaitHandle.WaitOne(650)) return AttackStageResult.Cancelled();
+        if (token.WaitHandle.WaitOne(250)) return AttackStageResult.Cancelled();
         if (_coordinates == null)
             return Degraded("coordinates_unavailable");
 
         int maxRage = _coordinates.RageInitial.Count + _coordinates.RageRemaining.Count;
         int maxFreeze = _coordinates.Freeze.Count;
-        AttackDeployBarSnapshot initialBar = _scanner.Scan(false, new[] { "rage", "freeze" });
-        int rage = ReadSpellCount("rage", initialBar, maxRage, token, out double rageConfidence, out string rageDiagnostic);
-        int freeze = ReadSpellCount("freeze", initialBar, maxFreeze, token, out double freezeConfidence, out string freezeDiagnostic);
+        using Mat? initialFrame = _adb.TakeScreenshot();
+        if (initialFrame == null || initialFrame.Empty())
+            return Degraded("initial_spell_frame_empty");
+        AttackDeployBarSnapshot initialBar = _scanner.Scan(
+            initialFrame,
+            false,
+            new[] { "rage", "freeze" },
+            requiredOnly: true);
+        _bar = initialBar;
+        int rage = ReadSpellCount("rage", initialBar, maxRage, token, out double rageConfidence, out string rageDiagnostic, firstFrame: initialFrame);
+        int freeze = ReadSpellCount("freeze", initialBar, maxFreeze, token, out double freezeConfidence, out string freezeDiagnostic, firstFrame: initialFrame);
         if (token.IsCancellationRequested) return AttackStageResult.Cancelled();
         if (rage < 0 || freeze < 0)
         {
@@ -140,7 +148,7 @@ internal sealed class AttackSpellDeploymentStrategy : ISpellDeploymentStrategy
         int maximumExpected = tabKey == "rage"
             ? _coordinates.RageInitial.Count + _coordinates.RageRemaining.Count
             : _coordinates.Freeze.Count;
-        AttackDeployBarSnapshot bar = _scanner.Scan(false, new[] { tabKey });
+        AttackDeployBarSnapshot bar = _scanner.Scan(false, new[] { tabKey }, requiredOnly: true);
         int count = ReadSpellCount(tabKey, bar, maximumExpected, token, out _, out _);
         if (count <= 0) return;
         int planned = Math.Min(count, points.Count);
@@ -222,13 +230,30 @@ internal sealed class AttackSpellDeploymentStrategy : ISpellDeploymentStrategy
         Console.WriteLine($"[ATTACK-CS] phase=deploy_spell status=planned item={tabKey} group={group} count_before={expectedBefore} planned_count={plannedCount} expected_remaining={expectedAfter}");
         if (!DeployGroup(tabKey, group, plannedCount, points, delay, token, out failure))
             return false;
+
+        if (expectedAfter == 0)
+        {
+            Console.WriteLine($"[ATTACK-CS] phase=validate_spell_remaining status=success item={tabKey} group={group} remaining=0 reason=planned_exhaustion");
+            return true;
+        }
         if (token.WaitHandle.WaitOne(100))
         {
             failure = $"cancelled_after_deploy:{group}";
             return false;
         }
 
-        AttackDeployBarSnapshot afterBar = _scanner.Scan(false, expectedAfter > 0 ? new[] { tabKey } : Array.Empty<string>());
+        using Mat? afterFrame = _adb.TakeScreenshot();
+        if (afterFrame == null || afterFrame.Empty())
+        {
+            failure = $"verification_frame_empty:{group}";
+            return false;
+        }
+        AttackDeployBarSnapshot afterBar = _scanner.Scan(
+            afterFrame,
+            false,
+            new[] { tabKey },
+            requiredOnly: true);
+        _bar = afterBar;
         if (!afterBar.Tabs.ContainsKey(tabKey))
         {
             if (expectedAfter == 0)
@@ -247,7 +272,8 @@ internal sealed class AttackSpellDeploymentStrategy : ISpellDeploymentStrategy
             token,
             out double confidence,
             out string diagnostic,
-            allowEmptyAsZero: expectedAfter == 0);
+            allowEmptyAsZero: expectedAfter == 0,
+            firstFrame: afterFrame);
         if (after != expectedAfter)
         {
             failure = $"count_after_mismatch:{group}:expected={expectedAfter}:actual={after}:confidence={confidence:F2}:detail={LogSafe(diagnostic)}";
@@ -267,7 +293,9 @@ internal sealed class AttackSpellDeploymentStrategy : ISpellDeploymentStrategy
         out string failure)
     {
         failure = string.Empty;
-        AttackDeployBarSnapshot bar = _scanner.Scan(false, new[] { tabKey });
+        AttackDeployBarSnapshot bar = _bar;
+        if (!bar.Tabs.ContainsKey(tabKey))
+            bar = _scanner.Scan(false, new[] { tabKey }, requiredOnly: true);
         if (!bar.Tabs.TryGetValue(tabKey, out Point tab))
         {
             failure = $"tab_not_found:{group}";
@@ -279,7 +307,8 @@ internal sealed class AttackSpellDeploymentStrategy : ISpellDeploymentStrategy
         _adb.Tap(tab.X, tab.Y);
         for (int index = 0; index < count; index++)
         {
-            if (token.WaitHandle.WaitOne(delay))
+            int tapDelay = index == 0 ? 100 : delay;
+            if (token.WaitHandle.WaitOne(tapDelay))
             {
                 failure = $"cancelled_during_deploy:{group}:sent={taps.Count}:planned={count}";
                 return false;
@@ -301,7 +330,8 @@ internal sealed class AttackSpellDeploymentStrategy : ISpellDeploymentStrategy
         CancellationToken token,
         out double confidence,
         out string diagnostic,
-        bool allowEmptyAsZero = false)
+        bool allowEmptyAsZero = false,
+        Mat? firstFrame = null)
     {
         confidence = 0;
         diagnostic = string.Empty;
@@ -312,13 +342,22 @@ internal sealed class AttackSpellDeploymentStrategy : ISpellDeploymentStrategy
 
         for (int attempt = 1; attempt <= 3 && !token.IsCancellationRequested; attempt++)
         {
-            int value = _countReader.Read(
-                key,
-                bar.Tabs,
-                maximumExpected,
-                out double sampleConfidence,
-                out string sampleDiagnostic,
-                captureDebug: attempt == 3);
+            int value = attempt == 1 && firstFrame != null
+                ? _countReader.Read(
+                    firstFrame,
+                    key,
+                    bar.Tabs,
+                    maximumExpected,
+                    out double sampleConfidence,
+                    out string sampleDiagnostic,
+                    captureDebug: false)
+                : _countReader.Read(
+                    key,
+                    bar.Tabs,
+                    maximumExpected,
+                    out sampleConfidence,
+                    out sampleDiagnostic,
+                    captureDebug: attempt == 3);
             attempts.Add($"attempt={attempt}:value={value}:confidence={sampleConfidence:F2}:{sampleDiagnostic}");
             Console.WriteLine($"[ATTACK-CS] phase=read_spell_count status=sample item={key} attempt={attempt} value={value} confidence={sampleConfidence:F2} max_expected={maximumExpected} detail=\"{LogSafe(sampleDiagnostic)}\"");
             if (value < 0 && allowEmptyAsZero && IsEmptyBadgeDiagnostic(sampleDiagnostic))
@@ -336,7 +375,7 @@ internal sealed class AttackSpellDeploymentStrategy : ISpellDeploymentStrategy
                     bestValue = value;
                     bestConfidence = sampleConfidence;
                 }
-                if (attempt == 1 && sampleConfidence >= 0.88)
+                if (attempt == 1 && sampleConfidence >= 0.84)
                 {
                     confidence = sampleConfidence;
                     diagnostic = $"reason=single_high_confidence attempts={string.Join(";", attempts)}";
