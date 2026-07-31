@@ -24,6 +24,7 @@ namespace CvAut
         private readonly WallCandidateSelector _selector;
         private readonly WallQuantityAdjuster _quantityAdjuster;
         private readonly WallDebugRecorder _debug;
+        private readonly MainVillageBuilderAvailabilityDetector _builderDetector;
 
         public WallUpdater(IADBHelper adb, IVisionEngine vision, string templatesPath)
         {
@@ -35,6 +36,7 @@ namespace CvAut
             _debug = new WallDebugRecorder(adb);
             _selector = new WallCandidateSelector(adb, _scanner, _inspector, _navigator, _debug);
             _quantityAdjuster = new WallQuantityAdjuster(adb);
+            _builderDetector = new MainVillageBuilderAvailabilityDetector(vision);
         }
 
         /// <summary>Scans wall locations on an existing screenshot; delegates to WallCandidateScanner.</summary>
@@ -83,6 +85,19 @@ namespace CvAut
             if (!WallPanelInspector.ValidateSupportedLayout(initialScreenshot, cycle, out string layoutReason))
             {
                 Console.WriteLine($"[WALL RESULT] phase=target_plan cycle={cycle} status=skip reason={layoutReason}");
+                return 0;
+            }
+
+            BuilderAvailabilityResult builder = _builderDetector.Detect(initialScreenshot);
+            Console.WriteLine(
+                $"[WALL] phase=builder_preflight cycle={cycle} state={builder.State.ToString().ToLowerInvariant()} " +
+                $"free_builders={builder.FreeBuilders?.ToString() ?? "unknown"} " +
+                $"total_builders={builder.TotalBuilders?.ToString() ?? "unknown"} " +
+                $"confidence={builder.Confidence:F2} icon_score={builder.IconScore:F3} reason={builder.Reason}");
+
+            if (builder.State != BuilderAvailabilityState.Available)
+            {
+                Console.WriteLine($"[WALL RESULT] phase=builder_preflight cycle={cycle} status=skip reason={builder.Reason}");
                 return 0;
             }
 
