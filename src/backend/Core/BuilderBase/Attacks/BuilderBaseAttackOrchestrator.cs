@@ -174,7 +174,13 @@ namespace CvAut
 
             _outcomeWatcher.ZoomOutBattleView(token, "initial_attack");
 
-            _deploymentExecutor.DeployAllVisibleTroops(options, token, secondAttack: false);
+            BuilderBaseDeploymentResult deployment = _deploymentExecutor.DeployAllVisibleTroops(options, token, secondAttack: false);
+            if (!deployment.Succeeded)
+            {
+                Console.WriteLine($"[BB-ATTACK] phase=attack status=fail reason={deployment.Reason} action=abort_and_return_home");
+                bool recovered = _returnHomeController.ReturnHomeDropTrophyBB(token);
+                return new(recovered, 0, 0, false, AttackExecuted: false);
+            }
             BuilderBaseBattleResult result = _outcomeWatcher.WaitBattleAndReturn(options, token, _deploymentExecutor);
 
             bool returned = _navigator.IsOnBuilderBase();

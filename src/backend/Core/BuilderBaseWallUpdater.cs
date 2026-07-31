@@ -6,6 +6,11 @@ using Point = OpenCvSharp.Point;
 
 namespace CvAut
 {
+    internal sealed record BuilderBaseWallUpgradeAttempt(bool UiConfirmed, string Resource, int Cost, string Reason)
+    {
+        public static BuilderBaseWallUpgradeAttempt Failed(string reason) => new(false, string.Empty, 0, reason);
+    }
+
     /// <summary>
     /// Nâng tối đa một đoạn tường Builder Base mỗi cycle qua menu gợi ý thợ xây.
     /// Chỉ tap khi cùng resource/cost được xác nhận ở cả template ready và upgrade.
@@ -70,84 +75,103 @@ namespace CvAut
             return templates;
         }
 
-        public bool TryUpgradeOne(CancellationToken token)
+        public BuilderBaseWallUpgradeAttempt TryUpgradeOne(CancellationToken token)
         {
             Console.WriteLine("[BB-WALL] phase=upgrade status=start limit=1");
             if (!_navigator.IsOnBuilderBase())
             {
                 Console.WriteLine("[BB-WALL] phase=upgrade status=skip reason=not_on_builder_base");
-                return false;
+                return BuilderBaseWallUpgradeAttempt.Failed("not_on_builder_base");
             }
 
             _adb.Tap(BuilderMenuPoint.X, BuilderMenuPoint.Y);
-            if (Sleep(900, token)) return false;
+            if (Sleep(900, token)) return BuilderBaseWallUpgradeAttempt.Failed("cancelled");
 
             var exhausted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int candidatesTried = 0;
             while (true)
             {
-                if (token.IsCancellationRequested) return false;
+                if (token.IsCancellationRequested) return BuilderBaseWallUpgradeAttempt.Failed("cancelled");
 
                 if (candidatesTried >= MaxWallCandidatesPerCycle)
                 {
                     Console.WriteLine($"[BB-WALL] phase=upgrade status=skip reason=max_candidates_reached tried={candidatesTried}");
                     Dismiss(token);
-                    return false;
+                    return BuilderBaseWallUpgradeAttempt.Failed("max_candidates_reached");
                 }
 
-                // Một ảnh chụp cho cả vòng quét, để mọi quyết định dựa trên cùng một thời điểm.
                 using Mat? menuShot = _adb.TakeScreenshot();
                 if (menuShot == null || menuShot.Empty())
                 {
                     Console.WriteLine("[BB-WALL] phase=builder_menu status=fail reason=screenshot_unavailable");
                     Dismiss(token);
-                    return false;
+                    return BuilderBaseWallUpgradeAttempt.Failed("screenshot_unavailable");
                 }
 
                 bool menuOpen = TryFind(menuShot, MenuIconTemplate, MenuIconThreshold, BuilderMenuRoi, out _, out _);
+                if (!menuOpen)
+                {
+                    Console.WriteLine("[BB-WALL] phase=builder_menu status=fail reason=menu_not_open_after_tap");
+                    Dismiss(token);
+                    return BuilderBaseWallUpgradeAttempt.Failed("menu_not_open_after_tap");
+                }
+
                 if (!TryFindReadyCandidate(menuShot, exhausted, out WallOption? option, out string readyTemplate, out Point readyCenter, out double readyScore))
                 {
-                    Console.WriteLine(menuOpen
-                        ? "[BB-WALL] phase=upgrade status=skip reason=no_ready_wall_found"
-                        : "[BB-WALL] phase=builder_menu status=fail reason=menu_not_open_after_tap");
+                    Console.WriteLine("[BB-WALL] phase=upgrade status=skip reason=no_ready_wall_found");
                     Dismiss(token);
-                    return false;
+                    return BuilderBaseWallUpgradeAttempt.Failed("no_ready_wall_found");
                 }
 
                 candidatesTried++;
                 exhausted.Add(CandidateKey(option!));
                 Console.WriteLine($"[BB-WALL] phase=ready status=success resource={option!.Resource} cost={option.Cost} template=\"{readyTemplate}\" score={readyScore:F2} center=({readyCenter.X},{readyCenter.Y}) candidate={candidatesTried}");
                 _adb.Tap(readyCenter.X, readyCenter.Y);
-                if (Sleep(900, token)) return false;
+                if (Sleep(900, token)) return BuilderBaseWallUpgradeAttempt.Failed("cancelled");
 
                 string upgradeTemplate = UpgradeTemplate(option);
                 if (!TryFindOnFreshScreenshot(upgradeTemplate, UpgradeThreshold, UpgradeButtonRoi, out Point upgradeCenter, out double upgradeScore))
                 {
                     Console.WriteLine($"[BB-WALL] phase=upgrade status=skip resource={option.Resource} cost={option.Cost} reason=matching_upgrade_button_not_found candidate={candidatesTried}");
                     Dismiss(token);
-                    if (Sleep(300, token)) return false;
+                    if (Sleep(300, token)) return BuilderBaseWallUpgradeAttempt.Failed("cancelled");
                     _adb.Tap(BuilderMenuPoint.X, BuilderMenuPoint.Y);
-                    if (Sleep(500, token)) return false;
-
-                    // Vòng kế tiếp chụp lại và tự xác nhận menu đã mở lại qua icon tường.
+                    if (Sleep(500, token)) return BuilderBaseWallUpgradeAttempt.Failed("cancelled");
                     continue;
                 }
 
                 Console.WriteLine($"[BB-WALL] phase=upgrade status=pending resource={option.Resource} cost={option.Cost} score={upgradeScore:F2} center=({upgradeCenter.X},{upgradeCenter.Y})");
                 _adb.Tap(upgradeCenter.X, upgradeCenter.Y);
-                if (Sleep(1500, token)) return false;
+                if (Sleep(1500, token)) return BuilderBaseWallUpgradeAttempt.Failed("cancelled");
 
                 bool upgradeStillVisible = TryFindOnFreshScreenshot(upgradeTemplate, UpgradeThreshold, UpgradeButtonRoi, out _, out double afterScore);
                 Dismiss(token);
                 if (upgradeStillVisible)
                 {
                     Console.WriteLine($"[BB-WALL] phase=upgrade status=uncertain resource={option.Resource} cost={option.Cost} reason=button_still_visible_after_tap score_after={afterScore:F2}");
-                    return false;
+                    return BuilderBaseWallUpgradeAttempt.Failed("button_still_visible_after_tap");
                 }
 
-                Console.WriteLine($"[BB-WALL] phase=upgrade status=success resource={option.Resource} cost={option.Cost} count=1");
-                return true;
+                int cost = ParseCost(option.Cost);
+                Console.WriteLine($"[BB-WALL] phase=upgrade status=pending resource={option.Resource} cost={cost} reason=await_resource_verification");
+                return new(true, option.Resource, cost, "ui_confirmed");
             }
+        }
+
+        internal static bool VerifyResourceDelta(
+            BuilderBaseWallUpgradeAttempt attempt,
+            BuilderBaseReportSnapshot before,
+            BuilderBaseReportSnapshot after,
+            out int delta)
+        {
+            delta = 0;
+            if (!attempt.UiConfirmed || attempt.Cost <= 0 || !before.Reliable || !after.Reliable) return false;
+
+            int beforeValue = attempt.Resource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? before.Gold : before.Elixir;
+            int afterValue = attempt.Resource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? after.Gold : after.Elixir;
+            delta = beforeValue - afterValue;
+            int tolerance = Math.Max(1000, attempt.Cost / 10);
+            return delta >= attempt.Cost - tolerance && delta <= attempt.Cost + tolerance;
         }
 
         private bool TryFindReadyCandidate(
@@ -185,6 +209,15 @@ namespace CvAut
 
         private static string UpgradeTemplate(WallOption option)
             => $@"walls\builder_hall\{option.Resource}\upgrade\{option.Resource}_wall_upgrade{option.Cost}";
+
+        private static int ParseCost(string value)
+        {
+            if (value.EndsWith("m", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(value[..^1], out int millions)) return millions * 1_000_000;
+            if (value.EndsWith("k", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(value[..^1], out int thousands)) return thousands * 1_000;
+            return int.TryParse(value, out int exact) ? exact : 0;
+        }
 
         private bool TryFindOnFreshScreenshot(string template, double threshold, Rect roi, out Point center, out double score)
         {

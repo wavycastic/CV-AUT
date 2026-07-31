@@ -77,20 +77,22 @@ internal sealed class BuilderBaseCycleRunner
 
         NightVillageConfig night = _configService.Current.NightVillage;
         string farmMode = night.FarmMode;
-        bool forceAttackForClanGames = false;
-        bool trophyRangeEnabled = false;
+        bool forceAttackForClanGames = night.ForceAttackForClanGames;
+        bool trophyRangeEnabled = night.TrophyRangeEnabled;
         int minTrophy = Math.Clamp(night.MinCups, 0, 10000);
         int maxTrophy = Math.Clamp(night.MaxCups, 0, 10000);
-        bool haltOnGoldFull = false;
-        bool haltOnElixirFull = false;
+        bool haltOnGoldFull = night.HaltOnGoldFull;
+        bool haltOnElixirFull = night.HaltOnElixirFull;
         bool upgradeWall = night.UpgradeWall;
         bool enableAttack = night.EnableAttack;
         bool boostClockTower = night.BoostClockTower;
         int maxAttacksPerCycle = Math.Clamp(night.MaxAttacksPerCycle, 1, 100);
         var armyOptions = new BuilderBaseArmyOptions(
             Enabled: night.ArmyManagement,
+            FillArmy: night.FillArmy,
             Formation: night.ArmyFormation,
-            RequireHero: night.WaitForHeroes);
+            RequireHero: night.WaitForHeroes,
+            HeroWaitSeconds: night.HeroWaitSeconds);
         var battleOptions = new BuilderBaseBattleOptions(
             DropOrder: night.DropOrder,
             UseCustomDropOrder: night.CustomDropOrderEnabled,
@@ -113,9 +115,12 @@ internal sealed class BuilderBaseCycleRunner
         }
         if (upgradeWall && !checkStopFunc(token))
         {
-            bool wallUpgraded = _builderBaseWallUpdater.TryUpgradeOne(token);
-            Console.WriteLine($"[BB-CS] phase=cycle status=pending step=wall_upgrade_done success={wallUpgraded}");
-            _stats.UpdateWallStats(currentVillageIdx, wallUpgraded ? 1 : 0);
+            BuilderBaseReportSnapshot wallBeforeReport = _builderBaseReport.Read();
+            BuilderBaseWallUpgradeAttempt wallAttempt = _builderBaseWallUpdater.TryUpgradeOne(token);
+            BuilderBaseReportSnapshot wallAfterReport = _builderBaseReport.Read();
+            bool wallUpgraded = BuilderBaseWallUpdater.VerifyResourceDelta(wallAttempt, wallBeforeReport, wallAfterReport, out int resourceDelta);
+            Console.WriteLine($"[BB-CS] phase=cycle status=pending step=wall_upgrade_done success={wallUpgraded} ui_confirmed={wallAttempt.UiConfirmed} resource={wallAttempt.Resource} cost={wallAttempt.Cost} delta={resourceDelta} reason={(wallUpgraded ? "resource_delta_confirmed" : wallAttempt.Reason)}");
+            if (wallUpgraded) _stats.UpdateWallStats(currentVillageIdx, 1);
         }
 
         if (!checkStopFunc(token))
@@ -167,7 +172,7 @@ internal sealed class BuilderBaseCycleRunner
                     ? _builderBaseAttacks.RunDropTrophyAttack(token)
                     : _builderBaseAttacks.RunSingleAttack(battleOptions, token);
                 Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attack_done index={attack} success={battleResult.ReturnedHome} damage={battleResult.Damage} stars={battleResult.Stars} stage2={battleResult.Stage2Entered}");
-                bool counted = battleResult.ReturnedHome;
+                bool counted = battleResult.ReturnedHome && battleResult.AttackExecuted;
                 if (counted)
                 {
                     _stats.UpdateBuilderBaseAttackStats(currentVillageIdx, battleResult);
@@ -177,7 +182,7 @@ internal sealed class BuilderBaseCycleRunner
                 else
                 {
                     consecutiveFailures++;
-                    Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attack_not_counted index={attack} reason=abort_or_return_home_failed consecutive_failures={consecutiveFailures} max_allowed={maxConsecutiveFailures}");
+                    Console.WriteLine($"[BB-CS] phase=cycle status=pending step=attack_not_counted index={attack} reason=attack_not_executed_or_return_home_failed attack_executed={battleResult.AttackExecuted} consecutive_failures={consecutiveFailures} max_allowed={maxConsecutiveFailures}");
                 }
 
                 if (!PostBuilderBaseAttackMaintenance(dismissPopupsFunc, ensureBuilderBaseEntryFunc, interruptibleSleepFunc, token, battleResult.ReturnedHome))

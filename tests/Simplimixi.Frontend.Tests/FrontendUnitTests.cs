@@ -206,6 +206,10 @@ namespace CvAut.Tests
                 FarmMode = "drop_trophy",
                 BoostClockTower = true,
                 UpgradeWall = true,
+                MinCups = 1234,
+                HaltOnGoldFull = true,
+                HaltOnElixirFull = true,
+                ForceAttackForClanGames = true,
                 ArmyFormation = "power_pekka",
                 CustomDropOrderEnabled = true,
                 DropOrder = "BattleMachine|Bomber|PowerPekka",
@@ -220,6 +224,10 @@ namespace CvAut.Tests
             Assert.Equal("true", night["upgrade_wall"]!.ToString().ToLowerInvariant());
             Assert.Equal("true", night["fill_army"]!.ToString().ToLowerInvariant());
             Assert.Equal("power_pekka", night["army_formation"]!.ToString());
+            Assert.Equal("1234", night["min_cups"]!.ToString());
+            Assert.Equal("true", night["halt_on_gold_full"]!.ToString().ToLowerInvariant());
+            Assert.Equal("true", night["halt_on_elixir_full"]!.ToString().ToLowerInvariant());
+            Assert.Equal("true", night["force_attack_for_clan_games"]!.ToString().ToLowerInvariant());
             
             Assert.Equal("true", night["custom_drop_order_enabled"]!.ToString().ToLowerInvariant());
             Assert.Equal("BattleMachine|Bomber|PowerPekka", night["drop_order"]!.ToString());

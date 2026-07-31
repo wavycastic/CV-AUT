@@ -28,7 +28,7 @@ namespace CvAut
 
         public List<BuilderBaseTroopSlot> ActiveBomberSlots => _activeBomberSlots;
 
-        public void DeployAllVisibleTroops(BuilderBaseBattleOptions options, CancellationToken token, bool secondAttack)
+        public BuilderBaseDeploymentResult DeployAllVisibleTroops(BuilderBaseBattleOptions options, CancellationToken token, bool secondAttack)
         {
             string attackSide = _random.Next(2) == 0 ? "left" : "right";
             _currentDropPlanner = BuildDropPlanner();
@@ -36,7 +36,7 @@ namespace CvAut
             if (previewDropPoints.Count == 0)
             {
                 Console.WriteLine("[BB-ATTACK] phase=deploy status=fail reason=no_valid_drop_points");
-                return;
+                return BuilderBaseDeploymentResult.Failed("no_valid_drop_points");
             }
             Console.WriteLine($"[BB-ATTACK] phase=deploy status=start attack_side={attackSide} side_points={previewDropPoints.Count} source={_currentDropPlanner.Source} second_attack={secondAttack}");
             _activeBomberSlots.Clear();
@@ -44,38 +44,47 @@ namespace CvAut
             Console.WriteLine($"[BB-ATTACK] phase=deploy status=attack_bar_refresh slots={remaining.Count}");
             if (remaining.Count == 0)
             {
-                if (Sleep(700, token)) return;
+                if (Sleep(700, token)) return BuilderBaseDeploymentResult.Failed("cancelled");
                 remaining = _barScanner.ReadAttackBarSlots(remaining: false, secondAttack: secondAttack);
                 Console.WriteLine($"[BB-ATTACK] phase=deploy status=attack_bar_retry slots={remaining.Count}");
                 if (remaining.Count == 0)
                 {
                     AttackDebugRecorder.CaptureDebugSnapshot(_adb, "attack_bar_empty_before_deploy");
                     Console.WriteLine("[BB-ATTACK] phase=deploy status=fail reason=attack_bar_empty_before_deploy");
-                    return;
+                    return BuilderBaseDeploymentResult.Failed("attack_bar_empty_before_deploy");
                 }
             }
 
+            int deployedCount = 0;
             for (int pass = 1; pass <= 4 && !token.IsCancellationRequested; pass++)
             {
                 List<BuilderBaseTroopSlot> slots = pass == 1 ? remaining : _barScanner.ReadAttackBarSlots(remaining: true, secondAttack: secondAttack);
                 if (slots.Count == 0) break;
                 foreach (BuilderBaseTroopSlot slot in DropOrderPolicy.OrderSlots(slots, options))
                 {
-                    if (token.IsCancellationRequested) return;
-                    DeploySlot(slot, options, attackSide, token);
+                    if (token.IsCancellationRequested) return new(false, deployedCount, "cancelled");
+                    deployedCount += DeploySlot(slot, options, attackSide, token);
                 }
             }
 
-            Console.WriteLine("[BB-ATTACK] phase=deploy status=done");
+            if (token.IsCancellationRequested) return new(false, deployedCount, "cancelled");
+            if (deployedCount <= 0)
+            {
+                Console.WriteLine("[BB-ATTACK] phase=deploy status=fail reason=no_troops_deployed");
+                return BuilderBaseDeploymentResult.Failed("no_troops_deployed");
+            }
+
+            Console.WriteLine($"[BB-ATTACK] phase=deploy status=done deployed={deployedCount}");
+            return new(true, deployedCount, "none");
         }
 
-        private void DeploySlot(BuilderBaseTroopSlot slot, BuilderBaseBattleOptions options, string attackSide, CancellationToken token)
+        private int DeploySlot(BuilderBaseTroopSlot slot, BuilderBaseBattleOptions options, string attackSide, CancellationToken token)
         {
             List<Point> dropPoints = (_currentDropPlanner ?? BuildDropPlanner()).ChooseDropPoints(slot.Name, attackSide, _random);
             if (dropPoints.Count == 0)
             {
                 Console.WriteLine($"[BB-ATTACK] phase=deploy status=skip troop={slot.Name} reason=no_drop_points_for_troop");
-                return;
+                return 0;
             }
 
             string displayName = slot.Name;
@@ -87,15 +96,17 @@ namespace CvAut
             }
 
             _adb.Tap(slot.Center.X, slot.Center.Y);
-            if (Sleep(_adb.FramePacer.AdjustDelay(Math.Clamp(options.SameTroopDelayMs, 50, 5000)), token)) return;
+            if (Sleep(_adb.FramePacer.AdjustDelay(Math.Clamp(options.SameTroopDelayMs, 50, 5000)), token)) return 0;
 
             int amount = Math.Clamp(slot.Count, 1, 12);
+            int deployedCount = 0;
             Console.WriteLine($"[BB-ATTACK] phase=deploy status=slot troop={displayName} count={amount} slot={slot.Index} center=({slot.Center.X},{slot.Center.Y})");
             for (int i = 0; i < amount && !token.IsCancellationRequested; i++)
             {
                 Point drop = dropPoints[i % dropPoints.Count];
                 if (i == 0) drop = AvoidPotionArea(drop);
                 _adb.Tap(drop.X, drop.Y);
+                deployedCount++;
                 if (slot.Name.Contains("Bomber", StringComparison.OrdinalIgnoreCase) && options.HandleBomber)
                 {
                     if (!_activeBomberSlots.Any(s => s.Index == slot.Index)) _activeBomberSlots.Add(slot);
@@ -108,10 +119,11 @@ namespace CvAut
                     _heroController.ConfirmMachineDeployAndAbility(displayName, token);
                 }
 
-                if (Sleep(_adb.FramePacer.AdjustDelay(Math.Clamp(options.SameTroopDelayMs, 50, 5000)), token)) return;
+                if (Sleep(_adb.FramePacer.AdjustDelay(Math.Clamp(options.SameTroopDelayMs, 50, 5000)), token)) return deployedCount;
             }
 
             Sleep(_adb.FramePacer.AdjustDelay(Math.Clamp(options.NextTroopDelayMs, 0, 10000)), token);
+            return deployedCount;
         }
 
         /// <summary>

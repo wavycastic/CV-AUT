@@ -87,7 +87,11 @@ namespace CvAut
                     sameDamageTicks = 0;
                     ZoomOutBattleView(token, "stage2");
                     Console.WriteLine("[BB-ATTACK] phase=stage2 status=detected action=redeploy_remaining reason=attack_bar_ready");
-                    deploymentExecutor.DeployAllVisibleTroops(options, token, secondAttack: true);
+                    BuilderBaseDeploymentResult stage2Deployment = deploymentExecutor.DeployAllVisibleTroops(options, token, secondAttack: true);
+                    if (!stage2Deployment.Succeeded)
+                    {
+                        Console.WriteLine($"[BB-ATTACK] phase=stage2 status=warning reason={stage2Deployment.Reason} action=continue_outcome_watch");
+                    }
                     timeout = DateTime.Now.AddSeconds(150);
                     continue;
                 }
@@ -337,9 +341,10 @@ namespace CvAut
             Rect completeRoi = MbrScreenScaling.ScaleMbrRect(770, 474, 830, 534, screenshot.Width, screenshot.Height);
             if (completeRoi.Width > 0 && completeRoi.Height > 0)
             {
-                if (_vision.FindElement(screenshot, @"clan_games\game_complete", 0.50, completeRoi, out _) != null
+                bool explicitCompletionDetected = _vision.FindElement(screenshot, @"clan_games\game_complete", 0.50, completeRoi, out _) != null
                     || _vision.FindElement(screenshot, @"ui\game_complete", 0.50, completeRoi, out _) != null
-                    || _vision.FindElement(screenshot, @"ui\challenge_complete", 0.50, completeRoi, out _) != null)
+                    || _vision.FindElement(screenshot, @"ui\challenge_complete", 0.50, completeRoi, out _) != null;
+                if (ShouldDismissClanGamesPopup(explicitCompletionDetected, _clanGamesNoCompleteBarChecks))
                 {
                     _clanGamesNoCompleteBarChecks = 0;
                     noBarChecks = 0;
@@ -373,11 +378,14 @@ namespace CvAut
                 return false;
             }
 
-            _clanGamesNoCompleteBarChecks++;
+            _clanGamesNoCompleteBarChecks = Math.Min(12, _clanGamesNoCompleteBarChecks + 1);
             noBarChecks = _clanGamesNoCompleteBarChecks;
-            Console.WriteLine($"[BB-ATTACK] phase=challenge_progress status=no_complete_bar check={_clanGamesNoCompleteBarChecks}/12");
-            return _clanGamesNoCompleteBarChecks >= 12;
+            Console.WriteLine($"[BB-ATTACK] phase=challenge_progress status=no_complete_bar check={_clanGamesNoCompleteBarChecks}/12 action=observe_only");
+            return false;
         }
+
+        internal static bool ShouldDismissClanGamesPopup(bool explicitCompletionDetected, int noBarChecks)
+            => explicitCompletionDetected;
 
         public int ReadDamage() => ReadNumberFromRoi(BuilderBaseAttackLayout.DamageRoi);
         public int ReadResultDamage() => ReadNumberFromRoi(BuilderBaseAttackLayout.ResultDamageRoi);
