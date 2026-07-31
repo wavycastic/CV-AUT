@@ -26,6 +26,25 @@ internal sealed class TroopCountReader
         out string diagnostic,
         bool captureDebug = false)
     {
+        using Mat? screenshot = _adb.TakeScreenshot();
+        if (screenshot == null || screenshot.Empty())
+        {
+            confidence = 0;
+            diagnostic = $"reason=screenshot_empty max_expected={maximumExpected}";
+            return -1;
+        }
+        return Read(screenshot, troopKey, tabs, maximumExpected, out confidence, out diagnostic, captureDebug);
+    }
+
+    public int Read(
+        Mat screenshot,
+        string troopKey,
+        IReadOnlyDictionary<string, Point> tabs,
+        int maximumExpected,
+        out double confidence,
+        out string diagnostic,
+        bool captureDebug = false)
+    {
         confidence = 0;
         diagnostic = string.Empty;
         if (!tabs.TryGetValue(troopKey, out Point tab))
@@ -33,8 +52,6 @@ internal sealed class TroopCountReader
             diagnostic = $"reason=tab_missing max_expected={maximumExpected}";
             return -1;
         }
-
-        using Mat? screenshot = _adb.TakeScreenshot();
         if (screenshot == null || screenshot.Empty())
         {
             diagnostic = $"reason=screenshot_empty tab={tab.X},{tab.Y} max_expected={maximumExpected}";
@@ -44,29 +61,32 @@ internal sealed class TroopCountReader
         bool spellBadge = troopKey.Equals("rage", StringComparison.OrdinalIgnoreCase)
             || troopKey.Equals("freeze", StringComparison.OrdinalIgnoreCase);
         var candidates = new List<Rect>();
-        if (TryBuildQuantityRoi(screenshot, tab, maximumExpected, out Rect quantityRoi))
+        bool quantityBadgeFound = TryBuildQuantityRoi(
+            screenshot,
+            tab,
+            maximumExpected,
+            out Rect quantityRoi);
+        if (quantityBadgeFound)
         {
             candidates.Add(quantityRoi);
         }
-        candidates.AddRange(spellBadge
-            ? new[]
+
+        if (!quantityBadgeFound && !spellBadge)
+        {
+            diagnostic = $"reason=quantity_badge_absent tab={tab.X},{tab.Y} max_expected={maximumExpected}";
+            return -1;
+        }
+        if (spellBadge)
+        {
+            candidates.AddRange(new[]
             {
                 // Spell buttons show the spell level immediately before the quantity: level 6
                 // Rage x4 and Freeze x3 were read as 64/63. Crop the rightmost quantity glyph.
                 Rect.FromLTRB(tab.X + 30, tab.Y - 94, tab.X + 72, tab.Y - 42),
                 Rect.FromLTRB(tab.X + 29, tab.Y - 96, tab.X + 74, tab.Y - 40),
                 Rect.FromLTRB(tab.X + 31, tab.Y - 92, tab.X + 72, tab.Y - 42)
-            }
-            : new[]
-            {
-                // The x prefix occupies roughly 27 px from the original crop's left edge. Keep the
-                // original vertical bounds so descenders are not clipped (a clipped 2 was read as 7).
-                Rect.FromLTRB(tab.X + 22, tab.Y - 94, tab.X + 72, tab.Y - 42),
-                Rect.FromLTRB(tab.X + 18, tab.Y - 96, tab.X + 74, tab.Y - 40),
-                Rect.FromLTRB(tab.X - 5, tab.Y - 94, tab.X + 72, tab.Y - 42),
-                Rect.FromLTRB(tab.X + 22, tab.Y - 96, tab.X + 78, tab.Y - 50),
-                Rect.FromLTRB(tab.X - 20, tab.Y - 98, tab.X + 78, tab.Y - 40)
             });
+        }
         var samples = new List<string>();
         for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
         {
