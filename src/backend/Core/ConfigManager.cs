@@ -130,9 +130,9 @@ internal static class ConfigManager
 
         return new AttackDelayConfig
         {
-            TroopDeployDelayMs = Clamp(GetIntOrDefault(attackDelays, "troop_deploy_delay_ms", 60), 20, 500),
-            RageSpellDelayMs = Clamp(GetIntOrDefault(attackDelays, "rage_spell_delay_ms", 650), 100, 5000),
-            FreezeSpellDelayMs = Clamp(GetIntOrDefault(attackDelays, "freeze_spell_delay_ms", 850), 100, 5000),
+            TroopDeployDelayMs = Clamp(GetIntOrDefault(attackDelays, "troop_deploy_delay_ms", 35), 20, 500),
+            RageSpellDelayMs = Clamp(GetIntOrDefault(attackDelays, "rage_spell_delay_ms", 350), 100, 5000),
+            FreezeSpellDelayMs = Clamp(GetIntOrDefault(attackDelays, "freeze_spell_delay_ms", 450), 100, 5000),
             GrandWardenAbilityDelayMs = Clamp(GetIntOrDefault(attackDelays, "grand_warden_ability_delay_ms", 2500), 500, 15000)
         };
     }

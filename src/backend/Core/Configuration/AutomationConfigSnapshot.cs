@@ -184,9 +184,9 @@ internal static class AutomationConfigSnapshotReader
             advanced.Int("search_delay_ms", 800, 0),
             advanced.Int("deploy_delay_ms", 120, 0),
             advanced.Int("return_home_delay_ms", 1500, 0),
-            delays.Int("troop_deploy_delay_ms", 60, 20, 500),
-            delays.Int("rage_spell_delay_ms", 650, 100, 5000),
-            delays.Int("freeze_spell_delay_ms", 850, 100, 5000),
+            delays.Int("troop_deploy_delay_ms", 35, 20, 500),
+            delays.Int("rage_spell_delay_ms", 350, 100, 5000),
+            delays.Int("freeze_spell_delay_ms", 450, 100, 5000),
             delays.Int("grand_warden_ability_delay_ms", 2500, 500, 15000));
     }
 
