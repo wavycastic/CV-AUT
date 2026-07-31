@@ -6,10 +6,13 @@ internal sealed class TrainingReadinessPolicy
     {
         bool heroesBlock = waitForHeroes && !state.HeroesReady;
         return new TrainingReadiness(
-            IsReady: state.ArmyReady && state.SpellsReady && state.SiegeReady && !heroesBlock,
-            RebuildArmy: !state.ArmyReady,
-            RebuildSpells: !state.SpellsReady,
-            RebuildSiege: !state.SiegeReady,
+            IsReady: state.Army == TrainingDetectionState.Ready
+                && state.Spells == TrainingDetectionState.Ready
+                && state.Siege == TrainingDetectionState.Ready
+                && !heroesBlock,
+            RebuildArmy: state.Army == TrainingDetectionState.NotReady,
+            RebuildSpells: state.Spells == TrainingDetectionState.NotReady,
+            RebuildSiege: state.Siege == TrainingDetectionState.NotReady,
             WaitForHeroes: heroesBlock);
     }
 }
