@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using CvAut;
+using CvAut.Configuration;
 using OpenCvSharp;
 using Xunit;
 
@@ -58,6 +60,64 @@ namespace CvAut.Backend.Tests
         {
             bool ready = BuilderBaseArmyManager.EvaluateArmyReadiness(visibleTroops, heroReady, requireHero);
             Assert.Equal(expectedReady, ready);
+        }
+
+        [Fact]
+        public void NightVillageSnapshot_WiresStopAndClanGamesFlags()
+        {
+            using JsonDocument document = JsonDocument.Parse("""
+            {
+              "night_village": {
+                "trophy_range_enabled": false,
+                "halt_on_gold_full": true,
+                "halt_on_elixir_full": true,
+                "force_attack_for_clan_games": true,
+                "fill_army": false,
+                "hero_wait_seconds": 37
+              }
+            }
+            """);
+
+            NightVillageConfig night = AutomationConfigSnapshotReader.Read(document.RootElement).NightVillage;
+
+            Assert.False(night.TrophyRangeEnabled);
+            Assert.True(night.HaltOnGoldFull);
+            Assert.True(night.HaltOnElixirFull);
+            Assert.True(night.ForceAttackForClanGames);
+            Assert.False(night.FillArmy);
+            Assert.Equal(37, night.HeroWaitSeconds);
+        }
+
+        [Theory]
+        [InlineData(false, 0, false)]
+        [InlineData(false, 12, false)]
+        [InlineData(true, 0, true)]
+        public void ShouldDismissClanGamesPopup_RequiresExplicitCompletion(bool explicitCompletion, int noBarChecks, bool expected)
+        {
+            Assert.Equal(expected, BattleOutcomeWatcher.ShouldDismissClanGamesPopup(explicitCompletion, noBarChecks));
+        }
+
+        [Fact]
+        public void VerifyResourceDelta_RequiresMatchingReliableSpend()
+        {
+            var attempt = new BuilderBaseWallUpgradeAttempt(true, "gold", 400_000, "ui_confirmed");
+            BuilderBaseReportSnapshot before = Report(gold: 1_000_000, elixir: 800_000, reliable: true);
+            BuilderBaseReportSnapshot after = Report(gold: 600_000, elixir: 800_000, reliable: true);
+
+            bool confirmed = BuilderBaseWallUpdater.VerifyResourceDelta(attempt, before, after, out int delta);
+
+            Assert.True(confirmed);
+            Assert.Equal(400_000, delta);
+        }
+
+        [Fact]
+        public void VerifyResourceDelta_RejectsUiOnlySuccess()
+        {
+            var attempt = new BuilderBaseWallUpgradeAttempt(true, "elixir", 400_000, "ui_confirmed");
+            BuilderBaseReportSnapshot before = Report(gold: 1_000_000, elixir: 800_000, reliable: true);
+            BuilderBaseReportSnapshot after = Report(gold: 1_000_000, elixir: 800_000, reliable: true);
+
+            Assert.False(BuilderBaseWallUpdater.VerifyResourceDelta(attempt, before, after, out _));
         }
 
         [Fact]
@@ -348,5 +408,8 @@ namespace CvAut.Backend.Tests
 
         private static BuilderBaseTroopSlot Slot(string name, int index)
             => new(name, new Point(100 + index * 80, 600), index, 1, 1.0);
+
+        private static BuilderBaseReportSnapshot Report(int gold, int elixir, bool reliable)
+            => new(gold, elixir, 2000, 1, 2, 9, true, true, true, true, 6, 12, false, false, reliable);
     }
 }

@@ -49,8 +49,8 @@
 
                         <Border Classes="Tile" Padding="8,6" IsVisible="{Binding IsDropTrophyMode}">
                             <StackPanel Spacing="3">
-                                <TextBlock Text="Cúp dừng hạ (Max)" Classes="label" />
-                                <NumericUpDown Value="{Binding MaxCups}" Minimum="0" Maximum="10000" FormatString="N0" Height="32" HorizontalAlignment="Stretch" />
+                                <TextBlock Text="Dừng hạ tại số cúp" Classes="label" />
+                                <NumericUpDown Value="{Binding MinCups}" Minimum="0" Maximum="10000" FormatString="N0" Height="32" HorizontalAlignment="Stretch" />
                             </StackPanel>
                         </Border>
 

@@ -9,8 +9,10 @@ namespace CvAut
 {
     internal sealed record BuilderBaseArmyOptions(
         bool Enabled,
+        bool FillArmy,
         string Formation,
-        bool RequireHero);
+        bool RequireHero,
+        int HeroWaitSeconds);
 
     /// <summary>
     /// Quản lý army Builder Base theo kiểu an toàn:
@@ -122,11 +124,20 @@ namespace CvAut
 
             ClosePrep(token);
 
-            if (!ready)
+            if (visibleTroops <= 0 && options.FillArmy)
             {
                 Console.WriteLine("[BB-ARMY] phase=prep_check status=action fill_army=true reason=visible_troops_missing");
                 FillArmy(options.Formation, token);
+            }
+            else if (visibleTroops <= 0)
+            {
+                Console.WriteLine("[BB-ARMY] phase=prep_check status=skip fill_army=false reason=disabled_by_config");
+                return false;
+            }
 
+            DateTime heroDeadline = DateTime.UtcNow.AddSeconds(Math.Clamp(options.HeroWaitSeconds, 0, 3600));
+            while (!token.IsCancellationRequested)
+            {
                 if (!OpenAttackPrep(token)) return false;
                 bool nowReady = IsArmyReadyOnPrep(options.RequireHero, out visibleTroops, out heroReady);
                 ClosePrep(token);
@@ -136,9 +147,19 @@ namespace CvAut
                     Console.WriteLine("[BB-ARMY] phase=ensure status=success reason=ready_after_fill");
                     return true;
                 }
+
+                bool canWaitForHero = options.RequireHero
+                    && visibleTroops > 0
+                    && !heroReady
+                    && DateTime.UtcNow < heroDeadline;
+                if (!canWaitForHero) break;
+
+                int remainingMs = (int)Math.Max(0, Math.Min(2000, (heroDeadline - DateTime.UtcNow).TotalMilliseconds));
+                Console.WriteLine($"[BB-ARMY] phase=hero_wait status=pending remaining_ms={remainingMs}");
+                if (remainingMs <= 0 || Sleep(remainingMs, token)) break;
             }
 
-            Console.WriteLine("[BB-ARMY] phase=ensure status=skip reason=army_or_hero_not_ready");
+            Console.WriteLine($"[BB-ARMY] phase=ensure status=skip reason=army_or_hero_not_ready fill_army={options.FillArmy} hero_wait_seconds={options.HeroWaitSeconds}");
             return false;
         }
 
