@@ -199,6 +199,33 @@ internal sealed class TrainingVision
     {
         current = 0;
         capacity = 0;
+
+        // A full army normally has equal-width values (for example 320/320).
+        // Read the complete indicator first so a geometric split cannot cut through a digit.
+        if (TryReadCombinedFraction(image, roi, out current, out capacity, out diagnostic))
+        {
+            return true;
+        }
+
+        Rect safe = ImageUtils.ClampRect(roi, image.Width, image.Height);
+        if (safe.Width >= 24 && safe.Height > 0)
+        {
+            int separatorPadding = Math.Max(2, safe.Width / 18);
+            int middle = safe.X + safe.Width / 2;
+            Rect left = Rect.FromLTRB(safe.X, safe.Y, middle - separatorPadding, safe.Bottom);
+            Rect right = Rect.FromLTRB(middle + separatorPadding, safe.Y, safe.Right, safe.Bottom);
+            bool leftRead = TryReadNumber(image, left, out int leftValue, out double leftConfidence);
+            bool rightRead = TryReadNumber(image, right, out int rightValue, out double rightConfidence);
+            if (leftRead && rightRead && rightValue > 0 && leftValue >= 0 && leftValue <= rightValue)
+            {
+                current = leftValue;
+                capacity = rightValue;
+                diagnostic = FormattableString.Invariant(
+                    $"read_split current={current} capacity={capacity} current_confidence={leftConfidence:F2} capacity_confidence={rightConfidence:F2}");
+                return true;
+            }
+        }
+
         if (!_vision.TryExtractNumericalMetrics(image, roi, out int value, out double confidence, useRgbThresh: true)
             && !_vision.TryExtractNumericalMetrics(image, roi, out value, out confidence))
         {
@@ -239,6 +266,74 @@ internal sealed class TrainingVision
         diagnostic = FormattableString.Invariant(
             $"read confidence={confidence:F2} digits={digits} current={current} capacity={capacity}");
         return true;
+    }
+
+    private bool TryReadCombinedFraction(
+        Mat image,
+        Rect roi,
+        out int current,
+        out int capacity,
+        out string diagnostic)
+    {
+        current = 0;
+        capacity = 0;
+        if (!_vision.TryExtractNumericalMetrics(image, roi, out int value, out double confidence, useRgbThresh: true)
+            && !_vision.TryExtractNumericalMetrics(image, roi, out value, out confidence))
+        {
+            diagnostic = "ocr_no_result";
+            return false;
+        }
+
+        string digits = value.ToString(CultureInfo.InvariantCulture);
+        if (confidence < 0.50 || !TryParseBalancedFractionDigits(digits, out current, out capacity)
+            || capacity <= 0 || current < 0 || current > capacity)
+        {
+            diagnostic = FormattableString.Invariant(
+                $"combined_rejected confidence={confidence:F2} digits={digits}");
+            return false;
+        }
+
+        diagnostic = FormattableString.Invariant(
+            $"read_combined confidence={confidence:F2} digits={digits} current={current} capacity={capacity}");
+        return true;
+    }
+
+    internal static bool TryParseBalancedFractionDigits(string digits, out int current, out int capacity)
+    {
+        current = 0;
+        capacity = 0;
+        if (string.IsNullOrWhiteSpace(digits) || digits.Length < 2 || digits.Length % 2 != 0)
+        {
+            return false;
+        }
+
+        int half = digits.Length / 2;
+        return int.TryParse(digits[..half], out current)
+            && int.TryParse(digits[half..], out capacity);
+    }
+
+    private bool TryReadNumber(Mat image, Rect roi, out int value, out double confidence)
+    {
+        value = 0;
+        confidence = 0;
+        double rgbConfidence = 0;
+        double grayConfidence = 0;
+        if (_vision.TryExtractNumericalMetrics(image, roi, out int rgbValue, out rgbConfidence, useRgbThresh: true)
+            && rgbConfidence >= 0.50)
+        {
+            value = rgbValue;
+            confidence = rgbConfidence;
+            return true;
+        }
+        if (_vision.TryExtractNumericalMetrics(image, roi, out int grayValue, out grayConfidence)
+            && grayConfidence >= 0.50)
+        {
+            value = grayValue;
+            confidence = grayConfidence;
+            return true;
+        }
+        confidence = Math.Max(rgbConfidence, grayConfidence);
+        return false;
     }
 
     public int? ReadNumber(Mat image, Rect roi, int minimum = 0)
