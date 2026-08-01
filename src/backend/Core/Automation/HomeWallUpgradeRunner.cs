@@ -16,26 +16,27 @@ internal sealed class HomeWallUpgradeRunner
         _stats = stats;
     }
 
-    public void TryUpgradeWallsFromHome(
+    public int TryUpgradeWallsFromHome(
         int villageIdx,
         int cycleCount,
         Func<int, bool> ensureHomeBaseFunc,
         CancellationToken token,
-        string phase)
+        string phase,
+        int batchBudget)
     {
         WallUpgradeConfig wallConfig = _configService.GetWallUpgradeConfig(villageIdx);
         Console.WriteLine($"[WALL DECISION] phase={phase} cycle={cycleCount} enabled={wallConfig.Enabled} home=true gold_start={wallConfig.GoldThreshold:N0} elixir_start={wallConfig.ElixirThreshold:N0} gold_reserve={wallConfig.GoldReserve:N0} elixir_reserve={wallConfig.ElixirReserve:N0} batch_limit={wallConfig.BatchLimit} wall_debug_screenshots={wallConfig.DebugScreenshots} status=check");
 
-        if (!wallConfig.Enabled)
+        if (!wallConfig.Enabled || batchBudget <= 0)
         {
-            Console.WriteLine($"[WALL RESULT] phase={phase} status=skip reason=disabled");
-            return;
+            Console.WriteLine($"[WALL RESULT] phase={phase} status=skip reason={(batchBudget <= 0 ? "budget_exhausted" : "disabled")}");
+            return 0;
         }
 
         if (!ensureHomeBaseFunc(20))
         {
             Console.WriteLine($"[WALL RESULT] phase={phase} status=skip reason=home_not_confirmed");
-            return;
+            return 0;
         }
 
         int upgradedWalls = _wallUpdater.HandleHomeResources(
@@ -43,7 +44,7 @@ internal sealed class HomeWallUpgradeRunner
             wallConfig.ElixirThreshold,
             wallConfig.GoldReserve,
             wallConfig.ElixirReserve,
-            wallConfig.BatchLimit,
+            Math.Min(wallConfig.BatchLimit, batchBudget),
             wallConfig.DebugScreenshots,
             cycleCount,
             token);
@@ -51,5 +52,7 @@ internal sealed class HomeWallUpgradeRunner
         {
             _stats.UpdateWallStats(villageIdx, upgradedWalls);
         }
+
+        return upgradedWalls;
     }
 }

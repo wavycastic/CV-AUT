@@ -102,6 +102,7 @@ internal sealed class MainVillageCycleRunner
         }
 
         MainVillageConfig mainConfig = _configService.GetMainVillageConfig(currentVillageIdx);
+        int remainingWallBatch = _configService.GetWallUpgradeConfig(currentVillageIdx).BatchLimit;
 
         waitIfPausedFunc();
         if (checkStopFunc(token)) return;
@@ -112,6 +113,7 @@ internal sealed class MainVillageCycleRunner
         if (mainConfig.AttackMode == AttackMode.DonateOnly)
         {
             runDonateOnlyCycleFunc(mainConfig, token);
+            _wallRunner.TryUpgradeWallsFromHome(currentVillageIdx, cycleCount, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds), token, "donate_only", remainingWallBatch);
             cycleCount++;
             Console.WriteLine($"[FSM-CS] phase=cycle status=success village={currentVillageIdx} mode=donate_only");
             return;
@@ -168,7 +170,8 @@ internal sealed class MainVillageCycleRunner
             tryUseCakeFunc(mainConfig, token);
             tryRequestTroopsFunc(mainConfig, token);
 
-            _wallRunner.TryUpgradeWallsFromHome(currentVillageIdx, cycleCount, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds), token, "after_collect");
+            int wallsUpgraded = _wallRunner.TryUpgradeWallsFromHome(currentVillageIdx, cycleCount, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds), token, "after_collect", remainingWallBatch);
+            remainingWallBatch -= wallsUpgraded;
         }
 
         waitIfPausedFunc();
@@ -274,7 +277,7 @@ internal sealed class MainVillageCycleRunner
 
                 if (returnedHome)
                 {
-                    _wallRunner.TryUpgradeWallsFromHome(currentVillageIdx, cycleCount, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds), token, "post_battle");
+                    _wallRunner.TryUpgradeWallsFromHome(currentVillageIdx, cycleCount, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds), token, "post_battle", Math.Max(0, remainingWallBatch));
                 }
 
                 checkStopFunc(token);

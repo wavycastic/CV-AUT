@@ -318,7 +318,7 @@ internal partial class CVAutomationFramework : IAutomationRunner
         => BuilderBaseStopPolicy.ShouldStopBuilderBaseAttacks(farmMode, report, trophyRangeEnabled, minTrophy, maxTrophy, haltOnGoldFull, haltOnElixirFull, out reason);
 
     private void TryUpgradeWallsFromHome(CancellationToken token, string phase)
-        => _wallRunner.TryUpgradeWallsFromHome(_currentVillageIdx, _cycleCount, maxWait => EnsureHomeBase(maxWait), token, phase);
+        => _wallRunner.TryUpgradeWallsFromHome(_currentVillageIdx, _cycleCount, maxWait => EnsureHomeBase(maxWait), token, phase, _configService.GetWallUpgradeConfig(_currentVillageIdx).BatchLimit);
 
     private void BotLoop(CancellationToken token)
     {
