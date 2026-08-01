@@ -10,24 +10,12 @@ namespace CvAut.Backend.Tests
         {
             if (!File.Exists(path))
             {
-                Assert.Fail(\$\
-Mandatory
-fixture
-missing:
-path
-\);
+                Assert.Fail($"Mandatory fixture missing: {path}");
             }
             var img = Cv2.ImRead(path, ImreadModes.Color);
             if (img.Empty())
             {
-                Assert.Fail(\$\Fixture
-image
-is
-empty
-or
-invalid:
-path
-\);
+                Assert.Fail($"Fixture image is empty or invalid: {path}");
             }
             return img;
         }
@@ -36,21 +24,13 @@ path
         {
             if (!File.Exists(path))
             {
-                Assert.Skip(\$\Optional
-fixture
-missing:
-path
-\);
+                Assert.Skip($"Optional fixture missing: {path}");
                 return null;
             }
             var img = Cv2.ImRead(path, ImreadModes.Color);
             if (img.Empty())
             {
-                Assert.Skip(\$\Optional
-fixture
-empty:
-path
-\);
+                Assert.Skip($"Optional fixture empty: {path}");
                 return null;
             }
             return img;

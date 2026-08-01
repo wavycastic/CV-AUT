@@ -19,8 +19,7 @@ namespace CvAut.Backend.Tests
 
             var runner = new HomeWallUpgradeRunner(null, configService, null);
 
-            int result = runner.TryUpgradeWallsFromHome(1, 1, _ => true, CancellationToken.None, \
-test\, 10);
+            int result = runner.TryUpgradeWallsFromHome(1, 1, _ => true, CancellationToken.None, "test", 10);
             Assert.Equal(0, result);
         }
 
@@ -33,7 +32,7 @@ test\, 10);
 
             var runner = new HomeWallUpgradeRunner(null, configService, null);
 
-            int result = runner.TryUpgradeWallsFromHome(1, 1, _ => true, CancellationToken.None, \test\, 0);
+            int result = runner.TryUpgradeWallsFromHome(1, 1, _ => true, CancellationToken.None, "test", 0);
             Assert.Equal(0, result);
         }
 
@@ -46,7 +45,7 @@ test\, 10);
 
             var runner = new HomeWallUpgradeRunner(null, configService, null);
 
-            int result = runner.TryUpgradeWallsFromHome(1, 1, _ => false, CancellationToken.None, \test\, 5);
+            int result = runner.TryUpgradeWallsFromHome(1, 1, _ => false, CancellationToken.None, "test", 5);
             Assert.Equal(0, result);
         }
     }
