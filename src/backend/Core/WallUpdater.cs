@@ -32,11 +32,11 @@ namespace CvAut
             _adb = adb;
             _vision = vision;
             _navigator = new WallMenuNavigator(adb);
-            _inspector = new WallPanelInspector(adb);
+            _inspector = new WallPanelInspector(adb, vision);
             _scanner = new WallCandidateScanner(adb, templatesPath, _inspector, _navigator);
             _debug = new WallDebugRecorder(adb);
             _selector = new WallCandidateSelector(adb, _scanner, _inspector, _navigator, _debug);
-            _quantityAdjuster = new WallQuantityAdjuster(adb);
+            _quantityAdjuster = new WallQuantityAdjuster(adb, vision);
             _builderDetector = new MainVillageBuilderAvailabilityDetector(vision);
         }
 
@@ -543,29 +543,46 @@ namespace CvAut
             int batchLimit = 1,
             bool debugScreenshots = false,
             int cycle = 0,
-            CancellationToken token = default)
+            CancellationToken token = default,
+            string trigger = "unknown",
+            string? runId = null)
         {
-            if (token.IsCancellationRequested) return 0;
-            _debug.Configure(debugScreenshots, cycle);
-            int safeBatchLimit = Math.Clamp(batchLimit, 1, 10);
+            runId ??= WallLogger.GenerateRunId();
+            var handleTimer = WallLogger.StartTimer();
+            if (token.IsCancellationRequested)
+            {
+                WallLogger.LogInfo("handle_home_resources", "cancelled", reason: "cancellation_requested", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: handleTimer.ElapsedMilliseconds);
+                return 0;
+            }
 
+            _debug.Configure(debugScreenshots, cycle);
+            int safeBatchLimit = Math.Clamp(batchLimit, 1, WallQuantityPlanner.HardSafetyMaximum);
+
+            WallLogger.LogInfo("handle_home_resources", "start", cycle: cycle, trigger: trigger, batchLimit: safeBatchLimit, runId: runId, extra: $"gold_start={wallGoldThreshold:N0} elixir_start={wallElixirThreshold:N0} gold_reserve={wallGoldReserve:N0} elixir_reserve={wallElixirReserve:N0}");
             Console.WriteLine($"[WALL] phase=target_plan cycle={cycle} status=start gold_start={wallGoldThreshold:N0} elixir_start={wallElixirThreshold:N0} gold_reserve={wallGoldReserve:N0} elixir_reserve={wallElixirReserve:N0} batch_limit={safeBatchLimit}");
 
             string[] templateNames = _scanner.GetWallTemplateNames();
+            WallLogger.LogInfo("preflight_templates", templateNames.Length > 0 ? "ok" : "skip", reason: templateNames.Length > 0 ? "templates_loaded" : "wall_templates_missing", cycle: cycle, trigger: trigger, runId: runId, extra: $"template_count={templateNames.Length} template_names=\"{string.Join(",", templateNames)}\"");
+
             if (templateNames.Length == 0)
             {
                 Console.WriteLine($"[WALL RESULT] phase=target_plan cycle={cycle} status=skip reason=wall_templates_missing");
+                WallLogger.LogInfo("handle_home_resources", "skip", reason: "wall_templates_missing", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: handleTimer.ElapsedMilliseconds);
                 return 0;
             }
 
             using Mat? initialScreenshot = _adb.TakeScreenshot();
-            if (!WallPanelInspector.ValidateSupportedLayout(initialScreenshot, cycle, out string layoutReason))
+            bool layoutOk = WallPanelInspector.ValidateSupportedLayout(initialScreenshot, cycle, out string layoutReason, trigger, runId);
+            if (!layoutOk)
             {
                 Console.WriteLine($"[WALL RESULT] phase=target_plan cycle={cycle} status=skip reason={layoutReason}");
+                WallLogger.LogInfo("handle_home_resources", "skip", reason: layoutReason, cycle: cycle, trigger: trigger, runId: runId, elapsedMs: handleTimer.ElapsedMilliseconds);
                 return 0;
             }
 
             BuilderAvailabilityResult builder = _builderDetector.Detect(initialScreenshot);
+            WallLogger.LogInfo("preflight_builder", builder.State == BuilderAvailabilityState.Available ? "ok" : "skip", reason: builder.Reason, cycle: cycle, trigger: trigger, runId: runId, extra: $"builder_state={builder.State.ToString().ToLowerInvariant()} free_builders={builder.FreeBuilders?.ToString() ?? "unknown"} total_builders={builder.TotalBuilders?.ToString() ?? "unknown"} confidence={builder.Confidence:F2} icon_score={builder.IconScore:F3}");
+
             Console.WriteLine(
                 $"[WALL] phase=builder_preflight cycle={cycle} state={builder.State.ToString().ToLowerInvariant()} " +
                 $"free_builders={builder.FreeBuilders?.ToString() ?? "unknown"} " +
@@ -575,43 +592,56 @@ namespace CvAut
             if (builder.State != BuilderAvailabilityState.Available)
             {
                 Console.WriteLine($"[WALL RESULT] phase=builder_preflight cycle={cycle} status=skip reason={builder.Reason}");
+                WallLogger.LogInfo("handle_home_resources", "skip", reason: builder.Reason, cycle: cycle, trigger: trigger, runId: runId, elapsedMs: handleTimer.ElapsedMilliseconds);
                 return 0;
             }
 
-            WallTransactionResult result = UpgradeWallBulk(
-                wallGoldThreshold,
-                wallElixirThreshold,
-                wallGoldReserve,
-                wallElixirReserve,
-                safeBatchLimit,
-                token);
-
-            if (result.VerifiedCount > 0)
+            try
             {
-                _debug.RecordVerified(result.VerifiedCount);
-            }
-            else if (string.Equals(result.Reason, "outcome_unknown", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(result.Reason, "cancelled_post_confirm", StringComparison.OrdinalIgnoreCase) ||
-                     result.Reason.StartsWith("post_confirm_", StringComparison.OrdinalIgnoreCase) ||
-                     result.Reason.Contains("delta_mismatch", StringComparison.OrdinalIgnoreCase))
-            {
-                _debug.RecordUnknown();
-            }
-            else
-            {
-                _debug.RecordSkipped();
-            }
+                WallTransactionResult result = UpgradeWallBulk(
+                    wallGoldThreshold,
+                    wallElixirThreshold,
+                    wallGoldReserve,
+                    wallElixirReserve,
+                    safeBatchLimit,
+                    token,
+                    trigger,
+                    runId,
+                    cycle);
 
-            _debug.LogSessionCounters(
-                "handle_home_resources",
-                result.Resource,
-                result.Cost,
-                result.CandidateMatchCount,
-                result.RequestedCount,
-                result.VerifiedCount,
-                result.Reason);
+                if (result.VerifiedCount > 0)
+                {
+                    _debug.RecordVerified(result.VerifiedCount);
+                }
+                else if (string.Equals(result.Reason, "outcome_unknown", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(result.Reason, "cancelled_post_confirm", StringComparison.OrdinalIgnoreCase) ||
+                         result.Reason.StartsWith("post_confirm_", StringComparison.OrdinalIgnoreCase) ||
+                         result.Reason.Contains("delta_mismatch", StringComparison.OrdinalIgnoreCase))
+                {
+                    _debug.RecordUnknown();
+                }
+                else
+                {
+                    _debug.RecordSkipped();
+                }
 
-            return result.VerifiedCount;
+                _debug.LogSessionCounters(
+                    "handle_home_resources",
+                    result.Resource,
+                    result.Cost,
+                    result.CandidateMatchCount,
+                    result.RequestedCount,
+                    result.VerifiedCount,
+                    result.Reason);
+
+                WallLogger.LogInfo("handle_home_resources", "end", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: handleTimer.ElapsedMilliseconds, extra: $"verified_count={result.VerifiedCount} reason={result.Reason}");
+                return result.VerifiedCount;
+            }
+            catch (Exception ex)
+            {
+                WallLogger.LogInfo("handle_home_resources", "fail", reason: "exception", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: handleTimer.ElapsedMilliseconds, extra: $"ex_type=\"{ex.GetType().Name}\" ex_msg=\"{ex.Message}\"");
+                throw;
+            }
         }
 
         private WallTransactionResult UpgradeWallBulk(
@@ -620,12 +650,25 @@ namespace CvAut
             int wallGoldReserve,
             int wallElixirReserve,
             int batchLimit,
-            CancellationToken token = default)
+            CancellationToken token = default,
+            string trigger = "unknown",
+            string? runId = null,
+            int cycle = 0)
         {
-            if (token.IsCancellationRequested) return WallTransactionResult.Skip("cancelled");
-            int safeBatchLimit = Math.Clamp(batchLimit, 1, 10);
+            runId ??= WallLogger.GenerateRunId();
+            if (token.IsCancellationRequested)
+            {
+                WallLogger.LogInfo("upgrade_wall_bulk", "cancelled", reason: "cancelled", cycle: cycle, trigger: trigger, runId: runId);
+                return WallTransactionResult.Skip("cancelled");
+            }
+            int safeBatchLimit = Math.Clamp(batchLimit, 1, WallQuantityPlanner.HardSafetyMaximum);
+            var timer = WallLogger.StartTimer();
+            WallLogger.LogInfo("upgrade_wall_bulk", "start", cycle: cycle, trigger: trigger, batchLimit: safeBatchLimit, runId: runId);
             Console.WriteLine($"[WALL] phase=attempt_upgrade status=start batch_limit={safeBatchLimit}");
-            return TryUpgradeWallBatch(wallGoldThreshold, wallElixirThreshold, wallGoldReserve, wallElixirReserve, safeBatchLimit, token);
+
+            var res = TryUpgradeWallBatch(wallGoldThreshold, wallElixirThreshold, wallGoldReserve, wallElixirReserve, safeBatchLimit, token, trigger, runId, cycle);
+            WallLogger.LogInfo("upgrade_wall_bulk", "end", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: timer.ElapsedMilliseconds, extra: $"verified_count={res.VerifiedCount} status_reason={res.Reason}");
+            return res;
         }
 
         private WallTransactionResult TryUpgradeWallBatch(
@@ -634,19 +677,28 @@ namespace CvAut
             int wallGoldReserve,
             int wallElixirReserve,
             int batchLimit,
-            CancellationToken token)
+            CancellationToken token,
+            string trigger = "unknown",
+            string? runId = null,
+            int cycle = 0)
         {
-            if (token.IsCancellationRequested) return WallTransactionResult.Skip("cancelled");
-            int safeBatchLimit = Math.Clamp(batchLimit, 1, 10);
-            int candidateMatchCount = 0;
+            runId ??= WallLogger.GenerateRunId();
+            var batchTimer = WallLogger.StartTimer();
+            if (token.IsCancellationRequested)
+            {
+                WallLogger.LogInfo("upgrade_batch", "cancelled", reason: "cancelled", cycle: cycle, trigger: trigger, runId: runId);
+                return WallTransactionResult.Skip("cancelled");
+            }
+            int safeBatchLimit = Math.Clamp(batchLimit, 1, WallQuantityPlanner.HardSafetyMaximum);
 
             try
             {
-                WallCandidateSelection selection = _selector.SelectValidatedCandidate(token);
-                candidateMatchCount = selection.CandidateMatchCount;
+                WallCandidateSelection selection = _selector.SelectValidatedCandidate(token, trigger, runId, cycle);
+                int candidateMatchCount = selection.CandidateMatchCount;
 
                 if (selection.SkipReason is string skipReason)
                 {
+                    WallLogger.LogInfo("upgrade_batch", "skip", reason: skipReason, cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds, extra: $"candidate_match_count={candidateMatchCount}");
                     return string.Equals(skipReason, "cancelled", StringComparison.Ordinal)
                         ? WallTransactionResult.Skip("cancelled")
                         : WallTransactionResult.Skip(skipReason).WithCandidateMatchCount(candidateMatchCount);
@@ -655,26 +707,63 @@ namespace CvAut
                 using Mat? currentScreenshot = _adb.TakeScreenshot();
                 if (currentScreenshot == null || currentScreenshot.Empty())
                 {
+                    WallLogger.LogInfo("upgrade_batch", "fail", reason: "screenshot_failed", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds);
                     _navigator.BestEffortDismiss();
                     return WallTransactionResult.Skip("screenshot_failed").WithCandidateMatchCount(candidateMatchCount);
                 }
 
-                // Extract the current resources and the cost of a single wall
+                // Extract current resources and cost of a single wall dynamically
                 (int currentGold, int currentElixir, _) = IsTarget.ExtractHomeResources(_adb, _vision);
-                int detectedGoldCost = _vision.ExtractNumericalMetrics(currentScreenshot, WallUiLayout.GoldUpgradeCostRoi);
-                int detectedElixirCost = _vision.ExtractNumericalMetrics(currentScreenshot, WallUiLayout.ElixirUpgradeCostRoi);
 
-                WallCostValidationResult costValidation = WallCostPolicy.ValidateWallCosts(detectedGoldCost, detectedElixirCost);
+                var panelLocal = WallDynamicLocalizer.LocalizePanelAndButtons(_vision, currentScreenshot);
+                WallResourceButtonInfo goldBtnInfo = panelLocal.GoldInfo;
+                WallResourceButtonInfo elixirBtnInfo = panelLocal.ElixirInfo;
+
+                int detectedGoldCost = 0;
+                double goldCostConfidence = 0;
+                int detectedElixirCost = 0;
+                double elixirCostConfidence = 0;
+
+                bool goldCostRead = goldBtnInfo.Found && TryReadWallUpgradeCost(_vision, currentScreenshot, goldBtnInfo.CostRoi, out detectedGoldCost, out goldCostConfidence);
+                bool elixirCostRead = panelLocal.ResourceMode == WallUpgradeResourceMode.GoldAndElixir &&
+                    elixirBtnInfo.Found &&
+                    TryReadWallUpgradeCost(_vision, currentScreenshot, elixirBtnInfo.CostRoi, out detectedElixirCost, out elixirCostConfidence);
+                if (!goldCostRead) { detectedGoldCost = 0; goldCostConfidence = 0; }
+                if (!elixirCostRead) { detectedElixirCost = 0; elixirCostConfidence = 0; }
+
+                Console.WriteLine($"[WALL-MV] resource=gold panel_rect=({panelLocal.SearchRoi.X},{panelLocal.SearchRoi.Y},{panelLocal.SearchRoi.Width},{panelLocal.SearchRoi.Height}) button_rect=({goldBtnInfo.ButtonRect.X},{goldBtnInfo.ButtonRect.Y},{goldBtnInfo.ButtonRect.Width},{goldBtnInfo.ButtonRect.Height}) cost_rect=({goldBtnInfo.CostRoi.X},{goldBtnInfo.CostRoi.Y},{goldBtnInfo.CostRoi.Width},{goldBtnInfo.CostRoi.Height}) tap_point=({goldBtnInfo.TapPoint.X},{goldBtnInfo.TapPoint.Y}) method={goldBtnInfo.Method} score={goldBtnInfo.Score:F3} ocr_val={detectedGoldCost} ocr_conf={goldCostConfidence:F2} ocr_method=wall_binary_242 reason={(goldBtnInfo.Found ? "ok" : goldBtnInfo.SkipReason)}");
+                Console.WriteLine($"[WALL-MV] resource=elixir panel_rect=({panelLocal.SearchRoi.X},{panelLocal.SearchRoi.Y},{panelLocal.SearchRoi.Width},{panelLocal.SearchRoi.Height}) button_rect=({elixirBtnInfo.ButtonRect.X},{elixirBtnInfo.ButtonRect.Y},{elixirBtnInfo.ButtonRect.Width},{elixirBtnInfo.ButtonRect.Height}) cost_rect=({elixirBtnInfo.CostRoi.X},{elixirBtnInfo.CostRoi.Y},{elixirBtnInfo.CostRoi.Width},{elixirBtnInfo.CostRoi.Height}) tap_point=({elixirBtnInfo.TapPoint.X},{elixirBtnInfo.TapPoint.Y}) method={elixirBtnInfo.Method} score={elixirBtnInfo.Score:F3} ocr_val={detectedElixirCost} ocr_conf={elixirCostConfidence:F2} ocr_method=wall_binary_242 reason={(elixirBtnInfo.Found ? "ok" : elixirBtnInfo.SkipReason)}");
+
+                bool roiPairVerified = goldBtnInfo.CostRoiVerified && elixirBtnInfo.CostRoiVerified;
+                bool goldOnlyVerified = panelLocal.ResourceMode == WallUpgradeResourceMode.GoldOnly && goldBtnInfo.CostRoiVerified;
+                WallCostValidationResult costValidation = panelLocal.ResourceMode switch
+                {
+                    WallUpgradeResourceMode.FullyUpgraded
+                        => new WallCostValidationResult(false, 0, "wall_fully_upgraded"),
+                    WallUpgradeResourceMode.GoldOnly when goldOnlyVerified
+                        => WallCostPolicy.ValidateGoldOnlyCost(detectedGoldCost),
+                    WallUpgradeResourceMode.GoldAndElixir when roiPairVerified
+                        => WallCostPolicy.ValidateWallCosts(detectedGoldCost, detectedElixirCost),
+                    WallUpgradeResourceMode.GoldOnly
+                        => new WallCostValidationResult(false, 0, "wall_gold_cost_not_verified"),
+                    _ => new WallCostValidationResult(false, 0, "wall_cost_pair_not_verified")
+                };
+                double mismatchRatio = (detectedGoldCost > 0 && detectedElixirCost > 0)
+                    ? (double)Math.Max(detectedGoldCost, detectedElixirCost) / Math.Min(detectedGoldCost, detectedElixirCost)
+                    : 1.0;
+
+                WallLogger.LogInfo("ocr_decision", costValidation.IsValid ? "ok" : "fail", reason: costValidation.Reason, cycle: cycle, trigger: trigger, runId: runId, extra: $"current_gold={currentGold:N0} current_elixir={currentElixir:N0} raw_gold_cost={detectedGoldCost} raw_elixir_cost={detectedElixirCost} gold_cost_read={goldCostRead} elixir_cost_read={elixirCostRead} gold_cost_confidence={goldCostConfidence:F2} elixir_cost_confidence={elixirCostConfidence:F2} gold_cost_roi=({goldBtnInfo.CostRoi.X},{goldBtnInfo.CostRoi.Y},{goldBtnInfo.CostRoi.Width},{goldBtnInfo.CostRoi.Height}) elixir_cost_roi=({elixirBtnInfo.CostRoi.X},{elixirBtnInfo.CostRoi.Y},{elixirBtnInfo.CostRoi.Width},{elixirBtnInfo.CostRoi.Height}) cost_mismatch_ratio={mismatchRatio:F2}");
+
                 if (!costValidation.IsValid)
                 {
                     Console.WriteLine($"[WALL RESULT] phase=cost_ocr cycle={_debug.Cycle} gold_cost={detectedGoldCost} elixir_cost={detectedElixirCost} status=skip reason={costValidation.Reason}");
+                    WallLogger.LogInfo("upgrade_batch", "skip", reason: costValidation.Reason, cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds);
                     _navigator.BestEffortDismiss();
                     return WallTransactionResult.Skip(costValidation.Reason).WithCandidateMatchCount(candidateMatchCount);
                 }
 
                 int singleWallCost = costValidation.Cost;
 
-                // Pick the resource with WallUpgradeDecider
                 var decisionInput = new WallUpgradeDecisionInput(
                     WallCost: singleWallCost,
                     Gold: currentGold,
@@ -683,108 +772,213 @@ namespace CvAut
                     ElixirStartThreshold: wallElixirThreshold,
                     GoldReserve: wallGoldReserve,
                     ElixirReserve: wallElixirReserve,
-                    BatchLimit: safeBatchLimit);
+                    BatchLimit: safeBatchLimit,
+                    ResourceMode: panelLocal.ResourceMode);
 
                 WallUpgradeDecision decision = WallUpgradeDecider.Decide(decisionInput);
+                WallLogger.LogInfo("decider_check", decision.Resource != WallUpgradeResource.None ? "ok" : "skip", reason: string.IsNullOrEmpty(decision.SkipReason) ? "decided" : decision.SkipReason, cycle: cycle, trigger: trigger, runId: runId, extra: $"gold_threshold={wallGoldThreshold:N0} elixir_threshold={wallElixirThreshold:N0} gold_reserve={wallGoldReserve:N0} elixir_reserve={wallElixirReserve:N0} affordable_gold={decision.AffordableGold} affordable_elixir={decision.AffordableElixir} selected_resource={decision.Resource} requested_count={decision.RequestedCount}");
+
                 if (decision.Resource == WallUpgradeResource.None || decision.RequestedCount <= 0)
                 {
                     Console.WriteLine($"[WALL RESULT] phase=decider_check cycle={_debug.Cycle} gold={currentGold:N0} elixir={currentElixir:N0} cost={singleWallCost:N0} status=skip reason={decision.SkipReason}");
+                    WallLogger.LogInfo("upgrade_batch", "skip", reason: decision.SkipReason, cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds);
                     _navigator.BestEffortDismiss();
                     return WallTransactionResult.Skip(decision.SkipReason).WithCandidateMatchCount(candidateMatchCount);
                 }
 
                 string selectedResource = decision.Resource == WallUpgradeResource.Gold ? "gold" : "elixir";
-                bool costIsRed = WallCostPolicy.IsUpgradeCostRed(currentScreenshot, selectedResource, out _, out _);
-                bool btnAvailable = WallPanelInspector.IsResourceUpgradeButtonAvailable(currentScreenshot, selectedResource);
+                WallResourceButtonInfo selectedBtnInfo = selectedResource == "gold" ? goldBtnInfo : elixirBtnInfo;
+
+                if (!selectedBtnInfo.Found)
+                {
+                    string resourceSkipReason = string.IsNullOrEmpty(selectedBtnInfo.SkipReason) ? "resource_button_not_localized" : selectedBtnInfo.SkipReason;
+                    Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debug.Cycle} resource={selectedResource} status=skip reason={resourceSkipReason}");
+                    WallLogger.LogInfo("upgrade_batch", "skip", reason: resourceSkipReason, cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds);
+                    _navigator.BestEffortDismiss();
+                    return WallTransactionResult.Skip(resourceSkipReason).WithCandidateMatchCount(candidateMatchCount);
+                }
+
+                bool costIsRed = WallCostPolicy.IsUpgradeCostRed(currentScreenshot, selectedBtnInfo.CostRoi, out double redRatio, out int redPixels);
+                bool btnAvailable = WallPanelInspector.IsResourceUpgradeButtonAvailable(currentScreenshot, selectedBtnInfo);
+
+                Point upgradePoint = selectedBtnInfo.TapPoint;
+                WallLogger.LogInfo("button_check", (!costIsRed && btnAvailable) ? "ok" : "fail", reason: (!btnAvailable ? "button_unavailable" : (costIsRed ? "cost_red" : "ok")), cycle: cycle, trigger: trigger, runId: runId, extra: $"selected_resource={selectedResource} btn_available={btnAvailable} cost_is_red={costIsRed} red_pixels={redPixels} red_ratio={redRatio:F3} upgrade_btn_x={upgradePoint.X} upgrade_btn_y={upgradePoint.Y}");
 
                 if (!btnAvailable || costIsRed)
                 {
                     Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debug.Cycle} resource={selectedResource} status=skip reason=resource_button_unavailable_or_red");
+                    WallLogger.LogInfo("upgrade_batch", "skip", reason: "resource_button_unavailable_or_red", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds);
                     _navigator.BestEffortDismiss();
                     return WallTransactionResult.Skip("resource_button_unavailable_or_red").WithCandidateMatchCount(candidateMatchCount);
                 }
 
-                int actualSelectedCount = _quantityAdjuster.AddWallsSafely(selectedResource, decision.RequestedCount, safeBatchLimit, token);
+                int actualSelectedCount = _quantityAdjuster.AddWallsSafely(selectedResource, decision.RequestedCount, safeBatchLimit, token, trigger, runId, cycle, selectedBtnInfo, singleWallCost);
+                WallLogger.LogInfo("quantity_adjuster", actualSelectedCount > 0 ? "ok" : "fail", cycle: cycle, trigger: trigger, runId: runId, extra: $"requested_count={decision.RequestedCount} selected_count={actualSelectedCount}");
+
                 if (actualSelectedCount <= 0)
                 {
+                    WallLogger.LogInfo("upgrade_batch", "skip", reason: "quantity_controls_not_localized", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds);
                     _navigator.BestEffortDismiss();
-                    return WallTransactionResult.Skip("insufficient_resource_for_cost").WithCandidateMatchCount(candidateMatchCount);
+                    return WallTransactionResult.Skip("quantity_controls_not_localized").WithCandidateMatchCount(candidateMatchCount);
                 }
 
                 _debug.Capture("add_wall_done");
 
+                // Quantity changes can move/rebuild resource buttons. Never reuse the pre-gateway tap point.
+                using Mat? finalPanelScreenshot = _adb.TakeScreenshot();
+                if (finalPanelScreenshot == null || finalPanelScreenshot.Empty())
+                {
+                    _navigator.BestEffortDismiss();
+                    return WallTransactionResult.Skip("final_panel_screenshot_failed").WithCandidateMatchCount(candidateMatchCount);
+                }
+                WallPanelLocalizationResult finalPanel = WallDynamicLocalizer.LocalizePanelAndButtons(_vision, finalPanelScreenshot);
+                selectedBtnInfo = selectedResource == "gold" ? finalPanel.GoldInfo : finalPanel.ElixirInfo;
+                if (!selectedBtnInfo.Found ||
+                    !WallBatchTotalReader.TryRead(_vision, finalPanelScreenshot, selectedBtnInfo.CostRoi, out long finalBatchTotal, out _) ||
+                    !WallBatchTotalReader.Validate(finalBatchTotal, singleWallCost, actualSelectedCount))
+                {
+                    _navigator.BestEffortDismiss();
+                    return WallTransactionResult.Skip("final_batch_state_not_verified").WithCandidateMatchCount(candidateMatchCount);
+                }
+                upgradePoint = selectedBtnInfo.TapPoint;
+
                 int resourceBefore = selectedResource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? currentGold : currentElixir;
 
-                Point upgradePoint = WallUiLayout.UpgradePointFor(selectedResource);
-
+                WallLogger.LogInfo("tap_upgrade_btn", "ok", cycle: cycle, trigger: trigger, runId: runId, extra: $"selected_resource={selectedResource} tap_x={upgradePoint.X} tap_y={upgradePoint.Y}");
                 _adb.Tap(upgradePoint.X, upgradePoint.Y);
-                if (InterruptibleSleep(1000, token)) return WallTransactionResult.Skip("cancelled");
+                if (InterruptibleSleep(1000, token))
+                {
+                    WallLogger.LogInfo("upgrade_batch", "cancelled", reason: "cancelled", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds);
+                    return WallTransactionResult.Skip("cancelled");
+                }
 
-                if (!_inspector.IsConfirmDialogOpen())
+                using Mat? confirmScreenshot = _adb.TakeScreenshot();
+                double confirmBrightness = 0;
+                bool confirmOpen = confirmScreenshot != null && !confirmScreenshot.Empty() && _inspector.IsConfirmDialogOpen(confirmScreenshot, out confirmBrightness, trigger, runId, cycle);
+                WallLogger.LogInfo("confirm_dialog_open", confirmOpen ? "ok" : "fail", reason: confirmOpen ? "confirm_open" : "confirm_dialog_not_verified", cycle: cycle, trigger: trigger, runId: runId, extra: $"dialog_brightness={confirmBrightness:F1} dialog_open={confirmOpen}");
+
+                if (!confirmOpen || confirmScreenshot == null)
                 {
                     Console.WriteLine($"[WALL RESULT] phase=confirm_open cycle={_debug.Cycle} resource={selectedResource} candidate_match_count={candidateMatchCount} requested_count={actualSelectedCount} verified_count=0 status=skip reason=confirm_dialog_not_verified");
+                    WallLogger.LogInfo("upgrade_batch", "skip", reason: "confirm_dialog_not_verified", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds, extra: "attempted_unverified=true");
                     _navigator.BestEffortDismiss();
                     return WallTransactionResult.Skip("confirm_dialog_not_verified").WithCandidateMatchCount(candidateMatchCount);
                 }
 
                 _debug.Capture("confirm_open");
 
-                Point confirmPoint = actualSelectedCount > 1 ? WallUiLayout.ConfirmMultiPoint : WallUiLayout.ConfirmUpgradePoint;
+                WallConfirmationValidation confirmation = WallConfirmationFlow.Validate(
+                    _vision, confirmScreenshot, selectedResource, actualSelectedCount, singleWallCost, finalBatchTotal);
+                WallLogger.LogInfo("confirmation_flow", confirmation.Valid ? "ok" : "fail",
+                    reason: confirmation.Reason, cycle: cycle, trigger: trigger, runId: runId,
+                    extra: $"kind={confirmation.Kind} expected_kind={(actualSelectedCount > 1 ? WallConfirmationKind.MultiCancelOkay : WallConfirmationKind.SingleConfirm)} expected_resource={selectedResource} observed_resource={confirmation.Resource} selected_count={actualSelectedCount} expected_total={(long)singleWallCost * actualSelectedCount:N0} observed_total={confirmation.Total:N0}");
+                if (!confirmation.Valid)
+                {
+                    Console.WriteLine($"[WALL RESULT] phase=confirmation_flow cycle={_debug.Cycle} resource={selectedResource} requested_count={actualSelectedCount} verified_count=0 status=skip reason={confirmation.Reason}");
+                    _navigator.BestEffortDismiss();
+                    return WallTransactionResult.Skip(confirmation.Reason).WithCandidateMatchCount(candidateMatchCount);
+                }
+
+                WallConfirmButtonInfo confirmBtnInfo = WallDynamicLocalizer.LocalizeConfirmButton(_vision, confirmScreenshot, actualSelectedCount > 1, selectedBtnInfo);
+                if (!confirmBtnInfo.Found)
+                {
+                    Console.WriteLine($"[WALL RESULT] phase=confirm_open cycle={_debug.Cycle} resource={selectedResource} candidate_match_count={candidateMatchCount} requested_count={actualSelectedCount} verified_count=0 status=skip reason=confirm_button_not_localized");
+                    WallLogger.LogInfo("upgrade_batch", "skip", reason: "confirm_button_not_localized", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds, extra: "attempted_unverified=true");
+                    _navigator.BestEffortDismiss();
+                    return WallTransactionResult.Skip("confirm_button_not_localized").WithCandidateMatchCount(candidateMatchCount);
+                }
+
+                Point confirmPoint = confirmBtnInfo.TapPoint;
+                WallLogger.LogInfo("tap_confirm_btn", "ok", cycle: cycle, trigger: trigger, runId: runId, extra: $"confirm_btn_x={confirmPoint.X} confirm_btn_y={confirmPoint.Y} is_multi={actualSelectedCount > 1} method={confirmBtnInfo.Method} score={confirmBtnInfo.Score:F3}");
                 _adb.Tap(confirmPoint.X, confirmPoint.Y);
 
                 if (InterruptibleSleep(1500, token))
                 {
+                    WallLogger.LogInfo("upgrade_batch", "cancelled", reason: "cancelled_post_confirm", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds, extra: "attempted_unverified=true");
                     _navigator.BestEffortDismiss();
                     return new WallTransactionResult(0, "cancelled_post_confirm", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
                 }
 
-                if (!_inspector.IsConfirmDialogClosed())
+                bool dialogClosed = _inspector.IsConfirmDialogClosed(out double postConfirmBrightness, trigger, runId, cycle);
+                WallLogger.LogInfo("confirm_dialog_closed", dialogClosed ? "ok" : "fail", reason: dialogClosed ? "dialog_closed" : "dialog_still_open", cycle: cycle, trigger: trigger, runId: runId, extra: $"dialog_brightness={postConfirmBrightness:F1} dialog_closed={dialogClosed}");
+
+                if (!dialogClosed)
                 {
                     Console.WriteLine($"[WALL RESULT] phase=confirm_verify cycle={_debug.Cycle} resource={selectedResource} status=unknown reason=dialog_still_open");
+                    WallLogger.LogInfo("upgrade_batch", "unknown", reason: "dialog_still_open", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds, extra: "attempted_unverified=true");
                     _navigator.BestEffortDismiss();
                     return new WallTransactionResult(0, "outcome_unknown", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
                 }
 
-                // Re-read the resources after confirming, polling up to 3 times (250 ms each) to let the resource bar finish updating
+                // Re-read resources after confirming, polling up to 3 times (~250ms each) to allow
+                // the game's animation to settle. Stop early as soon as the delta is verified.
                 int resourceAfter = 0;
                 long expectedSpend = (long)singleWallCost * actualSelectedCount;
                 long actualSpend = 0;
+                long tolerance = Math.Max(20_000, expectedSpend / 10);
                 bool deltaOk = false;
+                bool hudReadFailed = false;
 
                 for (int poll = 0; poll < 3; poll++)
                 {
                     (int goldAfter, int elixirAfter, _) = IsTarget.ExtractHomeResources(_adb, _vision);
-                    resourceAfter = selectedResource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? goldAfter : elixirAfter;
-                    if (resourceAfter > 0)
+                    int pollResourceAfter = selectedResource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? goldAfter : elixirAfter;
+
+                    if (pollResourceAfter <= 0)
                     {
-                        actualSpend = (long)resourceBefore - resourceAfter;
-                        if (WallCostPolicy.IsResourceDeltaVerified(resourceBefore, resourceAfter, expectedSpend))
-                        {
-                            deltaOk = true;
-                            break;
-                        }
+                        // HUD read failed completely for this poll; mark and stop polling.
+                        WallLogger.LogInfo("post_confirm_poll", "fail", reason: "hud_read_zero", cycle: cycle, trigger: trigger, runId: runId, extra: $"poll={poll + 1} resource_before={resourceBefore:N0} resource_after={pollResourceAfter} expected_spend={expectedSpend:N0}");
+                        hudReadFailed = true;
+                        break;
                     }
-                    Thread.Sleep(250);
+
+                    resourceAfter = pollResourceAfter;
+                    actualSpend = (long)resourceBefore - resourceAfter;
+
+                    if (WallCostPolicy.IsResourceDeltaVerified(resourceBefore, resourceAfter, expectedSpend))
+                    {
+                        deltaOk = true;
+                        WallLogger.LogInfo("post_confirm_poll", "ok", cycle: cycle, trigger: trigger, runId: runId, extra: $"poll={poll + 1} resource_before={resourceBefore:N0} resource_after={resourceAfter:N0} expected_spend={expectedSpend:N0} actual_spend={actualSpend:N0} tolerance={tolerance:N0} delta_ok=true verified=true");
+                        break;
+                    }
+
+                    WallLogger.LogInfo("post_confirm_poll", "pending", cycle: cycle, trigger: trigger, runId: runId, extra: $"poll={poll + 1} resource_before={resourceBefore:N0} resource_after={resourceAfter:N0} expected_spend={expectedSpend:N0} actual_spend={actualSpend:N0} tolerance={tolerance:N0} delta_ok=false");
+
+                    // Only sleep if there are more polls to attempt.
+                    if (poll < 2)
+                    {
+                        Thread.Sleep(250);
+                    }
                 }
 
                 _navigator.BestEffortDismiss();
 
-                if (resourceAfter > 0 && deltaOk)
+                if (deltaOk)
                 {
-                    int totalCost = (int)actualSpend > 0 ? (int)actualSpend : (int)expectedSpend;
-                    Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debug.Cycle} resource={selectedResource} candidate_match_count={candidateMatchCount} requested_count={actualSelectedCount} verified_count={actualSelectedCount} cost={totalCost:N0} status=upgraded reason=verified");
+                    int totalCost = actualSpend > 0 ? (int)actualSpend : (int)expectedSpend;
+                    Console.WriteLine($"[WALL RESULT] phase=attempt_upgrade cycle={_debug.Cycle} resource={selectedResource} candidate_match_count={candidateMatchCount} requested_count={actualSelectedCount} verified_count={actualSelectedCount} cost={totalCost:N0} actual_spend={actualSpend:N0} expected_spend={expectedSpend:N0} status=upgraded reason=ok");
+                    WallLogger.LogInfo("upgrade_batch", "upgraded", reason: "ok", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds, extra: $"resource={selectedResource} requested_count={actualSelectedCount} verified_count={actualSelectedCount} cost={totalCost:N0} actual_spend={actualSpend:N0} expected_spend={expectedSpend:N0} verified=true");
                     return WallTransactionResult.Verified(selectedResource, actualSelectedCount, totalCost, candidateMatchCount, actualSelectedCount);
+                }
+                else if (hudReadFailed)
+                {
+                    // Could not read HUD after confirm: outcome is unknown.
+                    Console.WriteLine($"[WALL RESULT] phase=confirm_verify cycle={_debug.Cycle} resource={selectedResource} status=unknown reason=post_confirm_outcome_unknown before={resourceBefore:N0} expected_spend={expectedSpend:N0}");
+                    WallLogger.LogInfo("upgrade_batch", "unknown", reason: "post_confirm_outcome_unknown", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds, extra: $"resource={selectedResource} requested_count={actualSelectedCount} verified_count=0 resource_before={resourceBefore:N0} resource_after=0 expected_spend={expectedSpend:N0} actual_spend=0 verified=false attempted_unverified=true");
+                    return new WallTransactionResult(0, "post_confirm_outcome_unknown", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
                 }
                 else
                 {
-                    string reason = resourceAfter <= 0 ? "post_confirm_resource_unreadable" : "resource_delta_mismatch";
-                    Console.WriteLine($"[WALL RESULT] phase=confirm_verify cycle={_debug.Cycle} resource={selectedResource} status=unknown reason={reason} before={resourceBefore:N0} after={resourceAfter:N0} expectedSpend={expectedSpend:N0} actualSpend={actualSpend:N0}");
-                    return new WallTransactionResult(0, reason, Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
+                    // HUD was readable but delta does not match: probable under-buy or OCR drift.
+                    Console.WriteLine($"[WALL RESULT] phase=confirm_verify cycle={_debug.Cycle} resource={selectedResource} status=unknown reason=post_confirm_delta_mismatch before={resourceBefore:N0} after={resourceAfter:N0} expected_spend={expectedSpend:N0} actual_spend={actualSpend:N0} tolerance={tolerance:N0}");
+                    WallLogger.LogInfo("upgrade_batch", "unknown", reason: "post_confirm_delta_mismatch", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds, extra: $"resource={selectedResource} requested_count={actualSelectedCount} verified_count=0 resource_before={resourceBefore:N0} resource_after={resourceAfter:N0} expected_spend={expectedSpend:N0} actual_spend={actualSpend:N0} tolerance={tolerance:N0} verified=false attempted_unverified=true");
+                    return new WallTransactionResult(0, "post_confirm_delta_mismatch", Resource: selectedResource, CandidateMatchCount: candidateMatchCount, RequestedCount: actualSelectedCount);
                 }
             }
-            finally
+            catch (Exception ex)
             {
-                _navigator.BestEffortDismiss();
+                WallLogger.LogInfo("upgrade_batch", "fail", reason: "exception", cycle: cycle, trigger: trigger, runId: runId, elapsedMs: batchTimer.ElapsedMilliseconds, extra: $"ex_type=\"{ex.GetType().Name}\" ex_msg=\"{ex.Message}\"");
+                throw;
             }
         }
 

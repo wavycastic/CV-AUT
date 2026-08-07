@@ -29,23 +29,26 @@ namespace CvAut
             _navigator = navigator;
         }
 
-        /// <summary>The four generic wall templates that actually exist in the Templates directory.</summary>
+        /// <summary>The five Wall text label templates that exist in the Templates directory (images containing the "Wall" text label).</summary>
         public string[] GetWallTemplateNames()
         {
             return new[]
             {
-                @"walls\wall.png",
-                @"walls\wall_2.png",
-                @"walls\wall_3.png",
-                @"walls\wall_4.png"
+                @"walls\wall_text_1.png",
+                @"walls\wall_text_2.png",
+                @"walls\wall_text_3.png",
+                @"walls\wall_text_4.png",
+                @"walls\wall_text_5.png"
             }.Where(name => TemplateAssetLoader.Exists(_templatesPath, name)).ToArray();
         }
 
         /// <summary>Opens the builder menu and scans up to seven times (scrolling between attempts) until candidates are found.</summary>
-        public List<WallCandidate> FindAllWallCandidates(CancellationToken token = default)
+        public List<WallCandidate> FindAllWallCandidates(CancellationToken token = default) => FindAllWallCandidates(token, "unknown", null, 0);
+
+        public List<WallCandidate> FindAllWallCandidates(CancellationToken token = default, string trigger = "unknown", string? runId = null, int cycle = 0)
         {
             if (token.IsCancellationRequested) return new List<WallCandidate>();
-            if (!PrepareWallSearch(token))
+            if (!PrepareWallSearch(token, trigger, runId, cycle))
             {
                 return new List<WallCandidate>();
             }
@@ -54,9 +57,11 @@ namespace CvAut
             if (templateNames.Length == 0)
             {
                 Console.WriteLine("[WALL WARN] No wall templates found in Templates directory.");
+                WallLogger.LogInfo("search_templates", "skip", reason: "templates_missing", cycle: cycle, trigger: trigger, runId: runId);
                 return new List<WallCandidate>();
             }
 
+            WallLogger.LogInfo("search_templates", "ok", reason: "loaded", cycle: cycle, trigger: trigger, runId: runId, extra: $"template_count={templateNames.Length} names=\"{string.Join(",", templateNames)}\"");
             Console.WriteLine($"[WALL] phase=search_templates count={templateNames.Length} status=ok reason=loaded");
 
             for (int attempt = 0; attempt < 7; attempt++)
@@ -64,6 +69,7 @@ namespace CvAut
                 if (token.IsCancellationRequested) return new List<WallCandidate>();
                 if (attempt > 0)
                 {
+                    WallLogger.LogInfo("candidate_swipe", "ok", cycle: cycle, trigger: trigger, runId: runId, extra: $"attempt={attempt + 1} swipe_start_x={WallUiLayout.RetrySwipeEnd.X} swipe_start_y={WallUiLayout.RetrySwipeEnd.Y} swipe_end_x={WallUiLayout.RetrySwipeStart.X} swipe_end_y={WallUiLayout.RetrySwipeStart.Y} swipe_duration_ms={WallUiLayout.SwipeDurationMs}");
                     _adb.Swipe(WallUiLayout.RetrySwipeEnd.X, WallUiLayout.RetrySwipeEnd.Y, WallUiLayout.RetrySwipeStart.X, WallUiLayout.RetrySwipeStart.Y, WallUiLayout.SwipeDurationMs);
                     if (ThreadingUtil.InterruptibleSleep(800, token)) return new List<WallCandidate>();
                 }
@@ -72,6 +78,7 @@ namespace CvAut
                 if (screenshot == null || screenshot.Empty())
                 {
                     Console.WriteLine("[WALL WARN] Screenshot failed while searching walls.");
+                    WallLogger.LogInfo("candidate_scan", "fail", reason: "screenshot_failed", cycle: cycle, trigger: trigger, runId: runId, extra: $"attempt={attempt + 1}");
                     continue;
                 }
 
@@ -79,6 +86,7 @@ namespace CvAut
                 if (roi.Width <= 0 || roi.Height <= 0)
                 {
                     Console.WriteLine("[WALL WARN] Builder Menu ROI is empty; check screenshot size.");
+                    WallLogger.LogInfo("candidate_scan", "fail", reason: "empty_builder_roi", cycle: cycle, trigger: trigger, runId: runId, extra: $"attempt={attempt + 1}");
                     return new List<WallCandidate>();
                 }
 
@@ -89,7 +97,13 @@ namespace CvAut
                 var merged = new List<WallCandidate>();
                 foreach (string templateName in templateNames)
                 {
-                    merged.AddRange(MatchWallTemplateInRoi(roiGray, templateName, WallUiLayout.BuilderUpgradeMenuRoi));
+                    var matches = MatchWallTemplateInRoi(roiGray, templateName, WallUiLayout.BuilderUpgradeMenuRoi).ToList();
+                    merged.AddRange(matches);
+                    if (matches.Count > 0)
+                    {
+                        var top = matches.MaxBy(m => m.Confidence);
+                        WallLogger.LogInfo("template_match", "ok", cycle: cycle, trigger: trigger, runId: runId, extra: $"attempt={attempt + 1} template_name=\"{templateName}\" match_count={matches.Count} best_score={top?.Confidence:F3} best_x={top?.Point.X} best_y={top?.Point.Y}");
+                    }
                 }
 
                 List<WallCandidate> candidates = DedupeCandidates(merged, 10)
@@ -97,13 +111,17 @@ namespace CvAut
                     .ThenBy(candidate => candidate.Point.X)
                     .ToList();
 
+                WallLogger.LogInfo("dedupe_candidates", "ok", cycle: cycle, trigger: trigger, runId: runId, extra: $"attempt={attempt + 1} raw_count={merged.Count} dedupe_count={candidates.Count}");
+
                 if (candidates.Count > 0)
                 {
                     Console.WriteLine($"[WALL] phase=search_candidates count={candidates.Count} status=ok reason=matched");
+                    WallLogger.LogInfo("search_candidates", "ok", reason: "matched", cycle: cycle, trigger: trigger, runId: runId, extra: $"attempt={attempt + 1} count={candidates.Count}");
                     return candidates;
                 }
             }
 
+            WallLogger.LogInfo("search_candidates", "skip", reason: "no_candidates_found", cycle: cycle, trigger: trigger, runId: runId);
             return new List<WallCandidate>();
         }
 
@@ -133,32 +151,37 @@ namespace CvAut
             return locations;
         }
 
-        private bool PrepareWallSearch(CancellationToken token = default)
+        private bool PrepareWallSearch(CancellationToken token = default, string trigger = "unknown", string? runId = null, int cycle = 0)
         {
             Console.WriteLine("[WALL] phase=preflight status=start reason=open_builder_menu");
+            WallLogger.LogInfo("builder_menu_prepare", "start", reason: "open_builder_menu", cycle: cycle, trigger: trigger, runId: runId);
             if (token.IsCancellationRequested) return false;
 
             _navigator.BestEffortDismiss();
             if (ThreadingUtil.InterruptibleSleep(300, token)) return false;
 
+            WallLogger.LogInfo("builder_menu_tap", "ok", cycle: cycle, trigger: trigger, runId: runId, extra: $"tap_x={WallUiLayout.BuilderMenuPoint.X} tap_y={WallUiLayout.BuilderMenuPoint.Y}");
             _adb.Tap(WallUiLayout.BuilderMenuPoint.X, WallUiLayout.BuilderMenuPoint.Y);
             if (ThreadingUtil.InterruptibleSleep(1000, token)) return false;
 
-            if (!_inspector.IsBuilderMenuOpen())
+            if (!_inspector.IsBuilderMenuOpen(out double darkRatio, trigger, runId, cycle))
             {
                 Console.WriteLine("[WALL] phase=preflight status=fail reason=builder_menu_not_visible");
+                WallLogger.LogInfo("builder_menu_prepare", "fail", reason: "builder_menu_not_visible", cycle: cycle, trigger: trigger, runId: runId, extra: $"dark_ratio={darkRatio:F2}");
                 return false;
             }
 
             for (int i = 0; i < 3; i++)
             {
                 if (token.IsCancellationRequested) return false;
+                WallLogger.LogInfo("builder_menu_scroll_up", "ok", cycle: cycle, trigger: trigger, runId: runId, extra: $"step={i + 1} swipe_start_x={WallUiLayout.RetrySwipeStart.X} swipe_start_y={WallUiLayout.RetrySwipeStart.Y} swipe_end_x={WallUiLayout.RetrySwipeEnd.X} swipe_end_y={WallUiLayout.RetrySwipeEnd.Y}");
                 _adb.Swipe(WallUiLayout.RetrySwipeStart.X, WallUiLayout.RetrySwipeStart.Y, WallUiLayout.RetrySwipeEnd.X, WallUiLayout.RetrySwipeEnd.Y, WallUiLayout.SwipeDurationMs);
                 if (ThreadingUtil.InterruptibleSleep(250, token)) return false;
             }
 
-            bool menuOpen = _inspector.IsBuilderMenuOpen();
+            bool menuOpen = _inspector.IsBuilderMenuOpen(out darkRatio, trigger, runId, cycle);
             Console.WriteLine($"[WALL] phase=preflight status={(menuOpen ? "ok" : "fail")} reason={(menuOpen ? "builder_menu_visible" : "builder_menu_not_visible")}");
+            WallLogger.LogInfo("builder_menu_prepare", menuOpen ? "ok" : "fail", reason: menuOpen ? "builder_menu_visible" : "builder_menu_not_visible", cycle: cycle, trigger: trigger, runId: runId, extra: $"dark_ratio={darkRatio:F2}");
             return menuOpen;
         }
 
