@@ -23,9 +23,11 @@ namespace CvAut
         public static readonly Rect TreasureHuntChestTemplateRoi = Rect.FromLTRB(105, 65, 210, 145);
         public static readonly Rect TreasureHuntTextTemplateRoi = Rect.FromLTRB(15, 210, 300, 275);
 
-        // Tọa độ Tap chuẩn
+        // Tọa độ Tap chuẩn & ROI nhận thưởng sau trận
         public static readonly Point TreasureHuntOpenedChestTapPoint = new(800, 455);
         public static readonly Point TreasureHuntRewardContinueTapPoint = new(800, 750);
         public static readonly Point StarBonusOkayTapPoint = new(808, 766);
+        public static readonly Rect ClaimRewardSafeRoi = Rect.FromLTRB(724, 750, 948, 822);
+        public static readonly Point ClaimRewardSafeTapPoint = new(836, 786);
     }
 }

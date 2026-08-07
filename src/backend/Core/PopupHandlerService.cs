@@ -11,7 +11,7 @@ internal sealed class PopupHandlerService : IPopupHandlerService
     private readonly string _templatesPath;
     private readonly Handlers.ConnectionPopupHandler _connectionHandler;
     private readonly Handlers.StarBonusPopupHandler _starBonusHandler;
-    private readonly Handlers.TreasureHuntHandler _treasureHuntHandler;
+    private readonly Handlers.EventRewardHandler _eventRewardHandler;
 
     private bool _handlingConnectionPopup;
 
@@ -22,7 +22,7 @@ internal sealed class PopupHandlerService : IPopupHandlerService
         _templatesPath = templatesPath;
         _connectionHandler = new Handlers.ConnectionPopupHandler(adb, vision, templatesPath);
         _starBonusHandler = new Handlers.StarBonusPopupHandler(adb, vision, templatesPath);
-        _treasureHuntHandler = new Handlers.TreasureHuntHandler(adb, vision, templatesPath);
+        _eventRewardHandler = new Handlers.EventRewardHandler(adb, vision, templatesPath);
     }
 
     public bool IsHandlingConnectionPopup => _handlingConnectionPopup;
@@ -129,7 +129,12 @@ internal sealed class PopupHandlerService : IPopupHandlerService
 
     public bool HandleTreasureHuntIfPresent(bool verboseNotFound = true)
     {
-        return _treasureHuntHandler.HandleIfPresent(verboseNotFound);
+        return _eventRewardHandler.HandleTreasureHuntIfPresent(verboseNotFound);
+    }
+
+    public bool HandleClaimRewardFlow(Point claimMatchCenter, int continueTimeoutSeconds = 8)
+    {
+        return _eventRewardHandler.HandleClaimRewardFlow(claimMatchCenter, continueTimeoutSeconds);
     }
 
     public bool DismissStarBonusIfPresent()
