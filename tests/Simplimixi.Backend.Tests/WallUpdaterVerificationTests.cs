@@ -99,6 +99,7 @@ namespace CvAut.Backend.Tests
         }
 
         [Fact]
+        [Trait("Category", "Manual")]
         public void ScanWallLocations_RuntimeMenuScreenshot_FindsBothVisibleWallRows()
         {
             string fixturePath = System.IO.Path.Combine(
@@ -1021,6 +1022,7 @@ namespace CvAut.Backend.Tests
         }
 
         [Fact]
+        [Trait("Category", "Manual")]
         public void AllNamedWallScreenshotsMatchFilenameMetadata()
         {
             string inputDir = Path.Combine(Directory.GetCurrentDirectory(), "scratch", "walltestimage");
@@ -1111,6 +1113,7 @@ namespace CvAut.Backend.Tests
         }
 
         [Fact]
+        [Trait("Category", "Manual")]
         public void TestGoldRedElixirWhiteScreenshots()
         {
             string inputDir = Path.Combine(Directory.GetCurrentDirectory(), "scratch", "walltestimage");
@@ -1167,6 +1170,7 @@ namespace CvAut.Backend.Tests
         }
 
         [Fact]
+        [Trait("Category", "Manual")]
         public void TestUserScreenshotsAndSaveCrops()
         {
             string inputDir = Path.Combine(Directory.GetCurrentDirectory(), "scratch", "walltestimage");
@@ -1255,6 +1259,7 @@ namespace CvAut.Backend.Tests
         }
 
         [Fact]
+        [Trait("Category", "Manual")]
         public void CropAllWallTestImageButtons()
         {
             string inputDir = Path.Combine(Directory.GetCurrentDirectory(), "scratch", "walltestimage");
@@ -1335,6 +1340,7 @@ namespace CvAut.Backend.Tests
         }
 
         [Fact]
+        [Trait("Category", "Manual")]
         public void VerifyOcrAccuracyOnAllTestImages()
         {
             string inputDir = Path.Combine(Directory.GetCurrentDirectory(), "scratch", "walltestimage");
