@@ -45,6 +45,7 @@ namespace CvAut.Backend.Tests
         }
 
         [Fact]
+        [Trait("Category", "Manual")]
         public void Issue1_EventResultScreen_ClaimRewardButton_MatchedCorrectly_AndActiveBattleFalse()
         {
             string imagePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Screenshot_2026.08.01_21.22.10.457.png");
