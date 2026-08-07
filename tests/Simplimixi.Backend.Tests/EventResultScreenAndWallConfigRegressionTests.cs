@@ -105,6 +105,59 @@ namespace CvAut.Backend.Tests
             Assert.True(battleEnded2);
             Assert.Contains("claim_reward", matchInfo2);
         }
+
+        [Fact]
+        public void Issue2_WallConfig_RootActiveConfigPrecedence_OverLegacyVillageProfile()
+        {
+            // Scenario 1: Root HAS upgrade_wall = true, profile Village_1 HAS upgrade_wall = false
+            // Root active config must win!
+            string jsonRootTrue = """
+            {
+              "upgrade_wall": true,
+              "wall_gold_threshold": 7000000,
+              "wall_elixir_threshold": 6000000,
+              "wall_gold_reserve": 200000,
+              "wall_elixir_reserve": 50000,
+              "wall_batch_limit": 3
+            }
+            """;
+            using JsonDocument docTrue = JsonDocument.Parse(jsonRootTrue);
+            var wallConfigTrue = ConfigService.GetWallUpgradeConfig(docTrue.RootElement, 1);
+
+            Assert.True(wallConfigTrue.Enabled);
+            Assert.Equal(7000000, wallConfigTrue.GoldThreshold);
+            Assert.Equal(6000000, wallConfigTrue.ElixirThreshold);
+            Assert.Equal(200000, wallConfigTrue.GoldReserve);
+            Assert.Equal(50000, wallConfigTrue.ElixirReserve);
+            Assert.Equal(3, wallConfigTrue.BatchLimit);
+
+            // Scenario 2: Root HAS upgrade_wall = false (explicitly set by user to false)
+            string jsonRootFalse = """
+            {
+              "upgrade_wall": false,
+              "wall_batch_limit": 2
+            }
+            """;
+            using JsonDocument docFalse = JsonDocument.Parse(jsonRootFalse);
+            var wallConfigFalse = ConfigService.GetWallUpgradeConfig(docFalse.RootElement, 1);
+
+            Assert.False(wallConfigFalse.Enabled);
+            Assert.Equal(2, wallConfigFalse.BatchLimit);
+
+            // Scenario 3: Root MISSING upgrade_wall property, profile HAS upgrade_wall = false in Village_1.json
+            // Should fallback to legacy profile value
+            string jsonRootMissing = """
+            {
+              "farming_thresholds": { "gold_threshold": 500000 }
+            }
+            """;
+            using JsonDocument docMissing = JsonDocument.Parse(jsonRootMissing);
+            var wallConfigMissing = ConfigService.GetWallUpgradeConfig(docMissing.RootElement, 1);
+
+            // Village_1.json has upgrade_wall: false
+            Assert.False(wallConfigMissing.Enabled);
+        }
+
         [Fact]
         public void Issue3_ClaimRewardFlow_ExecutesFiveSteps_AndHitsFailsafeWhenContinueTimeout()
         {

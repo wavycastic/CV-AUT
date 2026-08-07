@@ -131,15 +131,28 @@ internal sealed class ConfigService : IConfigService
     public static CvAut.WallUpgradeConfig GetWallUpgradeConfig(JsonElement root, int villageIndex)
     {
         TypedWallConfig wall = AutomationConfigSnapshotReader.Read(root).WallUpgrade;
+        JsonConfigReader rootReader = new(root);
         JsonConfigReader profile = new(JsonConfigPersistence.LoadVillageProfile(villageIndex));
+
+        bool enabled = rootReader.HasProperty("upgrade_wall") ? wall.Enabled : profile.Bool("upgrade_wall", wall.Enabled);
+        int goldThreshold = rootReader.HasProperty("wall_gold_threshold") ? wall.GoldThreshold : profile.Int("wall_gold_threshold", wall.GoldThreshold, 0);
+        int elixirThreshold = rootReader.HasProperty("wall_elixir_threshold") ? wall.ElixirThreshold : profile.Int("wall_elixir_threshold", wall.ElixirThreshold, 0);
+        int goldReserve = rootReader.HasProperty("wall_gold_reserve") ? wall.GoldReserve : profile.Int("wall_gold_reserve", wall.GoldReserve, 0);
+        int elixirReserve = rootReader.HasProperty("wall_elixir_reserve") ? wall.ElixirReserve : profile.Int("wall_elixir_reserve", wall.ElixirReserve, 0);
+        int batchLimit = rootReader.HasProperty("wall_batch_limit") ? wall.BatchLimit : profile.Int("wall_batch_limit", wall.BatchLimit, 1, WallQuantityPlanner.HardSafetyMaximum);
+        bool debugScreenshots = rootReader.HasProperty("wall_debug_screenshots") ? wall.DebugScreenshots : profile.Bool("wall_debug_screenshots", wall.DebugScreenshots);
+
+        string source = rootReader.HasProperty("upgrade_wall") ? "active_root" : (profile.HasProperty("upgrade_wall") ? "legacy_profile" : "default");
+        Console.WriteLine($"[CONFIG-CS] phase=get_wall_config village={villageIndex} enabled={enabled} source={source} gold_thresh={goldThreshold} elixir_thresh={elixirThreshold} gold_reserve={goldReserve} elixir_reserve={elixirReserve} batch={batchLimit} debug={debugScreenshots}");
+
         return new CvAut.WallUpgradeConfig(
-            profile.Bool("upgrade_wall", wall.Enabled),
-            profile.Int("wall_gold_threshold", wall.GoldThreshold, 0),
-            profile.Int("wall_elixir_threshold", wall.ElixirThreshold, 0),
-            profile.Int("wall_gold_reserve", wall.GoldReserve, 0),
-            profile.Int("wall_elixir_reserve", wall.ElixirReserve, 0),
-            profile.Int("wall_batch_limit", wall.BatchLimit, 1, 10),
-            profile.Bool("wall_debug_screenshots", wall.DebugScreenshots));
+            enabled,
+            goldThreshold,
+            elixirThreshold,
+            goldReserve,
+            elixirReserve,
+            batchLimit,
+            debugScreenshots);
     }
 
     public static int ReadClanGamesPoints(int villageIndex)

@@ -47,6 +47,57 @@ namespace CvAut.Backend.Tests
             Assert.Equal(WallUpgradeResource.None, decision.Resource);
             Assert.Equal(0, decision.RequestedCount);
         }
+
+        [Theory]
+        [InlineData(0, 1)]
+        [InlineData(1, 1)]
+        [InlineData(5, 5)]
+        [InlineData(10, 10)]
+        [InlineData(50, 50)]
+        [InlineData(255, 255)]
+        [InlineData(999, 255)]
+        public void CreateWallUpgradeConfig_ClampsBatchLimitBetween1And255(int rawBatch, int expectedBatch)
+        {
+            string json = $$"""
+            {
+                "upgrade_wall": true,
+                "wall_batch_limit": {{rawBatch}}
+            }
+            """;
+            using var doc = JsonDocument.Parse(json);
+
+            WallUpgradeConfig config = ConfigService.GetWallUpgradeConfig(doc.RootElement, 1);
+
+            Assert.Equal(expectedBatch, config.BatchLimit);
+        }
+
+        [Fact]
+        public void GetWallUpgradeConfig_FallbackToElementStateAutomation_WhenUpgradeWallPropertyIsMissing()
+        {
+            string legacyJson = """
+            {
+                "element_state_automation": {
+                    "upgrade_enabled": true,
+                    "wall_gold_threshold": 6000000,
+                    "wall_elixir_threshold": 6000000,
+                    "wall_gold_reserve": 200000,
+                    "wall_elixir_reserve": 100000,
+                    "wall_batch_limit": 3
+                }
+            }
+            """;
+            using var doc = JsonDocument.Parse(legacyJson);
+
+            WallUpgradeConfig config = ConfigService.GetWallUpgradeConfig(doc.RootElement, 99);
+
+            Assert.True(config.Enabled);
+            Assert.Equal(6_000_000, config.GoldThreshold);
+            Assert.Equal(6_000_000, config.ElixirThreshold);
+            Assert.Equal(200_000, config.GoldReserve);
+            Assert.Equal(100_000, config.ElixirReserve);
+            Assert.Equal(3, config.BatchLimit);
+        }
+
         [Fact]
         public void ScanWallLocations_RuntimeMenuScreenshot_FindsBothVisibleWallRows()
         {

@@ -116,7 +116,7 @@ internal static class AutomationConfigSnapshotReader
             root.Int("wall_elixir_threshold", legacy.Int("wall_elixir_threshold", root.Int("wall_upgrade_threshold", 5000000), 0), 0),
             root.Int("wall_gold_reserve", legacy.Int("wall_gold_reserve", root.Int("wall_reserve_threshold", 100000), 0), 0),
             root.Int("wall_elixir_reserve", legacy.Int("wall_elixir_reserve", 0, 0), 0),
-            root.Int("wall_batch_limit", root.Int("wall_batch_limit", legacy.Int("wall_batch_limit", 1, 1, 10), 1, 10), 1, 10),
+            root.Int("wall_batch_limit", root.Int("wall_batch_limit", legacy.Int("wall_batch_limit", 1, 1, CvAut.WallQuantityPlanner.HardSafetyMaximum), 1, CvAut.WallQuantityPlanner.HardSafetyMaximum), 1, CvAut.WallQuantityPlanner.HardSafetyMaximum),
             root.Bool("wall_debug_screenshots", false));
     }
 
