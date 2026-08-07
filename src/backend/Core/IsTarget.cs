@@ -61,6 +61,7 @@ namespace CvAut
             int hImg = screenshot.Height;
             int wImg = screenshot.Width;
             var results = new Dictionary<string, int>();
+            int failedReads = 0;
 
             foreach (var kvp in Coords)
             {
@@ -76,8 +77,16 @@ namespace CvAut
 
                 Rect roi = new Rect(x1p, y1p, x2p - x1p, y2p - y1p);
 
-                // Gọi bộ phân tích OCR của VisionEngine để đọc số trong vùng chọn (ROI)
-                int val = vision.ExtractNumericalMetrics(screenshot, roi);
+                // Prefer the existing grayscale path, then retry with RGB thresholding.
+                // Keep OCR failure separate from a legitimate numeric value.
+                bool read = vision.TryExtractNumericalMetrics(screenshot, roi, out int val, out double confidence, allowVerticalShift: true)
+                    || vision.TryExtractNumericalMetrics(screenshot, roi, out val, out confidence, useRgbThresh: true, allowVerticalShift: true);
+                if (!read)
+                {
+                    failedReads++;
+                    val = 0;
+                    Console.WriteLine($"[SCOUT-CS WARNING] phase=extract status=fail details=\"target\" resource=\"{label}\" reason=ocr_no_result roi={roi.X},{roi.Y},{roi.Width},{roi.Height}");
+                }
                 results[label] = val;
             }
 
@@ -85,7 +94,8 @@ namespace CvAut
             int elixir = results.GetValueOrDefault("Elixir", 0);
             int darkElixir = results.GetValueOrDefault("Dark Elixir", 0);
 
-            Console.WriteLine($"[SCOUT-CS] phase=extract status=success details=\"target\" gold={gold} elixir={elixir} dark_elixir={darkElixir}");
+            string status = failedReads == Coords.Count ? "fail" : failedReads > 0 ? "partial" : "success";
+            Console.WriteLine($"[SCOUT-CS] phase=extract status={status} details=\"target\" gold={gold} elixir={elixir} dark_elixir={darkElixir} failed_reads={failedReads}");
             return (gold, elixir, darkElixir);
         }
 

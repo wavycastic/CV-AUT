@@ -137,7 +137,7 @@ namespace CvAut
         /// 4. Resize mỗi chữ số về kích thước 12x16 pixel để chuẩn hóa.
         /// 5. Tính toán IoU của chữ số đó với 10 mẫu ma trận số của Supercell Magic để tìm số tương thích nhất.
         /// </summary>
-        public bool TryExtractNumericalMetrics(Mat screenshot, Rect roi, out int value, out double confidence, bool isOffline = false, bool useRgbThresh = false, bool invert = false)
+        public bool TryExtractNumericalMetrics(Mat screenshot, Rect roi, out int value, out double confidence, bool isOffline = false, bool useRgbThresh = false, bool invert = false, bool allowVerticalShift = false)
         {
             value = 0;
             confidence = 0;
@@ -174,7 +174,8 @@ namespace CvAut
             {
                 Rect r = Cv2.BoundingRect(c);
                 // Lọc bỏ nhiễu nhỏ hoặc các vệt dài không phải chữ số dựa trên kích thước thực nghiệm
-                if (r.Height >= 13 && r.Width > 2 && r.Height < 45 && r.Width < 30)
+                bool verticalPositionAccepted = allowVerticalShift || (r.Y >= 2 && r.Y <= 14);
+                if (verticalPositionAccepted && r.Height >= 10 && r.Width > 2 && r.Height < 45 && r.Width < 30)
                 {
                     rects.Add(r);
                 }

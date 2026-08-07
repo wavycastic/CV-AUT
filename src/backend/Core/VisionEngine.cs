@@ -63,14 +63,14 @@ namespace CvAut
 
         // --- OCR chữ số: uỷ quyền cho DigitOcrReader ---
 
-        public bool TryExtractNumericalMetrics(Mat screenshot, Rect roi, out int value, out double confidence, bool isOffline = false, bool useRgbThresh = false, bool invert = false)
-            => _ocr.TryExtractNumericalMetrics(screenshot, roi, out value, out confidence, isOffline, useRgbThresh, invert);
+        public bool TryExtractNumericalMetrics(Mat screenshot, Rect roi, out int value, out double confidence, bool isOffline = false, bool useRgbThresh = false, bool invert = false, bool allowVerticalShift = false)
+            => _ocr.TryExtractNumericalMetrics(screenshot, roi, out value, out confidence, isOffline, useRgbThresh, invert, allowVerticalShift);
 
         /// <summary>
         /// Trích xuất chỉ số số nguyên đơn giản từ vùng ROI ảnh mà không cần lấy chi tiết độ tin cậy.
         /// </summary>
-        public int ExtractNumericalMetrics(Mat screenshot, Rect roi, bool isOffline = false, bool useRgbThresh = false, bool invert = false)
-            => _ocr.TryExtractNumericalMetrics(screenshot, roi, out int value, out _, isOffline, useRgbThresh, invert)
+        public int ExtractNumericalMetrics(Mat screenshot, Rect roi, bool isOffline = false, bool useRgbThresh = false, bool invert = false, bool allowVerticalShift = false)
+            => _ocr.TryExtractNumericalMetrics(screenshot, roi, out int value, out _, isOffline, useRgbThresh, invert, allowVerticalShift)
                 ? value
                 : 0;
 
