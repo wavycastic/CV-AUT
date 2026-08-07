@@ -39,24 +39,66 @@ internal sealed class ConfigService : IConfigService
     public static MainVillageConfig GetMainVillageConfig(JsonElement root, int villageIndex)
     {
         AutomationConfigSnapshot snapshot = AutomationConfigSnapshotReader.Read(root);
+        JsonConfigReader rootReader = new(root);
         JsonConfigReader profile = new(JsonConfigPersistence.LoadVillageProfile(villageIndex));
         FarmingConfig farming = snapshot.Farming;
-        int gold = profile.Int("gold_threshold", farming.GoldThreshold, 0);
-        int elixir = profile.Int("elixir_threshold", farming.ElixirThreshold, 0);
-        int total = profile.Int("total_resource_threshold", farming.TotalResourceThreshold, 0);
-        TargetSelectionLogic logic = profile.String("target_logic", farming.TargetLogic.ToString()).ToLowerInvariant() switch
-        {
-            "and" => TargetSelectionLogic.And,
-            "or" => TargetSelectionLogic.Or,
-            _ => TargetSelectionLogic.Total
-        };
+
+        JsonConfigReader profileFarming = profile.Section("farming_thresholds");
+        bool profileHasFarmingSection = profile.HasProperty("farming_thresholds");
+        bool rootHasFarmingSection = rootReader.HasProperty("farming_thresholds");
+
+        int gold = profileHasFarmingSection
+            ? profileFarming.Int("gold_threshold", farming.GoldThreshold, 0)
+            : (rootHasFarmingSection
+                ? farming.GoldThreshold
+                : profile.Int("gold_threshold", farming.GoldThreshold, 0));
+
+        int elixir = profileHasFarmingSection
+            ? profileFarming.Int("elixir_threshold", farming.ElixirThreshold, 0)
+            : (rootHasFarmingSection
+                ? farming.ElixirThreshold
+                : profile.Int("elixir_threshold", farming.ElixirThreshold, 0));
+
+        int darkElixir = profileHasFarmingSection
+            ? profileFarming.Int("dark_elixir_threshold", farming.DarkElixirThreshold, 0)
+            : (rootHasFarmingSection
+                ? farming.DarkElixirThreshold
+                : profile.Int("dark_elixir_threshold", farming.DarkElixirThreshold, 0));
+
+        int total = profileHasFarmingSection
+            ? profileFarming.Int("total_resource_threshold", farming.TotalResourceThreshold, 0)
+            : (rootHasFarmingSection
+                ? farming.TotalResourceThreshold
+                : profile.Int("total_resource_threshold", farming.TotalResourceThreshold, 0));
+
+        TargetSelectionLogic logic = profileHasFarmingSection
+            ? (profileFarming.String("target_logic", farming.TargetLogic.ToString()).ToLowerInvariant() switch
+            {
+                "and" => TargetSelectionLogic.And,
+                "or" => TargetSelectionLogic.Or,
+                _ => TargetSelectionLogic.Total
+            })
+            : (rootHasFarmingSection
+                ? (farming.TargetLogic switch
+                {
+                    TargetLogic.And => TargetSelectionLogic.And,
+                    TargetLogic.Or => TargetSelectionLogic.Or,
+                    _ => TargetSelectionLogic.Total
+                })
+                : (profile.String("target_logic", farming.TargetLogic.ToString()).ToLowerInvariant() switch
+                {
+                    "and" => TargetSelectionLogic.And,
+                    "or" => TargetSelectionLogic.Or,
+                    _ => TargetSelectionLogic.Total
+                }));
+
         AttackConfig attack = snapshot.Attack;
         SmartSurrenderSettings surrender = attack.SmartSurrender;
         return new MainVillageConfig(
             profile.String("attack_mode", attack.Mode).Equals("donate_only", StringComparison.OrdinalIgnoreCase)
                 ? AttackMode.DonateOnly
                 : AttackMode.Attack,
-            new FarmingTargetConfig(gold, elixir, profile.Int("dark_elixir_threshold", farming.DarkElixirThreshold, 0), total <= 0 ? gold + elixir : total, logic),
+            new FarmingTargetConfig(gold, elixir, darkElixir, total <= 0 ? gold + elixir : total, logic),
             profile.Bool("request_troops", attack.RequestTroops),
             profile.Bool("use_event_troops", attack.UseEventTroops),
             profile.Bool("use_cake", attack.UseCake),

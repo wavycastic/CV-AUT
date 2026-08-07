@@ -28,6 +28,31 @@ namespace CvAut.Backend.Tests
         }
 
         [Fact]
+        public void GetMainVillageConfig_ActiveRootFarmingThresholds_OverridesLegacyVillageProfile()
+        {
+            const string json = """
+            {
+              "farming_thresholds": {
+                "gold_threshold": 200000,
+                "elixir_threshold": 200000,
+                "dark_elixir_threshold": 1000,
+                "total_resource_threshold": 400000,
+                "target_logic": "total"
+              }
+            }
+            """;
+
+            using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(json);
+            MainVillageConfig config = ConfigService.GetMainVillageConfig(doc.RootElement, 1);
+
+            Assert.Equal(200000, config.Target.GoldThreshold);
+            Assert.Equal(200000, config.Target.ElixirThreshold);
+            Assert.Equal(1000, config.Target.DarkElixirThreshold);
+            Assert.Equal(400000, config.Target.TotalResourceThreshold);
+            Assert.Equal(TargetSelectionLogic.Total, config.Target.Logic);
+        }
+
+        [Fact]
         public void IsActiveBattlePresent_DarkScreen_ReturnsFalse()
         {
             VisionEngine vision = CreateVisionEngine();
