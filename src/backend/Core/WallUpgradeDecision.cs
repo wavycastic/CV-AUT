@@ -7,6 +7,14 @@ namespace CvAut
         Elixir
     }
 
+    internal enum WallUpgradeResourceMode
+    {
+        Unknown,
+        GoldOnly,
+        GoldAndElixir,
+        FullyUpgraded
+    }
+
     internal sealed record WallUpgradeDecisionInput(
         int? WallCost,
         int Gold,
@@ -15,7 +23,8 @@ namespace CvAut
         int ElixirStartThreshold,
         int GoldReserve,
         int ElixirReserve,
-        int BatchLimit = 10);
+        int BatchLimit = 10,
+        WallUpgradeResourceMode ResourceMode = WallUpgradeResourceMode.GoldAndElixir);
 
     internal sealed record WallUpgradeDecision(
         WallUpgradeResource Resource,
@@ -28,6 +37,10 @@ namespace CvAut
     {
         internal static WallUpgradeDecision Decide(WallUpgradeDecisionInput input)
         {
+            if (input.ResourceMode == WallUpgradeResourceMode.FullyUpgraded)
+            {
+                return Skip("wall_fully_upgraded", 0, 0);
+            }
             if (input.WallCost is not { } cost || cost <= 0)
             {
                 return Skip("missing_wall_cost", 0, 0);
@@ -36,7 +49,7 @@ namespace CvAut
             int affordableGold = input.Gold >= input.GoldStartThreshold
                 ? Math.Max(0, input.Gold - Math.Max(0, input.GoldReserve)) / cost
                 : 0;
-            int affordableElixir = input.Elixir >= input.ElixirStartThreshold
+            int affordableElixir = input.ResourceMode == WallUpgradeResourceMode.GoldAndElixir && input.Elixir >= input.ElixirStartThreshold
                 ? Math.Max(0, input.Elixir - Math.Max(0, input.ElixirReserve)) / cost
                 : 0;
 
