@@ -1,0 +1,18 @@
+Test run for D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Frontend.Tests\bin\Debug\net10.0-windows\Simplimixi.Frontend.Tests.dll (.NETCoreApp,Version=v10.0)
+Test run for D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\bin\Debug\net10.0-windows\Simplimixi.Backend.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   101, Skipped:     0, Total:   101, Duration: 406 ms - Simplimixi.Frontend.Tests.dll (net10.0)
+[xUnit.net 00:00:09.21]     CvAut.Backend.Tests.EventResultScreenAndWallConfigRegressionTests.Issue1_EventResultScreen_ClaimRewardButton_MatchedCorrectly_AndActiveBattleFalse [FAIL]
+  Failed CvAut.Backend.Tests.EventResultScreenAndWallConfigRegressionTests.Issue1_EventResultScreen_ClaimRewardButton_MatchedCorrectly_AndActiveBattleFalse [2 ms]
+  Error Message:
+   Mandatory fixture missing: E:\Projects\CV-AUT\tests\Simplimixi.Backend.Tests\Fixtures\Screenshot_2026.08.01_21.22.10.457.png
+  Stack Trace:
+     at CvAut.Backend.Tests.FixtureLoader.LoadMandatory(String path) in D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\FixtureLoader.cs:line 13
+   at CvAut.Backend.Tests.EventResultScreenAndWallConfigRegressionTests.Issue1_EventResultScreen_ClaimRewardButton_MatchedCorrectly_AndActiveBattleFalse() in D:\a\CV-AUT\CV-AUT\tests\Simplimixi.Backend.Tests\EventResultScreenAndWallConfigRegressionTests.cs:line 60
+   at System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     1, Passed:   325, Skipped:     0, Total:   326, Duration: 1 m 15 s - Simplimixi.Backend.Tests.dll (net10.0)
