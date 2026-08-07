@@ -7,8 +7,6 @@ namespace CvAut;
 internal sealed class PopupHandlerService : IPopupHandlerService
 {
     private readonly IADBHelper _adb;
-    private readonly IVisionEngine _vision;
-    private readonly string _templatesPath;
     private readonly Handlers.ConnectionPopupHandler _connectionHandler;
     private readonly Handlers.StarBonusPopupHandler _starBonusHandler;
     private readonly Handlers.EventRewardHandler _eventRewardHandler;
@@ -18,8 +16,6 @@ internal sealed class PopupHandlerService : IPopupHandlerService
     public PopupHandlerService(IADBHelper adb, IVisionEngine vision, string templatesPath)
     {
         _adb = adb;
-        _vision = vision;
-        _templatesPath = templatesPath;
         _connectionHandler = new Handlers.ConnectionPopupHandler(adb, vision, templatesPath);
         _starBonusHandler = new Handlers.StarBonusPopupHandler(adb, vision, templatesPath);
         _eventRewardHandler = new Handlers.EventRewardHandler(adb, vision, templatesPath);
@@ -64,56 +60,6 @@ internal sealed class PopupHandlerService : IPopupHandlerService
             return true;
 
         return false;
-    }
-
-    // Reuses CVAutomationFramework's dialog shape detection logic
-    private static bool TryDetectReloadDialogShape(Mat screenshot, out Rect dialogRect)
-    {
-        dialogRect = default;
-        if (screenshot.Empty()) return false;
-
-        Rect roi = GetCenteredConnectionPopupRoi(screenshot.Width, screenshot.Height);
-        using Mat crop = new Mat(screenshot, roi);
-        using Mat hsv = new Mat();
-        Cv2.CvtColor(crop, hsv, ColorConversionCodes.BGR2HSV);
-
-        using Mat mask = new Mat();
-        Cv2.InRange(hsv, new Scalar(0, 0, 45), new Scalar(179, 45, 105), mask);
-
-        using Mat kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(15, 15));
-        Cv2.MorphologyEx(mask, mask, MorphTypes.Close, kernel);
-        Cv2.FindContours(mask, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
-
-        foreach (Point[] contour in contours)
-        {
-            Rect localRect = Cv2.BoundingRect(contour);
-            double area = Cv2.ContourArea(contour);
-            double fillRatio = area / Math.Max(1, localRect.Width * localRect.Height);
-            double widthRatio = localRect.Width / (double)screenshot.Width;
-            double heightRatio = localRect.Height / (double)screenshot.Height;
-
-            if (widthRatio < 0.38 || widthRatio > 0.90 || heightRatio < 0.14 || heightRatio > 0.48 || fillRatio < 0.55)
-                continue;
-
-            int centerX = roi.X + localRect.X + localRect.Width / 2;
-            int centerY = roi.Y + localRect.Y + localRect.Height / 2;
-            bool centered = centerX >= screenshot.Width * 0.20 && centerX <= screenshot.Width * 0.80
-                && centerY >= screenshot.Height * 0.25 && centerY <= screenshot.Height * 0.75;
-            if (!centered) continue;
-
-            dialogRect = new Rect(roi.X + localRect.X, roi.Y + localRect.Y, localRect.Width, localRect.Height);
-            return true;
-        }
-        return false;
-    }
-
-    private static Rect GetCenteredConnectionPopupRoi(int width, int height)
-    {
-        int x = (int)Math.Round(width * 0.08);
-        int y = (int)Math.Round(height * 0.18);
-        int roiWidth = (int)Math.Round(width * 0.84);
-        int roiHeight = (int)Math.Round(height * 0.64);
-        return ImageUtils.ClampRect(new Rect(x, y, roiWidth, roiHeight), width, height);
     }
 
     private void BootRecovery()
