@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "fixtures": [
+    { "file": "multi_x1_goldonly_5k.png", "mode": "Multi", "level": 2, "selectedCount": 1, "singleCost": 5000, "batchTotal": 5000, "confirmKind": "None", "sha256": "06cee3ab5c8ebb4c9dac78f520b4a95f9c5a35aefcc4471db72ed3b074c61e26" },
+    { "file": "multi_x2_total40k.png", "mode": "Multi", "level": 4, "selectedCount": 2, "singleCost": 20000, "batchTotal": 40000, "confirmKind": "None", "sha256": "0198e46aa1f4b9fa7e7f7ac96a25aa6ce200e0d0914f4ed5e94f5b550c9bd5a3" },
+    { "file": "multi_x3_total60k.png", "mode": "Multi", "level": 4, "selectedCount": 3, "singleCost": 20000, "batchTotal": 60000, "confirmKind": "None", "sha256": "d2be1fa4e895a0b2c25a3f4454ef6e6cc5ae5e4070927f40728c2f3aaa1ab121" },
+    { "file": "multi_x255_red_zero_wallet.png", "mode": "Multi", "selectedCount": 255, "confirmKind": "None", "sha256": "e2e4add7d3f5e3cb12ce5b0a9f426fad7f65aa941c2b18c654345114a1c42125" },
+    { "file": "multi_x255_white_31m_wallet.png", "mode": "Multi", "selectedCount": 255, "confirmKind": "None", "sha256": "9e42baa797934ac678d476108016b3e258de4ed6b14574b45bf2ce6993ccf033" },
+    { "file": "multi_x254_after_remove.png", "mode": "Multi", "selectedCount": 254, "confirmKind": "None", "sha256": "29b9b4ccf7608cc3700f7acaa4a0b2448df663c6d656a61bb20089ea682340ea" },
+    { "file": "multi_x11_after_add10.png", "mode": "Multi", "selectedCount": 11, "confirmKind": "None", "sha256": "32277f0ab772447e5d61d355ec8675195332a9773e7d2497dd64460839903d48" },
+    { "file": "multi_x11_total220k.png", "mode": "Multi", "level": 4, "selectedCount": 11, "singleCost": 20000, "batchTotal": 220000, "confirmKind": "None", "sha256": "39704fba0b81ec5aedf0b5d0b76bd37e68258b67a44f08d5c127952efa4d9714" },
+    { "file": "single_confirm_gold.png", "mode": "Single", "selectedCount": 1, "confirmKind": "SingleConfirm", "resource": "gold", "sha256": "cf729820f677d788c1e14f0fd07c92ca836e4428c7c58412762712dc2ae348cf" },
+    { "file": "single_confirm_elixir.png", "mode": "Single", "selectedCount": 1, "confirmKind": "SingleConfirm", "resource": "elixir", "sha256": "08c628640ddac515934d63795fba3919fdca70204acfce39f7792a98920f8ef9" },
+    { "file": "multi_x31_total620k.png", "mode": "Multi", "level": 4, "selectedCount": 31, "singleCost": 20000, "batchTotal": 620000, "confirmKind": "None", "sha256": "6d3a7ada56e469eab483f81885972238bfa9b25c69365e2c37465d70aebcfd0e" },
+    { "file": "multi_confirm_gold_620k.png", "mode": "Multi", "selectedCount": 31, "batchTotal": 620000, "confirmKind": "MultiCancelOkay", "resource": "gold", "sha256": "a88c42250a1da041d36a06bb2c2c22a5e9e3db4b4243b2c0012fb5b514f369d2" },
+    { "file": "multi_confirm_elixir_620k.png", "mode": "Multi", "selectedCount": 31, "batchTotal": 620000, "confirmKind": "MultiCancelOkay", "resource": "elixir", "sha256": "229e8aa486f5a28039cf846be2fcff9fce4601c11f5be86cb145227c920ef4db" },
+    { "file": "single_level1_gold_1k.png", "mode": "Single", "level": 1, "selectedCount": 1, "singleCost": 1000, "confirmKind": "None", "sha256": "248dd0fce07509064136b6bb308b4debd775e141841aed44f1693b9f70728864" },
+    { "file": "single_level4_total20k.png", "mode": "Single", "level": 4, "selectedCount": 1, "singleCost": 20000, "batchTotal": 20000, "confirmKind": "None", "sha256": "5f4f48f194529b66c618aa92c4c5442026178535de59beffe4a3b6ec05f6267f" },
+    { "file": "multi_x21_total420k.png", "mode": "Multi", "level": 4, "selectedCount": 21, "singleCost": 20000, "batchTotal": 420000, "confirmKind": "None", "sha256": "1aa1b1fb82dfc0220e79fda94ec90a8b4f7f9d8f958dac5f963bee4df74a0311" }
+  ]
+}
