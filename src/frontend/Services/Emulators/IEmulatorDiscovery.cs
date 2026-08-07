@@ -82,13 +82,22 @@ namespace CvAut.Services.Emulators
                     activeScanners = _scanners.Where(s => IsScannerMatch(s, emulatorFilter)).ToList();
                 }
 
-                // Pass 1: collect candidates from every scanner, grouped by endpoint so
-                // duplicate sources for the same host:port can be merged (item 6).
+                // Pass 1: run independent vendor scanners concurrently. Some scanners invoke
+                // vendor CLIs with multi-second timeouts; running them serially made the
+                // "Tất cả" filter accumulate every timeout before ADB probing even started.
+                Task<List<DeviceCandidate>>[] scannerTasks = activeScanners
+                    .Select(scanner => Task.Run(
+                        () => scanner.Scan(cancellationToken).ToList(),
+                        cancellationToken))
+                    .ToArray();
+                List<DeviceCandidate>[] scannerResults = Task.WhenAll(scannerTasks).GetAwaiter().GetResult();
+
+                // Group by endpoint so duplicate sources for the same host:port can be merged.
                 var groups = new Dictionary<string, List<DeviceCandidate>>(StringComparer.OrdinalIgnoreCase);
-                foreach (IDeviceScanner scanner in activeScanners)
+                foreach (List<DeviceCandidate> scannerResult in scannerResults)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    foreach (DeviceCandidate candidate in scanner.Scan(cancellationToken))
+                    foreach (DeviceCandidate candidate in scannerResult)
                     {
                         if (!groups.TryGetValue(candidate.Id, out List<DeviceCandidate>? list))
                         {
@@ -126,6 +135,8 @@ namespace CvAut.Services.Emulators
                 // so a closed-but-installed emulator is still surfaced to the user instead
                 // of being dropped — Start can auto-launch it via the bootstrapper.
                 bool anyConnected = false;
+                AdbConnector.EnsureServerStarted();
+                using var connectGate = new SemaphoreSlim(4);
                 var connectTasks = candidates.Values
                     .Where(c => c.StatusHint == null || c.StatusHint == DeviceStatus.Installed)
                     .Select(async c =>
@@ -143,19 +154,27 @@ namespace CvAut.Services.Emulators
                         }
 
                         bool isInstalled = c.StatusHint == DeviceStatus.Installed || !string.IsNullOrWhiteSpace(c.EmulatorPath);
-                        bool connected = await Task.Run(() => AdbConnector.TryConnect(c.Host, c.Port), cancellationToken);
-
-                        lock (devices)
+                        await connectGate.WaitAsync(cancellationToken);
+                        try
                         {
-                            if (connected)
+                            bool connected = await Task.Run(() => AdbConnector.TryConnect(c.Host, c.Port), cancellationToken);
+
+                            lock (devices)
                             {
-                                anyConnected = true;
-                                devices[c.Id] = ToDevice(c, isInstalled ? DeviceStatus.Installed : DeviceStatus.Unknown);
+                                if (connected)
+                                {
+                                    anyConnected = true;
+                                    devices[c.Id] = ToDevice(c, isInstalled ? DeviceStatus.Installed : DeviceStatus.Unknown);
+                                }
+                                else if (isInstalled)
+                                {
+                                    devices[c.Id] = ToDevice(c, DeviceStatus.Installed);
+                                }
                             }
-                            else if (isInstalled)
-                            {
-                                devices[c.Id] = ToDevice(c, DeviceStatus.Installed);
-                            }
+                        }
+                        finally
+                        {
+                            connectGate.Release();
                         }
                     })
                     .ToArray();
