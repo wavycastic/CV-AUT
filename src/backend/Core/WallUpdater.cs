@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using OpenCvSharp;
 using Point = OpenCvSharp.Point;
@@ -48,11 +49,487 @@ namespace CvAut
         internal static WallCostValidationResult ValidateWallCosts(int goldCost, int elixirCost, double maxMismatchRatio = WallUiLayout.MaxCostMismatchRatio)
             => WallCostPolicy.ValidateWallCosts(goldCost, elixirCost, maxMismatchRatio);
 
+        internal static WallCostValidationResult ValidateGoldOnlyWallCost(int goldCost)
+            => WallCostPolicy.ValidateGoldOnlyCost(goldCost);
+
         internal static bool IsResourceDeltaVerified(long resourceBefore, long resourceAfter, long expectedSpend, long tolerance = 0)
             => WallCostPolicy.IsResourceDeltaVerified(resourceBefore, resourceAfter, expectedSpend, tolerance);
 
         internal static bool IsUpgradeCostRed(Mat screenshot, string resource, out double redRatio, out int redPixels)
             => WallCostPolicy.IsUpgradeCostRed(screenshot, resource, out redRatio, out redPixels);
+
+        /// <summary>
+        /// Reads a wall upgrade cost from dark digits rendered on a light capsule. This preprocessing is
+        /// intentionally wall-specific so the threshold used by resource/loot OCR remains unchanged.
+        /// </summary>
+        internal static bool TryReadWallUpgradeCost(IVisionEngine vision, Mat screenshot, Rect roi, out int value, out double confidence)
+        {
+            value = 0;
+            confidence = 0;
+            if (screenshot == null || screenshot.Empty()) return false;
+
+            Rect safeRoi = ImageUtils.ClampRect(roi, screenshot.Width, screenshot.Height);
+            if (safeRoi.Width <= 0 || safeRoi.Height <= 0) return false;
+
+            if (TryReadWallCostConsensus(vision, screenshot, safeRoi, out value, out confidence))
+            {
+                return true;
+            }
+
+            // Contour candidates can capture different amounts of the resource-button border. When that
+            // makes the standard ROI clip the top of the digits, retry one digit-height lower inside the
+            // same button. This remains a local recovery; it cannot scan a different button.
+            int downwardOffset = Math.Max(2, safeRoi.Height / 3);
+            Rect loweredRoi = ImageUtils.ClampRect(
+                new Rect(safeRoi.X, safeRoi.Y + downwardOffset, safeRoi.Width, safeRoi.Height),
+                screenshot.Width,
+                screenshot.Height);
+
+            return loweredRoi != safeRoi &&
+                   TryReadWallCostConsensus(vision, screenshot, loweredRoi, out value, out confidence);
+        }
+
+        /// <summary>
+        /// Reads the same cost ROI through several algorithmically-independent preprocessing passes
+        /// (two gray thresholds plus a per-channel RGB segmentation) and returns the value the passes
+        /// agree on. Consensus removes random single-pass OCR errors and is discount-proof, because every
+        /// pass reads the exact same digits. It cannot fix a systematic font misread shared by all passes;
+        /// that stays the job of the gold==elixir cross-check and the post-purchase resource-delta check.
+        /// </summary>
+        private static bool TryReadWallCostConsensus(IVisionEngine vision, Mat screenshot, Rect roi, out int value, out double confidence)
+        {
+            value = 0;
+            confidence = 0;
+
+            // Million-value labels use a smaller font and are especially vulnerable to a
+            // clipped leading digit (for example 1,500,000 being read as 500,000). Detect
+            // the complete seven/eight-glyph sequence before trying the shorter labels.
+            if (TryReadKnownMillionWallCost(vision, screenshot, roi, out value, out confidence))
+            {
+                return true;
+            }
+
+            // Verify the complete glyph sequence before trusting OCR. Small white labels can lose
+            // their zero glyphs in OCR (for example 20,000 -> 20), while red labels use a separate
+            // segmentation path. Reading both colors through the same topology check keeps mixed
+            // affordability states symmetric and rejects clipped labels.
+            if (TryReadKnownThousandsWallCost(vision, screenshot, roi, out value, out confidence))
+            {
+                return true;
+            }
+
+            bool p1 = TryReadWallUpgradeCostAtRoi(vision, screenshot, roi, WallUiLayout.WallCostOcrThreshold, out int v1, out double c1);
+            bool p2 = TryReadWallUpgradeCostAtRoi(vision, screenshot, roi, WallUiLayout.WallCostConsensusThreshold, out int v2, out double c2);
+            bool p3 = TryReadWallCostRgb(vision, screenshot, roi, out int v3, out double c3);
+            bool p4 = TryReadWallCostRed(vision, screenshot, roi, out int v4, out double c4);
+
+            var reads = new List<(int Value, double Confidence)>();
+            if (p1) reads.Add((v1, c1));
+            if (p2) reads.Add((v2, c2));
+            if (p3) reads.Add((v3, c3));
+            if (p4) reads.Add((v4, c4));
+            if (reads.Count == 0) return false;
+
+            var byValue = reads
+                .GroupBy(r => r.Value)
+                .Select(g => new { Value = g.Key, Count = g.Count(), Confidence = g.Max(r => r.Confidence) })
+                .ToList();
+
+            int maxCount = byValue.Max(g => g.Count);
+            if (maxCount >= 2)
+            {
+                // At least two independent passes agree -> trust that value
+                var winner = byValue
+                    .Where(g => g.Count == maxCount)
+                    .OrderByDescending(g => g.Confidence)
+                    .First();
+                value = winner.Value;
+                confidence = winner.Confidence;
+                return true;
+            }
+
+            // Prefer any pass that yields a plausible wall cost (e.g. 5,000,000 vs garbage 56666)
+            var plausibleRead = reads
+                .Where(r => WallCostPolicy.IsPlausibleWallCost(r.Value))
+                .OrderByDescending(r => r.Confidence)
+                .FirstOrDefault();
+
+            if (plausibleRead.Value > 0)
+            {
+                value = plausibleRead.Value;
+                confidence = plausibleRead.Confidence;
+                return true;
+            }
+
+            if (p1)
+            {
+                value = v1;
+                confidence = c1;
+                return true;
+            }
+
+            var best = reads.OrderByDescending(r => r.Confidence).First();
+            value = best.Value;
+            confidence = best.Confidence;
+            return true;
+        }
+
+        private static bool TryReadKnownThousandsWallCost(IVisionEngine vision, Mat screenshot, Rect roi, out int value, out double confidence)
+        {
+            value = 0;
+            confidence = 0;
+            using Mat crop = new Mat(screenshot, roi);
+            if (crop.Empty()) return false;
+
+            using Mat gray = new();
+            using Mat whiteMask = new();
+            Cv2.CvtColor(crop, gray, ColorConversionCodes.BGR2GRAY);
+            Cv2.Threshold(gray, whiteMask, WallUiLayout.WallCostConsensusThreshold, 255, ThresholdTypes.Binary);
+            if (TryReadKnownThousandsWallCostMask(vision, whiteMask, out value))
+            {
+                confidence = 0.90;
+                return true;
+            }
+
+            using Mat redMask = Mat.Zeros(crop.Size(), MatType.CV_8UC1);
+            for (int y = 0; y < crop.Rows; y++)
+            {
+                for (int x = 0; x < crop.Cols; x++)
+                {
+                    Vec3b pixel = crop.At<Vec3b>(y, x);
+                    int b = pixel.Item0;
+                    int g = pixel.Item1;
+                    int r = pixel.Item2;
+                    if (r >= 140 && r - g >= 35 && r - b >= 35 && g <= 190 && b <= 190)
+                    {
+                        redMask.Set(y, x, (byte)255);
+                    }
+                }
+            }
+
+            if (!TryReadKnownThousandsWallCostMask(vision, redMask, out value)) return false;
+            confidence = 0.90;
+            return true;
+        }
+
+        private static bool TryReadKnownThousandsWallCostMask(IVisionEngine vision, Mat sourceMask, out int value)
+        {
+            value = 0;
+            using Mat mask = sourceMask.Clone();
+            int labelRight = Math.Max(1, (int)Math.Round(mask.Width * 0.90));
+            if (labelRight < mask.Width)
+            {
+                Cv2.Rectangle(mask, new Rect(labelRight, 0, mask.Width - labelRight, mask.Height), Scalar.Black, -1);
+            }
+
+            using Mat contourSource = mask.Clone();
+            Cv2.FindContours(contourSource, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+            List<Rect> glyphs = contours
+                .Select(Cv2.BoundingRect)
+                .Where(r => r.Height >= 10 && r.Height <= 22 && r.Width >= 3 && r.Width <= 20 &&
+                            r.Y >= 2 && r.Y <= Math.Min(22, mask.Height - 8) &&
+                            r.X > 0 && r.X + r.Width < labelRight)
+                .OrderBy(r => r.X)
+                .ToList();
+
+            if (glyphs.Count is not (5 or 6)) return false;
+            double medianHeight = glyphs.Select(r => (double)r.Height).OrderBy(h => h).ElementAt(glyphs.Count / 2);
+            if (glyphs.Any(r => Math.Abs(r.Height - medianHeight) > 3)) return false;
+            int[] baselines = glyphs.Select(r => r.Y + r.Height).ToArray();
+            if (baselines.Max() - baselines.Min() > 3) return false;
+            if (glyphs.Zip(glyphs.Skip(1), (a, b) => b.X - (a.X + a.Width)).Any(gap => gap < 0 || gap > 12)) return false;
+            // Keep a left safety margin. Without it, a crop that cuts off the leading "1" in
+            // 1,500,000 leaves a valid-looking six-glyph suffix and can be misclassified as 500,000.
+            if (glyphs[0].X < 14 || glyphs[0].X > mask.Width * 0.35 ||
+                glyphs[^1].X + glyphs[^1].Width >= labelRight) return false;
+
+            bool[] hasHole = glyphs.Select(r => GlyphHasHole(mask, r)).ToArray();
+            if (hasHole.Skip(glyphs.Count - 3).Any(hole => !hole)) return false;
+
+            if (glyphs.Count == 6)
+            {
+                if (hasHole.Skip(1).Any(hole => !hole) ||
+                    !TryReadMaskedGlyphs(vision, mask, glyphs.Take(1).ToList(), out int leadingDigit)) return false;
+                if (leadingDigit == 6 && !hasHole[0]) leadingDigit = 7;
+                value = leadingDigit * 100_000;
+            }
+            else if (hasHole[1])
+            {
+                if (!TryReadMaskedGlyphs(vision, mask, glyphs.Take(1).ToList(), out int leadingDigit)) return false;
+                if (leadingDigit == 6 && !hasHole[0]) leadingDigit = 7;
+                value = leadingDigit * 10_000;
+            }
+            else
+            {
+                if (!TryReadMaskedGlyphs(vision, mask, glyphs.Take(2).ToList(), out int prefix)) return false;
+                value = prefix * 1_000;
+            }
+
+            if (WallCostPolicy.IsPlausibleWallCost(value)) return true;
+            value = 0;
+            return false;
+        }
+
+        private static bool TryReadMaskedGlyphs(IVisionEngine vision, Mat mask, List<Rect> glyphs, out int value)
+        {
+            value = 0;
+            if (glyphs.Count == 0) return false;
+            int left = glyphs.Min(r => r.X);
+            int top = glyphs.Min(r => r.Y);
+            int right = glyphs.Max(r => r.X + r.Width);
+            int bottom = glyphs.Max(r => r.Y + r.Height);
+            using Mat glyphCrop = new Mat(mask, new Rect(left, top, right - left, bottom - top));
+            using Mat glyphBgr = new();
+            Cv2.CvtColor(glyphCrop, glyphBgr, ColorConversionCodes.GRAY2BGR);
+            return vision.TryExtractNumericalMetrics(
+                glyphBgr,
+                new Rect(0, 0, glyphBgr.Width, glyphBgr.Height),
+                out value,
+                out _,
+                allowVerticalShift: true);
+        }
+
+        private static bool TryReadKnownMillionWallCost(IVisionEngine vision, Mat screenshot, Rect roi, out int value, out double confidence)
+        {
+            value = 0;
+            confidence = 0;
+            using Mat crop = new Mat(screenshot, roi);
+            if (crop.Empty()) return false;
+
+            using Mat gray = new();
+            using Mat mask = new();
+            Cv2.CvtColor(crop, gray, ColorConversionCodes.BGR2GRAY);
+            Cv2.Threshold(gray, mask, WallUiLayout.WallCostConsensusThreshold, 255, ThresholdTypes.Binary);
+
+            // The resource badge occupies the far-right edge of a button and can look like
+            // an extra zero. It is not part of the numeric label.
+            int labelRight = Math.Max(1, (int)Math.Round(mask.Width * 0.86));
+            if (labelRight < mask.Width)
+            {
+                Cv2.Rectangle(mask, new Rect(labelRight, 0, mask.Width - labelRight, mask.Height), Scalar.Black, -1);
+            }
+
+            using Mat contourSource = mask.Clone();
+            Cv2.FindContours(contourSource, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+            List<Rect> glyphs = contours
+                .Select(Cv2.BoundingRect)
+                .Where(r => r.Height >= 10 && r.Height <= 22 && r.Width >= 3 && r.Width <= 20)
+                .OrderBy(r => r.X)
+                .ToList();
+
+            if (glyphs.Count is not (7 or 8)) return false;
+            double medianHeight = glyphs.Select(r => (double)r.Height).OrderBy(h => h).ElementAt(glyphs.Count / 2);
+            if (glyphs.Any(r => Math.Abs(r.Height - medianHeight) > 4)) return false;
+            if (glyphs.Zip(glyphs.Skip(1), (a, b) => b.X - (a.X + a.Width)).Any(gap => gap < 0 || gap > 12)) return false;
+            if (glyphs[0].X > mask.Width * 0.20 || glyphs[^1].X + glyphs[^1].Width >= labelRight - 1) return false;
+
+            bool[] hasHole = glyphs.Select(r => GlyphHasHole(mask, r)).ToArray();
+            int leadingDigit;
+            if (glyphs[0].Width <= glyphs[0].Height * 0.48)
+            {
+                leadingDigit = 1;
+            }
+            else
+            {
+                using Mat glyph = new(mask, glyphs[0]);
+                using Mat glyphBgr = new();
+                Cv2.CvtColor(glyph, glyphBgr, ColorConversionCodes.GRAY2BGR);
+                if (!vision.TryExtractNumericalMetrics(glyphBgr, new Rect(0, 0, glyphBgr.Width, glyphBgr.Height), out leadingDigit, out _, allowVerticalShift: true))
+                    return false;
+                if (leadingDigit == 6 && !hasHole[0]) leadingDigit = 7;
+            }
+
+            if (glyphs.Count == 8)
+            {
+                if (leadingDigit != 1 || hasHole.Skip(1).Any(hole => !hole)) return false;
+                value = 10_000_000;
+            }
+            else if (hasHole[1])
+            {
+                if (hasHole.Skip(1).Any(hole => !hole)) return false;
+                value = leadingDigit * 1_000_000;
+            }
+            else
+            {
+                // The only supported seven-digit non-zero second glyph is 1,500,000.
+                if (leadingDigit != 1 || hasHole.Skip(2).Any(hole => !hole)) return false;
+                using Mat secondGlyph = new(mask, glyphs[1]);
+                using Mat secondBgr = new();
+                Cv2.CvtColor(secondGlyph, secondBgr, ColorConversionCodes.GRAY2BGR);
+                if (!vision.TryExtractNumericalMetrics(secondBgr, new Rect(0, 0, secondBgr.Width, secondBgr.Height), out int secondDigit, out _, allowVerticalShift: true) || secondDigit != 5)
+                    return false;
+                value = 1_500_000;
+            }
+
+            if (!WallCostPolicy.IsPlausibleWallCost(value))
+            {
+                value = 0;
+                return false;
+            }
+            confidence = 0.90;
+            return true;
+        }
+
+        private static bool GlyphHasHole(Mat mask, Rect glyphRect)
+        {
+            using Mat glyph = new(mask, glyphRect);
+            using Mat source = glyph.Clone();
+            Cv2.FindContours(source, out _, out HierarchyIndex[] hierarchy, RetrievalModes.CComp, ContourApproximationModes.ApproxSimple);
+            return hierarchy.Any(h => h.Parent >= 0);
+        }
+
+        private static bool TryReadWallCostRgb(IVisionEngine vision, Mat screenshot, Rect roi, out int value, out double confidence)
+        {
+            value = 0;
+            confidence = 0;
+            using Mat crop = new Mat(screenshot, roi);
+            if (crop.Empty()) return false;
+            return vision.TryExtractNumericalMetrics(
+                crop,
+                new Rect(0, 0, crop.Width, crop.Height),
+                out value,
+                out confidence,
+                isOffline: false,
+                useRgbThresh: true,
+                invert: false);
+        }
+
+        /// <summary>
+        /// Extracts the red unaffordable-cost label as white digits on black. Red text is dark in
+        /// grayscale, so the normal high-threshold passes otherwise ignore it and may OCR the
+        /// button caption below instead.
+        /// </summary>
+        private static bool TryReadWallCostRed(IVisionEngine vision, Mat screenshot, Rect roi, out int value, out double confidence)
+        {
+            value = 0;
+            confidence = 0;
+            using Mat crop = new Mat(screenshot, roi);
+            if (crop.Empty()) return false;
+
+            using Mat redMask = Mat.Zeros(crop.Size(), MatType.CV_8UC1);
+            for (int y = 0; y < crop.Rows; y++)
+            {
+                for (int x = 0; x < crop.Cols; x++)
+                {
+                    Vec3b pixel = crop.At<Vec3b>(y, x);
+                    int b = pixel.Item0;
+                    int g = pixel.Item1;
+                    int r = pixel.Item2;
+                    if (r >= 140 && r - g >= 35 && r - b >= 35 && g <= 190 && b <= 190)
+                    {
+                        redMask.Set(y, x, (byte)255);
+                    }
+                }
+            }
+
+            if (Cv2.CountNonZero(redMask) < 20) return false;
+            SplitTouchingRedDigits(redMask);
+            using Mat redBgr = new Mat();
+            Cv2.CvtColor(redMask, redBgr, ColorConversionCodes.GRAY2BGR);
+            bool read = vision.TryExtractNumericalMetrics(
+                redBgr,
+                new Rect(0, 0, redBgr.Width, redBgr.Height),
+                out value,
+                out confidence);
+            if (!read) return false;
+            if (!WallCostPolicy.IsPlausibleWallCost(value) && TryNormalizeRedWallCost(redMask, value, out int normalizedValue))
+            {
+                value = normalizedValue;
+            }
+            return true;
+        }
+
+        private static bool TryNormalizeRedWallCost(Mat redMask, int rawValue, out int normalizedValue)
+        {
+            normalizedValue = 0;
+            using Mat contourSource = redMask.Clone();
+            Cv2.FindContours(contourSource, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+            List<Rect> glyphs = contours.Select(Cv2.BoundingRect)
+                .Where(r => r.Height >= 10 && r.Width > 2 && r.Width < 30 && r.Y >= 2 && r.Y <= 20)
+                .OrderBy(r => r.X).ToList();
+            string rawDigits = rawValue.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (glyphs.Count < 4 || rawDigits.Length != glyphs.Count) return false;
+            char[] digits = rawDigits.ToCharArray();
+            for (int i = 0; i < glyphs.Count; i++)
+            {
+                using Mat glyphMask = new Mat(redMask, glyphs[i]);
+                using Mat hierarchySource = glyphMask.Clone();
+                Cv2.FindContours(hierarchySource, out _, out HierarchyIndex[] hierarchy, RetrievalModes.CComp, ContourApproximationModes.ApproxSimple);
+                if (hierarchy.Any(h => h.Parent >= 0)) digits[i] = '0';
+            }
+            return int.TryParse(new string(digits), out normalizedValue) && WallCostPolicy.IsPlausibleWallCost(normalizedValue);
+        }
+
+        private static void SplitTouchingRedDigits(Mat redMask)
+        {
+            using Mat contourSource = redMask.Clone();
+            Cv2.FindContours(contourSource, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+            foreach (Point[] contour in contours)
+            {
+                Rect glyph = Cv2.BoundingRect(contour);
+                if (glyph.Height < 10 || glyph.Width < glyph.Height * 1.20 || glyph.Width >= 30) continue;
+
+                int searchStart = glyph.X + glyph.Width / 3;
+                int searchEnd = glyph.X + (glyph.Width * 2) / 3;
+                int splitX = searchStart;
+                int fewestPixels = int.MaxValue;
+                for (int x = searchStart; x <= searchEnd; x++)
+                {
+                    int columnPixels = 0;
+                    for (int y = glyph.Y; y < glyph.Y + glyph.Height; y++)
+                    {
+                        if (redMask.At<byte>(y, x) != 0) columnPixels++;
+                    }
+                    if (columnPixels < fewestPixels)
+                    {
+                        fewestPixels = columnPixels;
+                        splitX = x;
+                    }
+                }
+
+                Cv2.Line(redMask, new Point(splitX, glyph.Y), new Point(splitX, glyph.Y + glyph.Height - 1), Scalar.Black, 1);
+            }
+        }
+
+        private static bool TryReadWallUpgradeCostAtRoi(IVisionEngine vision, Mat screenshot, Rect roi, double grayThreshold, out int value, out double confidence)
+        {
+            value = 0;
+            confidence = 0;
+            using Mat crop = new Mat(screenshot, roi);
+            using Mat gray = new Mat();
+            using Mat binary = new Mat();
+            using Mat binaryBgr = new Mat();
+            Cv2.CvtColor(crop, gray, ColorConversionCodes.BGR2GRAY);
+            Cv2.Threshold(gray, binary, grayThreshold, 255, ThresholdTypes.Binary);
+            RemoveRightEdgeCostNoise(binary);
+            Cv2.CvtColor(binary, binaryBgr, ColorConversionCodes.GRAY2BGR);
+
+            return vision.TryExtractNumericalMetrics(
+                binaryBgr,
+                new Rect(0, 0, binaryBgr.Width, binaryBgr.Height),
+                out value,
+                out confidence);
+        }
+
+        private static void RemoveRightEdgeCostNoise(Mat binary)
+        {
+            if (binary == null || binary.Empty()) return;
+
+            using Mat contourSource = binary.Clone();
+            Cv2.FindContours(contourSource, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+            int rightEdgeGuard = Math.Max(2, binary.Width / 40);
+
+            foreach (var contour in contours)
+            {
+                Rect r = Cv2.BoundingRect(contour);
+                bool isThinRightNoise = r.Y >= 2 && r.Y <= binary.Height / 2 && r.Height >= binary.Height * 0.30 && r.Width > 0 && r.Width <= 5;
+                bool touchesRightEdge = r.X + r.Width >= binary.Width - rightEdgeGuard;
+                if (isThinRightNoise && touchesRightEdge)
+                {
+                    Cv2.Rectangle(binary, r, Scalar.Black, -1);
+                }
+            }
+        }
 
         /// <summary>
         /// Handles wall upgrades independently of the wall level.
