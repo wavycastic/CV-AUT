@@ -32,25 +32,6 @@ namespace CvAut
                 CheckStop,
                 InterruptibleSleep);
 
-        private void TryDonateOnce(CancellationToken token)
-            => MainVillageInteractions.TryDonateOnce(
-                token,
-                CheckStop,
-                InterruptibleSleep);
-
-        private bool TapFirstVisibleTemplate(
-            string[] templates,
-            double threshold,
-            Rect? roi,
-            out string matchedTemplate,
-            bool tap = true)
-            => MainVillageInteractions.TapFirstVisibleTemplate(
-                templates,
-                threshold,
-                roi,
-                out matchedTemplate,
-                tap);
-
         private bool ShouldSmartSurrender(
             DateTime battleStart,
             SmartSurrenderConfig config,

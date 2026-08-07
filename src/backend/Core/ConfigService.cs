@@ -39,24 +39,66 @@ internal sealed class ConfigService : IConfigService
     public static MainVillageConfig GetMainVillageConfig(JsonElement root, int villageIndex)
     {
         AutomationConfigSnapshot snapshot = AutomationConfigSnapshotReader.Read(root);
+        JsonConfigReader rootReader = new(root);
         JsonConfigReader profile = new(JsonConfigPersistence.LoadVillageProfile(villageIndex));
         FarmingConfig farming = snapshot.Farming;
-        int gold = profile.Int("gold_threshold", farming.GoldThreshold, 0);
-        int elixir = profile.Int("elixir_threshold", farming.ElixirThreshold, 0);
-        int total = profile.Int("total_resource_threshold", farming.TotalResourceThreshold, 0);
-        TargetSelectionLogic logic = profile.String("target_logic", farming.TargetLogic.ToString()).ToLowerInvariant() switch
-        {
-            "and" => TargetSelectionLogic.And,
-            "or" => TargetSelectionLogic.Or,
-            _ => TargetSelectionLogic.Total
-        };
+
+        JsonConfigReader profileFarming = profile.Section("farming_thresholds");
+        bool profileHasFarmingSection = profile.HasProperty("farming_thresholds");
+        bool rootHasFarmingSection = rootReader.HasProperty("farming_thresholds");
+
+        int gold = profileHasFarmingSection
+            ? profileFarming.Int("gold_threshold", farming.GoldThreshold, 0)
+            : (rootHasFarmingSection
+                ? farming.GoldThreshold
+                : profile.Int("gold_threshold", farming.GoldThreshold, 0));
+
+        int elixir = profileHasFarmingSection
+            ? profileFarming.Int("elixir_threshold", farming.ElixirThreshold, 0)
+            : (rootHasFarmingSection
+                ? farming.ElixirThreshold
+                : profile.Int("elixir_threshold", farming.ElixirThreshold, 0));
+
+        int darkElixir = profileHasFarmingSection
+            ? profileFarming.Int("dark_elixir_threshold", farming.DarkElixirThreshold, 0)
+            : (rootHasFarmingSection
+                ? farming.DarkElixirThreshold
+                : profile.Int("dark_elixir_threshold", farming.DarkElixirThreshold, 0));
+
+        int total = profileHasFarmingSection
+            ? profileFarming.Int("total_resource_threshold", farming.TotalResourceThreshold, 0)
+            : (rootHasFarmingSection
+                ? farming.TotalResourceThreshold
+                : profile.Int("total_resource_threshold", farming.TotalResourceThreshold, 0));
+
+        TargetSelectionLogic logic = profileHasFarmingSection
+            ? (profileFarming.String("target_logic", farming.TargetLogic.ToString()).ToLowerInvariant() switch
+            {
+                "and" => TargetSelectionLogic.And,
+                "or" => TargetSelectionLogic.Or,
+                _ => TargetSelectionLogic.Total
+            })
+            : (rootHasFarmingSection
+                ? (farming.TargetLogic switch
+                {
+                    TargetLogic.And => TargetSelectionLogic.And,
+                    TargetLogic.Or => TargetSelectionLogic.Or,
+                    _ => TargetSelectionLogic.Total
+                })
+                : (profile.String("target_logic", farming.TargetLogic.ToString()).ToLowerInvariant() switch
+                {
+                    "and" => TargetSelectionLogic.And,
+                    "or" => TargetSelectionLogic.Or,
+                    _ => TargetSelectionLogic.Total
+                }));
+
         AttackConfig attack = snapshot.Attack;
         SmartSurrenderSettings surrender = attack.SmartSurrender;
         return new MainVillageConfig(
             profile.String("attack_mode", attack.Mode).Equals("donate_only", StringComparison.OrdinalIgnoreCase)
                 ? AttackMode.DonateOnly
                 : AttackMode.Attack,
-            new FarmingTargetConfig(gold, elixir, profile.Int("dark_elixir_threshold", farming.DarkElixirThreshold, 0), total <= 0 ? gold + elixir : total, logic),
+            new FarmingTargetConfig(gold, elixir, darkElixir, total <= 0 ? gold + elixir : total, logic),
             profile.Bool("request_troops", attack.RequestTroops),
             profile.Bool("use_event_troops", attack.UseEventTroops),
             profile.Bool("use_cake", attack.UseCake),
@@ -89,15 +131,28 @@ internal sealed class ConfigService : IConfigService
     public static CvAut.WallUpgradeConfig GetWallUpgradeConfig(JsonElement root, int villageIndex)
     {
         TypedWallConfig wall = AutomationConfigSnapshotReader.Read(root).WallUpgrade;
+        JsonConfigReader rootReader = new(root);
         JsonConfigReader profile = new(JsonConfigPersistence.LoadVillageProfile(villageIndex));
+
+        bool enabled = rootReader.HasProperty("upgrade_wall") ? wall.Enabled : profile.Bool("upgrade_wall", wall.Enabled);
+        int goldThreshold = rootReader.HasProperty("wall_gold_threshold") ? wall.GoldThreshold : profile.Int("wall_gold_threshold", wall.GoldThreshold, 0);
+        int elixirThreshold = rootReader.HasProperty("wall_elixir_threshold") ? wall.ElixirThreshold : profile.Int("wall_elixir_threshold", wall.ElixirThreshold, 0);
+        int goldReserve = rootReader.HasProperty("wall_gold_reserve") ? wall.GoldReserve : profile.Int("wall_gold_reserve", wall.GoldReserve, 0);
+        int elixirReserve = rootReader.HasProperty("wall_elixir_reserve") ? wall.ElixirReserve : profile.Int("wall_elixir_reserve", wall.ElixirReserve, 0);
+        int batchLimit = rootReader.HasProperty("wall_batch_limit") ? wall.BatchLimit : profile.Int("wall_batch_limit", wall.BatchLimit, 1, WallQuantityPlanner.HardSafetyMaximum);
+        bool debugScreenshots = rootReader.HasProperty("wall_debug_screenshots") ? wall.DebugScreenshots : profile.Bool("wall_debug_screenshots", wall.DebugScreenshots);
+
+        string source = rootReader.HasProperty("upgrade_wall") ? "active_root" : (profile.HasProperty("upgrade_wall") ? "legacy_profile" : "default");
+        Console.WriteLine($"[CONFIG-CS] phase=get_wall_config village={villageIndex} enabled={enabled} source={source} gold_thresh={goldThreshold} elixir_thresh={elixirThreshold} gold_reserve={goldReserve} elixir_reserve={elixirReserve} batch={batchLimit} debug={debugScreenshots}");
+
         return new CvAut.WallUpgradeConfig(
-            profile.Bool("upgrade_wall", wall.Enabled),
-            profile.Int("wall_gold_threshold", wall.GoldThreshold, 0),
-            profile.Int("wall_elixir_threshold", wall.ElixirThreshold, 0),
-            profile.Int("wall_gold_reserve", wall.GoldReserve, 0),
-            profile.Int("wall_elixir_reserve", wall.ElixirReserve, 0),
-            profile.Int("wall_batch_limit", wall.BatchLimit, 1, 10),
-            profile.Bool("wall_debug_screenshots", wall.DebugScreenshots));
+            enabled,
+            goldThreshold,
+            elixirThreshold,
+            goldReserve,
+            elixirReserve,
+            batchLimit,
+            debugScreenshots);
     }
 
     public static int ReadClanGamesPoints(int villageIndex)

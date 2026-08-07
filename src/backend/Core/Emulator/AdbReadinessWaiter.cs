@@ -23,7 +23,15 @@ namespace CvAut
                 // Thử kết nối trong tối đa 3 giây
                 if (adb.EnsureConnectedOnline(timeoutSeconds: ConnectAttemptTimeoutSeconds))
                 {
-                    return true;
+                    // ADB online nhưng Android có thể chưa boot xong; đợi boot hoàn tất
+                    // trước khi cho phép launch app để không gửi lệnh quá sớm.
+                    string bootCompleted = adb.ExecuteShell("getprop sys.boot_completed").Trim();
+                    if (string.Equals(bootCompleted, "1", StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+
+                    Console.WriteLine("[ADB] phase=boot status=pending action=wait_boot_completed value=\"" + bootCompleted + "\"");
                 }
 
                 if (token.WaitHandle.WaitOne(PollIntervalMs)) return false;

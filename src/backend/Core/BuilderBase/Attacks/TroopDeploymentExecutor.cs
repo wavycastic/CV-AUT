@@ -10,7 +10,6 @@ namespace CvAut
     internal sealed class TroopDeploymentExecutor
     {
         private readonly IADBHelper _adb;
-        private readonly IVisionEngine _vision;
         private readonly Random _random;
         private readonly AttackBarScanner _barScanner;
         private readonly HeroAbilityController _heroController;
@@ -20,7 +19,6 @@ namespace CvAut
         public TroopDeploymentExecutor(IADBHelper adb, IVisionEngine vision, Random random, AttackBarScanner barScanner, HeroAbilityController heroController)
         {
             _adb = adb;
-            _vision = vision;
             _random = random;
             _barScanner = barScanner;
             _heroController = heroController;

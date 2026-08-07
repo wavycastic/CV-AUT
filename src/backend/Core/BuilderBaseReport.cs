@@ -153,9 +153,9 @@ namespace CvAut
             starBonusAvailable = starBonusKnown && remainingStars > 0;
 
             bool byStars = starBonusAvailable;
-            bool byButton = _vision.FindElement(screenshot, @"ui\attack_button", 0.55, LootAvailabilityRoi, out double score) != null
-                || _vision.FindElement(screenshot, @"ui\icon_attack", 0.55, LootAvailabilityRoi, out score) != null
-                || _vision.FindElement(screenshot, @"ui\battle", 0.55, LootAvailabilityRoi, out score) != null;
+            bool byButton = _vision.FindElement(screenshot, @"ui\attack_button", 0.55, LootAvailabilityRoi, out _) != null
+                || _vision.FindElement(screenshot, @"ui\icon_attack", 0.55, LootAvailabilityRoi, out _) != null
+                || _vision.FindElement(screenshot, @"ui\battle", 0.55, LootAvailabilityRoi, out _) != null;
 
             attackAvailable = byButton;
             attackAvailabilityKnown = IsAttackAvailabilityKnown(byButton, starBonusKnown);

@@ -20,11 +20,11 @@ internal static class ImageUtils
         // Giới hạn giá trị của toạ độ trái (Left) và trên (Top) trong khoảng [0, kích thước ảnh]
         int left = Math.Clamp(rect.Left, 0, width);
         int top = Math.Clamp(rect.Top, 0, height);
-        
+
         // Đảm bảo toạ độ phải (Right) và dưới (Bottom) không vượt quá biên ảnh
         int right = Math.Clamp(rect.Right, left, width);
         int bottom = Math.Clamp(rect.Bottom, top, height);
-        
+
         // Tạo và trả về Rect chuẩn hóa từ các toạ độ biên mới
         return Rect.FromLTRB(left, top, right, bottom);
     }

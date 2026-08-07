@@ -228,15 +228,5 @@ namespace CvAut.ViewModels
 
             return true;
         }
-
-        private static string SanitizeFileName(string value)
-        {
-            foreach (char invalid in Path.GetInvalidFileNameChars())
-            {
-                value = value.Replace(invalid, '_');
-            }
-
-            return value.Replace(':', '_');
-        }
     }
 }

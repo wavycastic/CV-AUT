@@ -88,13 +88,13 @@ namespace CvAut
                 screenshot.Height);
             if (roi.Width <= 0 || roi.Height <= 0) return 1;
 
-            if (vision.TryExtractNumericalMetrics(screenshot, roi, out int value, out double confidence, useRgbThresh: true)
+            if (vision.TryExtractNumericalMetrics(screenshot, roi, out int value, out _, useRgbThresh: true)
                 && value > 0 && value <= 20)
             {
                 return value;
             }
 
-            if (vision.TryExtractNumericalMetrics(screenshot, roi, out value, out confidence)
+            if (vision.TryExtractNumericalMetrics(screenshot, roi, out value, out _)
                 && value > 0 && value <= 20)
             {
                 return value;

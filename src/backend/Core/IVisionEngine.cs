@@ -23,14 +23,16 @@ public interface IVisionEngine
         out double confidence,
         bool isOffline = false,
         bool useRgbThresh = false,
-        bool invert = false);
+        bool invert = false,
+        bool allowVerticalShift = false);
 
     int ExtractNumericalMetrics(
         Mat screenshot,
         Rect roi,
         bool isOffline = false,
         bool useRgbThresh = false,
-        bool invert = false) => TryExtractNumericalMetrics(screenshot, roi, out int value, out _, isOffline, useRgbThresh, invert) ? value : 0;
+        bool invert = false,
+        bool allowVerticalShift = false) => TryExtractNumericalMetrics(screenshot, roi, out int value, out _, isOffline, useRgbThresh, invert, allowVerticalShift) ? value : 0;
 
     int OcrReadNumber(Mat croppedImage);
 

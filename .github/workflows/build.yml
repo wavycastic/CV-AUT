@@ -49,7 +49,7 @@ jobs:
         shell: pwsh
         continue-on-error: true
         run: |
-          dotnet test CV-AUT.slnx --no-build -c Debug -v minimal 2>&1 | Tee-Object -FilePath test.log
+          dotnet test CV-AUT.slnx --no-build -c Debug -v minimal --filter "Category!=Manual" 2>&1 | Tee-Object -FilePath test.log
           $code = $LASTEXITCODE
           "exit_code=$code" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           exit $code

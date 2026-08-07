@@ -316,16 +316,14 @@ internal sealed class TrainingVision
     {
         value = 0;
         confidence = 0;
-        double rgbConfidence = 0;
-        double grayConfidence = 0;
-        if (_vision.TryExtractNumericalMetrics(image, roi, out int rgbValue, out rgbConfidence, useRgbThresh: true)
+        if (_vision.TryExtractNumericalMetrics(image, roi, out int rgbValue, out double rgbConfidence, useRgbThresh: true)
             && rgbConfidence >= 0.50)
         {
             value = rgbValue;
             confidence = rgbConfidence;
             return true;
         }
-        if (_vision.TryExtractNumericalMetrics(image, roi, out int grayValue, out grayConfidence)
+        if (_vision.TryExtractNumericalMetrics(image, roi, out int grayValue, out double grayConfidence)
             && grayConfidence >= 0.50)
         {
             value = grayValue;

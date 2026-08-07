@@ -13,6 +13,9 @@ internal readonly struct JsonConfigReader
         _element = element;
     }
 
+    public bool HasProperty(string name)
+        => TryGet(name, out _);
+
     public JsonConfigReader Section(string name)
         => TryGet(name, out JsonElement value) && value.ValueKind == JsonValueKind.Object
             ? new JsonConfigReader(value)

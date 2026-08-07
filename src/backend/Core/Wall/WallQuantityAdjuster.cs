@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using OpenCvSharp;
 
@@ -11,73 +12,102 @@ namespace CvAut
     internal sealed class WallQuantityAdjuster
     {
         private readonly IADBHelper _adb;
+        private readonly IVisionEngine? _vision;
 
-        public WallQuantityAdjuster(IADBHelper adb)
+        public WallQuantityAdjuster(IADBHelper adb) : this(adb, null)
         {
-            _adb = adb;
         }
 
-        public int AddWallsSafely(string resource, int requestedCount, int batchLimit, CancellationToken token)
+        public WallQuantityAdjuster(IADBHelper adb, IVisionEngine? vision)
         {
-            int targetCount = Math.Clamp(requestedCount, 1, Math.Clamp(batchLimit, 1, 10));
-            int selectedCount = 1;
-            int addMoreTaps = targetCount - 1;
-            if (addMoreTaps <= 0) return 1;
+            _adb = adb;
+            _vision = vision;
+        }
 
-            Rect costRoi = WallUiLayout.CostRoiFor(resource);
+        public int AddWallsSafely(
+            string resource,
+            int requestedCount,
+            int batchLimit,
+            CancellationToken token,
+            string trigger = "unknown",
+            string? runId = null,
+            int cycle = 0,
+            WallResourceButtonInfo? buttonInfo = null,
+            int singleWallCost = 0)
+        {
+            int targetCount = WallQuantityPlanner.ClampTarget(requestedCount, batchLimit);
+            if (targetCount == 1) return 1;
+            if (_vision == null || buttonInfo == null || !buttonInfo.Found || singleWallCost <= 0)
+                return Stop("runtime_detector_dependencies_missing", resource, trigger, runId, cycle);
 
-            for (int i = 0; i < addMoreTaps; i++)
+            using Mat? initial = _adb.TakeScreenshot();
+            if (initial == null || initial.Empty()) return Stop("before_screenshot_failed", resource, trigger, runId, cycle);
+            WallQuantityPanelInfo state = WallQuantityControlLocalizer.Localize(_vision, initial);
+            if (!state.Header.Found) return Stop(state.Header.Reason, resource, trigger, runId, cycle);
+
+            int selectedCount = state.Header.SelectedCount;
+            if (state.Header.Mode == WallSelectionMode.Single)
             {
-                if (token.IsCancellationRequested) break;
+                WallQuantityControlInfo? gateway = state.Controls.SingleOrDefault(c => c.Role == WallQuantityControlRole.UpgradeMore);
+                if (gateway == null || !gateway.Found || !gateway.Available)
+                    return Stop("upgrade_more_not_localized_or_disabled", resource, trigger, runId, cycle);
+                _adb.Tap(gateway.TapPoint.X, gateway.TapPoint.Y);
+                if (ThreadingUtil.InterruptibleSleep(WallUiLayout.WallUiAnimationDelayMs, token)) return Stop("cancelled", resource, trigger, runId, cycle);
 
-                using Mat? beforeScreenshot = _adb.TakeScreenshot();
-                if (beforeScreenshot == null || beforeScreenshot.Empty())
-                {
-                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=before_screenshot_failed");
-                    break;
-                }
-
-                _adb.Tap(WallUiLayout.AddWallPlusOneButton.X, WallUiLayout.AddWallPlusOneButton.Y);
-                if (ThreadingUtil.InterruptibleSleep(WallUiLayout.WallUiAnimationDelayMs, token)) break;
-
-                using Mat? afterScreenshot = _adb.TakeScreenshot();
-                if (afterScreenshot == null || afterScreenshot.Empty())
-                {
-                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=after_screenshot_failed");
-                    break;
-                }
-
-                if (WallCostPolicy.IsUpgradeCostRed(afterScreenshot, resource, out _, out _))
-                {
-                    _adb.Tap(WallUiLayout.RemoveWallMinusOneButton.X, WallUiLayout.RemoveWallMinusOneButton.Y);
-                    ThreadingUtil.InterruptibleSleep(WallUiLayout.WallUiAnimationDelayMs, token);
-                    break;
-                }
-
-                Rect clamped = ImageUtils.ClampRect(costRoi, afterScreenshot.Width, afterScreenshot.Height);
-                if (clamped.Width <= 0 || clamped.Height <= 0)
-                {
-                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=invalid_roi");
-                    break;
-                }
-
-                using Mat beforeCost = new Mat(beforeScreenshot, clamped);
-                using Mat afterCost = new Mat(afterScreenshot, clamped);
-                using Mat diff = new Mat();
-                Cv2.Absdiff(beforeCost, afterCost, diff);
-                Scalar meanDiff = Cv2.Mean(diff);
-                double diffVal = meanDiff.Val0 + meanDiff.Val1 + meanDiff.Val2;
-
-                if (diffVal < 3.0)
-                {
-                    Console.WriteLine($"[WALL] phase=add_wall resource={resource} status=stop reason=cost_region_unchanged diff={diffVal:F2}");
-                    break;
-                }
-
-                selectedCount++;
+                using Mat? afterGateway = _adb.TakeScreenshot();
+                if (afterGateway == null || afterGateway.Empty()) return Stop("gateway_screenshot_failed", resource, trigger, runId, cycle);
+                WallPanelLocalizationResult gatewayPanel = WallDynamicLocalizer.LocalizePanelAndButtons(_vision, afterGateway);
+                WallResourceButtonInfo gatewayResource = ResourceInfo(resource, gatewayPanel);
+                if (!gatewayResource.Found ||
+                    !WallBatchTotalReader.TryRead(_vision, afterGateway, gatewayResource.CostRoi, out long gatewayTotal, out _) ||
+                    !WallBatchTotalReader.Validate(gatewayTotal, singleWallCost, 1))
+                    return Stop("gateway_batch_total_not_verified", resource, trigger, runId, cycle);
+                state = WallQuantityControlLocalizer.Localize(_vision, afterGateway, WallSelectionMode.Multi, 1);
+                if (!state.Controls.Any(c => c.Role is WallQuantityControlRole.AddOne or WallQuantityControlRole.AddTen))
+                    return Stop("gateway_quantity_controls_missing", resource, trigger, runId, cycle);
+                selectedCount = 1;
             }
 
+            while (selectedCount < targetCount)
+            {
+                if (token.IsCancellationRequested) return Stop("cancelled", resource, trigger, runId, cycle);
+                using Mat? before = _adb.TakeScreenshot();
+                if (before == null || before.Empty()) return Stop("before_screenshot_failed", resource, trigger, runId, cycle);
+                state = WallQuantityControlLocalizer.Localize(_vision, before, WallSelectionMode.Multi, selectedCount);
+                WallQuantityPlanStep step = WallQuantityPlanner.PlanNext(selectedCount, targetCount, state.Controls);
+                if (!step.CanExecute)
+                    return Stop(step.Reason, resource, trigger, runId, cycle);
+                WallQuantityControlInfo control = state.Controls.Single(c => c.Role == step.Role);
+                int expectedCount = step.ExpectedCount;
+                WallLogger.LogInfo("quantity_plan", "ok", cycle: cycle, trigger: trigger, runId: runId,
+                    extra: $"role={step.Role} delta={step.Delta} current_count={selectedCount} target_count={targetCount} expected_count={expectedCount} reason={step.Reason}");
+                _adb.Tap(control.TapPoint.X, control.TapPoint.Y);
+                if (ThreadingUtil.InterruptibleSleep(WallUiLayout.WallUiAnimationDelayMs, token)) return Stop("cancelled", resource, trigger, runId, cycle);
+                using Mat? after = _adb.TakeScreenshot();
+                if (after == null || after.Empty()) return Stop("after_screenshot_failed", resource, trigger, runId, cycle);
+
+                WallHeaderInfo header = WallHeaderInspector.Inspect(_vision, after);
+                if (!header.Found || header.Mode != WallSelectionMode.Multi || header.SelectedCount != expectedCount)
+                    return Stop("header_delta_not_verified", resource, trigger, runId, cycle);
+                WallPanelLocalizationResult afterPanel = WallDynamicLocalizer.LocalizePanelAndButtons(_vision, after);
+                WallResourceButtonInfo afterResource = ResourceInfo(resource, afterPanel);
+                if (!afterResource.Found ||
+                    !WallBatchTotalReader.TryRead(_vision, after, afterResource.CostRoi, out long batchTotal, out _) ||
+                    !WallBatchTotalReader.Validate(batchTotal, singleWallCost, expectedCount))
+                    return Stop("batch_total_not_verified", resource, trigger, runId, cycle);
+                selectedCount = expectedCount;
+            }
             return selectedCount;
+        }
+
+        private static WallResourceButtonInfo ResourceInfo(string resource, WallPanelLocalizationResult panel)
+            => resource.Equals("gold", StringComparison.OrdinalIgnoreCase) ? panel.GoldInfo : panel.ElixirInfo;
+
+        private static int Stop(string reason, string resource, string trigger, string? runId, int cycle)
+        {
+            Console.WriteLine($"[WALL] phase=quantity_runtime resource={resource} status=stop reason={reason}");
+            WallLogger.LogInfo("quantity_runtime", "stop", reason: reason, cycle: cycle, trigger: trigger, runId: runId, extra: $"resource={resource}");
+            return 0;
         }
     }
 }

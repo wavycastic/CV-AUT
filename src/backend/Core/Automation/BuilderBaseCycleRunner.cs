@@ -10,8 +10,6 @@ internal sealed class BuilderBaseCycleRunner
 {
     private static bool s_loggedBuilderBaseAssetAudit;
 
-    private readonly IADBHelper _adb;
-    private readonly IVisionEngine _vision;
     private readonly IConfigService _configService;
     private readonly BuilderBaseNavigator _builderBaseNavigator;
     private readonly BuilderBaseResources _builderBaseResources;
@@ -37,8 +35,6 @@ internal sealed class BuilderBaseCycleRunner
         StatsRepository stats,
         string templatesPath)
     {
-        _adb = adb;
-        _vision = vision;
         _configService = configService;
         _builderBaseNavigator = builderBaseNavigator;
         _builderBaseResources = builderBaseResources;

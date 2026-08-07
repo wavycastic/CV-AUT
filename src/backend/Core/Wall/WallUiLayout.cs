@@ -10,8 +10,10 @@ namespace CvAut
     /// </summary>
     internal static class WallUiLayout
     {
-        // ROI used to search for walls inside the builder menu
-        internal static readonly Rect BuilderUpgradeMenuRoi = new(646, 107, 347, 474);
+        // ROI used to search for walls inside the builder menu.
+        // Expanded from the legacy crop because 1600x900 runtime labels begin near x=623
+        // and the lower visible Wall row reaches y=630; the old ROI clipped both labels.
+        internal static readonly Rect BuilderUpgradeMenuRoi = new(590, 90, 450, 570);
         // Probe point for the light grey/white panel background that confirms the upgrade panel is open
         internal static readonly Point PanelCheckPoint = new(800, 750);
         // Builder suggestions button at the top center
@@ -31,8 +33,10 @@ namespace CvAut
         internal static readonly Point FixedElixirUpgradePoint = new(1095, 702);
         internal static readonly Point AddWallPlusOneButton = new(660, 650);
         internal static readonly Point RemoveWallMinusOneButton = new(330, 650);
-        internal static readonly Rect GoldUpgradeCostRoi = new(860, 635, 120, 33);
-        internal static readonly Rect ElixirUpgradeCostRoi = new(1035, 635, 120, 33);
+        // Cost capsules on the Level 15 wall panel. The legacy ROIs were about 50 px too far left
+        // and clipped most of the 100,000 label, producing false OCR values such as 66 and 896.
+        internal static readonly Rect GoldUpgradeCostRoi = new(910, 630, 135, 35);
+        internal static readonly Rect ElixirUpgradeCostRoi = new(1085, 630, 135, 35);
         internal static readonly Point ConfirmUpgradePoint = new(1115, 782);
         internal static readonly Point ConfirmMultiPoint = new(990, 620);
         internal static readonly Rect ConfirmDialogRoi = new(820, 540, 430, 300);
@@ -45,6 +49,9 @@ namespace CvAut
         internal const double BuilderCountMinimumConfidence = 0.60;
         internal const int SwipeDurationMs = 600;
         internal const double MaxCostMismatchRatio = 1.15;
+        internal const double WallCostOcrThreshold = 242;
+        // Second, slightly lower gray threshold used for a redundant consensus OCR pass on the wall cost.
+        internal const double WallCostConsensusThreshold = 225;
         internal const int SupportedScreenshotWidth = 1600;
         internal const int SupportedScreenshotHeight = 900;
         internal const int MaxCandidateAttempts = 3;

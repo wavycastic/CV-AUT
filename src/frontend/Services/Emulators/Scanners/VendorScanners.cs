@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Xml.Linq;
 using CvAut.Models;
 
 namespace CvAut.Services.Emulators.Scanners
@@ -330,13 +331,24 @@ namespace CvAut.Services.Emulators.Scanners
 
         public override IEnumerable<DeviceCandidate> Scan(CancellationToken cancellationToken = default)
         {
-            List<MemuVmInfo> vms = GetMemuVms();
+            string? exePath = InstallRoots
+                .Select(root => Path.Combine(root, "MEmu.exe"))
+                .FirstOrDefault(File.Exists);
+
+            // MEmu's .memu VM files contain the exact instance name and ADB forwarding
+            // port. Reading them takes milliseconds, while `memuc listvms` takes over a
+            // second even when MEmu is closed. Fall back to memuc if the local config is
+            // absent or cannot be parsed completely.
+            List<MemuVmInfo> vms = exePath is null
+                ? new List<MemuVmInfo>()
+                : GetMemuVmsFromConfig(Path.GetDirectoryName(exePath) ?? string.Empty);
+            if (vms.Count == 0)
+            {
+                vms = GetMemuVms();
+            }
+
             if (vms.Count > 0)
             {
-                string? exePath = InstallRoots
-                    .Select(root => Path.Combine(root, "MEmu.exe"))
-                    .FirstOrDefault(File.Exists);
-
                 foreach (MemuVmInfo vm in vms)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -355,15 +367,104 @@ namespace CvAut.Services.Emulators.Scanners
                 yield break;
             }
 
-            // Fallback if memuc listvms is not available: only emit candidates from base scan
+            // Fallback if memuc listvms is not available. Query running instances once and
+            // reuse the result for every fallback port. The old code launched
+            // `memuc listvms --running` once per candidate (up to six times × 3 seconds).
+            Dictionary<int, string> runningInstances = GetRunningMemuInstancesByPort();
             foreach (DeviceCandidate candidate in base.Scan(cancellationToken))
             {
-                string? instance = TryResolveMemuInstance(candidate.Port);
+                runningInstances.TryGetValue(candidate.Port, out string? instance);
                 yield return candidate with { EmulatorInstance = instance };
             }
         }
 
         private sealed record MemuVmInfo(int Index, string Title, int Port);
+
+        private static List<MemuVmInfo> GetMemuVmsFromConfig(string installRoot)
+        {
+            var result = new List<MemuVmInfo>();
+            string vmRoot = Path.Combine(installRoot, "MemuHyperv VMs");
+            if (!Directory.Exists(vmRoot))
+            {
+                return result;
+            }
+
+            try
+            {
+                string[] configPaths = Directory
+                    .GetFiles(vmRoot, "*.memu", SearchOption.AllDirectories)
+                    .Where(path => string.Equals(
+                        Path.GetFileNameWithoutExtension(path),
+                        Path.GetFileName(Path.GetDirectoryName(path)),
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                if (configPaths.Length == 0)
+                {
+                    return result;
+                }
+
+                foreach (string configPath in configPaths)
+                {
+                    string instanceKey = Path.GetFileNameWithoutExtension(configPath);
+                    if (!TryParseMemuIndex(instanceKey, out int index))
+                    {
+                        return new List<MemuVmInfo>();
+                    }
+
+                    XDocument document = XDocument.Load(configPath, LoadOptions.None);
+                    XElement? machine = document.Descendants()
+                        .FirstOrDefault(element => element.Name.LocalName == "Machine");
+                    XElement? adbForwarding = document.Descendants()
+                        .FirstOrDefault(element =>
+                            element.Name.LocalName == "Forwarding"
+                            && string.Equals((string?)element.Attribute("name"), "ADB", StringComparison.OrdinalIgnoreCase));
+
+                    string? portValue = (string?)adbForwarding?.Attribute("hostport");
+                    if (machine is null
+                        || !int.TryParse(portValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out int port)
+                        || port <= 0
+                        || port > 65535)
+                    {
+                        return new List<MemuVmInfo>();
+                    }
+
+                    string title = (string?)machine.Attribute("name") ?? instanceKey;
+                    result.Add(new MemuVmInfo(index, title, port));
+                }
+
+                if (result.Select(vm => vm.Port).Distinct().Count() != result.Count
+                    || result.Select(vm => vm.Index).Distinct().Count() != result.Count)
+                {
+                    return new List<MemuVmInfo>();
+                }
+
+                return result.OrderBy(vm => vm.Index).ToList();
+            }
+            catch
+            {
+                return new List<MemuVmInfo>();
+            }
+        }
+
+        private static bool TryParseMemuIndex(string instanceKey, out int index)
+        {
+            if (string.Equals(instanceKey, "MEmu", StringComparison.OrdinalIgnoreCase))
+            {
+                index = 0;
+                return true;
+            }
+
+            const string prefix = "MEmu_";
+            if (instanceKey.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(instanceKey.AsSpan(prefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out index)
+                && index >= 0)
+            {
+                return true;
+            }
+
+            index = -1;
+            return false;
+        }
 
         private static List<MemuVmInfo> GetMemuVms()
         {
@@ -425,14 +526,15 @@ namespace CvAut.Services.Emulators.Scanners
             return result;
         }
 
-        private static string? TryResolveMemuInstance(int port)
+        private static Dictionary<int, string> GetRunningMemuInstancesByPort()
         {
+            var instancesByPort = new Dictionary<int, string>();
             string? memucPath = InstallRoots
                 .Select(root => Path.Combine(root, "memuc.exe"))
                 .FirstOrDefault(File.Exists);
             if (memucPath is null)
             {
-                return null;
+                return instancesByPort;
             }
 
             try
@@ -449,35 +551,42 @@ namespace CvAut.Services.Emulators.Scanners
 
                 if (process is null)
                 {
-                    return null;
+                    return instancesByPort;
                 }
 
                 if (!process.WaitForExit(3000))
                 {
                     try { process.Kill(entireProcessTree: true); } catch { /* best effort */ }
-                    return null;
+                    return instancesByPort;
                 }
 
                 string output = process.StandardOutput.ReadToEnd();
                 foreach (string rawLine in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
                 {
                     string line = rawLine.Trim();
-                    if (line.Contains(port.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+                    string[] parts = line.Split(',', StringSplitOptions.TrimEntries);
+                    if (parts.Length == 0 || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int index))
                     {
-                        string[] parts = line.Split(',', StringSplitOptions.TrimEntries);
-                        if (parts.Length > 0 && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int index))
+                        continue;
+                    }
+
+                    // Preserve the previous matching behaviour, but do it for all known
+                    // MEmu ports while the command output is already in memory.
+                    foreach (int port in CommonPorts.Memu)
+                    {
+                        if (line.Contains(port.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
                         {
-                            return index.ToString(CultureInfo.InvariantCulture);
+                            instancesByPort[port] = index.ToString(CultureInfo.InvariantCulture);
                         }
                     }
                 }
             }
             catch
             {
-                return null;
+                return instancesByPort;
             }
 
-            return null;
+            return instancesByPort;
         }
     }
 
@@ -493,8 +602,8 @@ namespace CvAut.Services.Emulators.Scanners
     /// </summary>
     public sealed class BlueStacksInstallScanner : EmulatorInstallScanner
     {
-            // BlueStacks-likely ADB ports only. The full CommonPorts set (which includes MuMu /
-            // LDPlayer ranges) must NOT be emitted here — it produced ~14 duplicate
+        // BlueStacks-likely ADB ports only. The full CommonPorts set (which includes MuMu /
+        // LDPlayer ranges) must NOT be emitted here — it produced ~14 duplicate
         // "BlueStacks" candidates when only one real instance (e.g. 5556) exists.
         private static readonly int[] BlueStacksLikelyPorts = { 5556, 5554, 5557 };
 

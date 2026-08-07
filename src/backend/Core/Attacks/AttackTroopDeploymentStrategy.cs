@@ -10,7 +10,6 @@ namespace CvAut;
 internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
 {
     private readonly IADBHelper _adb;
-    private readonly AttackDelayConfig _delays;
     private readonly TroopCountReader _countReader;
     private readonly AttackDeployBarScanner _scanner;
     private readonly Random _random = new();
@@ -25,7 +24,6 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
         AttackDeployBarScanner scanner)
     {
         _adb = adb;
-        _delays = delays;
         _countReader = countReader;
         _scanner = scanner;
     }
@@ -152,7 +150,7 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
         }
         var taps = new List<Point>(tapCount);
         for (int index = 0; index < tapCount; index++) taps.Add(Jitter(points[index]));
-        if (!DeployPacedTaps(key, taps, token)) return false;
+        if (!DeployPacedTaps(taps, token)) return false;
         watch.Stop();
         Console.WriteLine($"[ATTACK-CS] phase=deploy status=success item={key} detected_count={detectedCount} confidence={confidence:F2} tap_count={taps.Count} tab={tab.X},{tab.Y} direction={_direction} input_mode=single_command first={taps[0].X},{taps[0].Y} last={taps[^1].X},{taps[^1].Y} duration={watch.ElapsedMilliseconds}ms");
 
@@ -209,7 +207,7 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
             if (token.WaitHandle.WaitOne(60)) return;
             var taps = new List<Point>(tapCount);
             for (int index = 0; index < tapCount; index++) taps.Add(Jitter(fallback[index]));
-            if (!DeployPacedTaps(key, taps, token)) return;
+            if (!DeployPacedTaps(taps, token)) return;
             if (token.WaitHandle.WaitOne(200)) return;
             probe = _scanner.Scan(
                 includeElectroDragon,
@@ -234,7 +232,7 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
         if (token.WaitHandle.WaitOne(60)) return;
         var taps = new List<Point>(count);
         for (int index = 0; index < count; index++) taps.Add(Jitter(points[index % points.Count]));
-        _ = DeployPacedTaps(key, taps, token);
+        _ = DeployPacedTaps(taps, token);
     }
 
     private int ReadTroopCount(
@@ -326,7 +324,7 @@ internal sealed class AttackTroopDeploymentStrategy : ITroopDeploymentStrategy
     internal static bool IsQuantityBadgeAbsent(string diagnostic)
         => diagnostic.Contains("reason=quantity_badge_absent", StringComparison.Ordinal);
 
-    private bool DeployPacedTaps(string key, IReadOnlyList<Point> taps, CancellationToken token)
+    private bool DeployPacedTaps(IReadOnlyList<Point> taps, CancellationToken token)
     {
         if (token.IsCancellationRequested || taps.Count == 0) return false;
         _adb.TapSequence(taps);

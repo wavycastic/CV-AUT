@@ -29,7 +29,7 @@
                         <materialIcons:MaterialIcon Kind="Wall" Width="14" Height="14" Foreground="{DynamicResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
                         <TextBlock Text="Số Wall tối đa mỗi lần" Classes="label" VerticalAlignment="Center" />
                     </StackPanel>
-                    <NumericUpDown Value="{Binding WallBatchLimit}" Minimum="1" Maximum="10" Height="32" />
+                    <NumericUpDown Value="{Binding WallBatchLimit}" Minimum="1" Maximum="255" Height="32" />
                 </StackPanel>
                 <StackPanel Spacing="3">
                     <StackPanel Orientation="Horizontal" Spacing="6">

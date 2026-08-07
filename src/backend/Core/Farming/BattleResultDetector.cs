@@ -10,11 +10,11 @@ namespace CvAut
     /// </summary>
     internal sealed class BattleResultDetector
     {
-        private readonly ADBHelper _adb;
-        private readonly VisionEngine _vision;
+        private readonly IADBHelper _adb;
+        private readonly IVisionEngine _vision;
         private readonly Func<bool> _checkStop;
 
-        public BattleResultDetector(ADBHelper adb, VisionEngine vision, Func<bool> checkStop)
+        public BattleResultDetector(IADBHelper adb, IVisionEngine vision, Func<bool> checkStop)
         {
             _adb = adb;
             _vision = vision;
@@ -35,7 +35,7 @@ namespace CvAut
             {
                 if (_checkStop()) return false;
 
-                if (BattleEnded(out string resultMatchInfo))
+                if (BattleEnded(out _))
                 {
                     stableResultMatches++;
                     if (!resultDetectedLogged)
@@ -86,10 +86,10 @@ namespace CvAut
                 return false;
             }
 
-            bool hasContinue = TryFindContinueButton(screenshot, out Point center, out double continueScore);
+            bool hasContinue = TryFindContinueButton(screenshot, out Point center, out double continueScore, out string matchedTemplate);
             bool hasResultMarker = _vision.FindElement(screenshot, @"ui\resources_gained.png", AutomationThresholds.ResultYouGotThreshold, AutomationRoiConstants.ResultYouGotRoi, out double markerScore) != null;
 
-            matchInfo = $"continue score={continueScore:F2} center=({center.X},{center.Y}), result-marker score={markerScore:F2}";
+            matchInfo = $"continue score={continueScore:F2} template={matchedTemplate} center=({center.X},{center.Y}), result-marker score={markerScore:F2}";
             return hasContinue || hasResultMarker;
         }
 
@@ -98,14 +98,14 @@ namespace CvAut
             return BattleScreenDetector.IsActiveBattlePresent(_vision, screenshot, out endBattleScore);
         }
 
+        public bool TryFindContinueButton(Mat screenshot, out Point center, out double score, out string matchedTemplate)
+        {
+            return BattleScreenDetector.TryFindContinueButton(_vision, screenshot, out center, out score, out matchedTemplate);
+        }
+
         public bool TryFindContinueButton(Mat screenshot, out Point center, out double score)
         {
-            Point? found = _vision.FindElement(screenshot, @"ui\return_home.png", AutomationThresholds.ResultContinueThreshold, AutomationRoiConstants.ResultContinueRoi, out score);
-            if (found.HasValue) { center = found.Value; return true; }
-            found = _vision.FindElement(screenshot, @"ui\return_home_n.png", AutomationThresholds.ResultContinueThreshold, AutomationRoiConstants.ResultContinueRoi, out score);
-            if (found.HasValue) { center = found.Value; return true; }
-            center = default;
-            return false;
+            return BattleScreenDetector.TryFindContinueButton(_vision, screenshot, out center, out score, out _);
         }
     }
 }

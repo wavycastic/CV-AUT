@@ -65,7 +65,7 @@ namespace CvAut.Services.Emulators.Scanners
             foreach (string line in File.ReadLines(confPath))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                
+
                 Match portMatch = InstancePortPattern.Match(line);
                 if (portMatch.Success)
                 {

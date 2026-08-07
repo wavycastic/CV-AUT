@@ -102,6 +102,7 @@ internal sealed class MainVillageCycleRunner
         }
 
         MainVillageConfig mainConfig = _configService.GetMainVillageConfig(currentVillageIdx);
+        int remainingWallBatch = _configService.GetWallUpgradeConfig(currentVillageIdx).BatchLimit;
 
         waitIfPausedFunc();
         if (checkStopFunc(token)) return;
@@ -168,7 +169,21 @@ internal sealed class MainVillageCycleRunner
             tryUseCakeFunc(mainConfig, token);
             tryRequestTroopsFunc(mainConfig, token);
 
-            _wallRunner.TryUpgradeWallsFromHome(currentVillageIdx, cycleCount, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds), token, "after_collect");
+            var collectTimer = WallLogger.StartTimer();
+            string collectRunId = WallLogger.GenerateRunId();
+            WallLogger.LogInfo("cycle_runner", "start", village: currentVillageIdx, cycle: cycleCount, trigger: "after_collect", batchBudget: remainingWallBatch, runId: collectRunId);
+            int wallsUpgraded = 0;
+            try
+            {
+                wallsUpgraded = _wallRunner.TryUpgradeWallsFromHome(currentVillageIdx, cycleCount, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds), token, "after_collect", remainingWallBatch, collectRunId);
+                remainingWallBatch -= wallsUpgraded;
+                WallLogger.LogInfo("cycle_runner", "success", village: currentVillageIdx, cycle: cycleCount, trigger: "after_collect", runId: collectRunId, elapsedMs: collectTimer.ElapsedMilliseconds, extra: $"upgraded={wallsUpgraded}");
+            }
+            catch (Exception ex)
+            {
+                WallLogger.LogInfo("cycle_runner", "fail", reason: "exception", village: currentVillageIdx, cycle: cycleCount, trigger: "after_collect", runId: collectRunId, elapsedMs: collectTimer.ElapsedMilliseconds, extra: $"ex_type=\"{ex.GetType().Name}\" ex_msg=\"{ex.Message}\"");
+                throw;
+            }
         }
 
         waitIfPausedFunc();
@@ -274,7 +289,19 @@ internal sealed class MainVillageCycleRunner
 
                 if (returnedHome)
                 {
-                    _wallRunner.TryUpgradeWallsFromHome(currentVillageIdx, cycleCount, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds), token, "post_battle");
+                    var postBattleTimer = WallLogger.StartTimer();
+                    string postBattleRunId = WallLogger.GenerateRunId();
+                    WallLogger.LogInfo("cycle_runner", "start", village: currentVillageIdx, cycle: cycleCount, trigger: "post_battle", batchBudget: Math.Max(0, remainingWallBatch), runId: postBattleRunId);
+                    try
+                    {
+                        _wallRunner.TryUpgradeWallsFromHome(currentVillageIdx, cycleCount, seconds => _homeDetector.EnsureHomeBase(interruptibleSleepFunc, bootRecoveryFunc, token, seconds), token, "post_battle", Math.Max(0, remainingWallBatch), postBattleRunId);
+                        WallLogger.LogInfo("cycle_runner", "success", village: currentVillageIdx, cycle: cycleCount, trigger: "post_battle", runId: postBattleRunId, elapsedMs: postBattleTimer.ElapsedMilliseconds);
+                    }
+                    catch (Exception ex)
+                    {
+                        WallLogger.LogInfo("cycle_runner", "fail", reason: "exception", village: currentVillageIdx, cycle: cycleCount, trigger: "post_battle", runId: postBattleRunId, elapsedMs: postBattleTimer.ElapsedMilliseconds, extra: $"ex_type=\"{ex.GetType().Name}\" ex_msg=\"{ex.Message}\"");
+                        throw;
+                    }
                 }
 
                 checkStopFunc(token);
