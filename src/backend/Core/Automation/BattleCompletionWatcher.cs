@@ -42,7 +42,7 @@ internal sealed class BattleCompletionWatcher
             waitIfPausedFunc();
             if (checkStopFunc(token)) return false;
 
-            if (BattleEnded(out string resultMatchInfo))
+            if (BattleEnded(out _))
             {
                 stableResultMatches++;
                 if (!resultDetectedLogged)
@@ -111,10 +111,10 @@ internal sealed class BattleCompletionWatcher
             return false;
         }
 
-        bool hasContinue = TryFindContinueButton(screenshot, out Point center, out double continueScore);
+        bool hasContinue = TryFindContinueButton(screenshot, out Point center, out double continueScore, out string matchedTemplate);
         bool hasResultMarker = _vision.FindElement(screenshot, @"ui\resources_gained.png", AutomationThresholds.ResultYouGotThreshold, AutomationRoiConstants.ResultYouGotRoi, out double markerScore) != null;
 
-        matchInfo = $"continue score={continueScore:F2} center=({center.X},{center.Y}), result-marker score={markerScore:F2}";
+        matchInfo = $"continue score={continueScore:F2} template={matchedTemplate} center=({center.X},{center.Y}), result-marker score={markerScore:F2}";
 
         return hasContinue || hasResultMarker;
     }
@@ -124,14 +124,14 @@ internal sealed class BattleCompletionWatcher
         return BattleScreenDetector.IsActiveBattlePresent(_vision, screenshot, out endBattleScore);
     }
 
+    public bool TryFindContinueButton(Mat screenshot, out Point center, out double score, out string matchedTemplate)
+    {
+        return BattleScreenDetector.TryFindContinueButton(_vision, screenshot, out center, out score, out matchedTemplate);
+    }
+
     public bool TryFindContinueButton(Mat screenshot, out Point center, out double score)
     {
-        Point? found = _vision.FindElement(screenshot, @"ui\return_home.png", AutomationThresholds.ResultContinueThreshold, AutomationRoiConstants.ResultContinueRoi, out score);
-        if (found.HasValue) { center = found.Value; return true; }
-        found = _vision.FindElement(screenshot, @"ui\return_home_n.png", AutomationThresholds.ResultContinueThreshold, AutomationRoiConstants.ResultContinueRoi, out score);
-        if (found.HasValue) { center = found.Value; return true; }
-        center = default;
-        return false;
+        return BattleScreenDetector.TryFindContinueButton(_vision, screenshot, out center, out score, out _);
     }
 
     public bool ReturnHome(DetectHomeBaseDelegate detectHomeBaseFunc, EnsureHomeBaseDelegate ensureHomeBaseFunc)
@@ -144,10 +144,17 @@ internal sealed class BattleCompletionWatcher
             Console.WriteLine($"[FSM-CS] phase=return_home status=pending attempt={attempt}");
 
             using Mat? screenshot = _adb.TakeScreenshot();
-            if (screenshot != null && !screenshot.Empty() && TryFindContinueButton(screenshot, out Point continueCenter, out double score))
+            if (screenshot != null && !screenshot.Empty() && TryFindContinueButton(screenshot, out Point continueCenter, out double score, out string matchedTemplate))
             {
-                Console.WriteLine($"[FSM-CS] phase=return_home status=pending action=continue score={score:F2} attempt={attempt}");
-                _adb.Tap(continueCenter.X, continueCenter.Y);
+                Console.WriteLine($"[FSM-CS] phase=return_home status=pending action=continue score={score:F2} template={matchedTemplate} center=({continueCenter.X},{continueCenter.Y}) attempt={attempt}");
+                if (!string.IsNullOrEmpty(matchedTemplate) && matchedTemplate.Contains("claim_reward"))
+                {
+                    _popups.HandleClaimRewardFlow(continueCenter);
+                }
+                else
+                {
+                    _adb.Tap(continueCenter.X, continueCenter.Y);
+                }
             }
             else
             {
@@ -190,5 +197,10 @@ internal sealed class BattleCompletionWatcher
         bool homeConfirmed = ensureHomeBaseFunc(20);
         Console.WriteLine($"[FSM-CS] phase=return_home action=ensure_home status={(homeConfirmed ? "success" : "fail")}");
         return homeConfirmed;
+    }
+
+    public bool HandleClaimRewardFlow(Point claimMatchCenter, int continueTimeoutSeconds = 8)
+    {
+        return _popups.HandleClaimRewardFlow(claimMatchCenter, continueTimeoutSeconds);
     }
 }

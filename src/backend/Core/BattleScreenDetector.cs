@@ -13,6 +13,66 @@ namespace CvAut
     {
         private static readonly Rect EndBattleButtonRoi = new(20, 670, 180, 70);
 
+        public static readonly string[] ResultContinueTemplates = new[]
+        {
+            @"ui\return_home.png",
+            @"ui\return_home_n.png",
+            @"ui\claim_reward.png",
+            @"ui\continue_reward.png",
+            @"ui\okay.png",
+            @"ui\okay_n.png",
+            @"ui\okay_n2.png"
+        };
+
+        /// <summary>
+        /// Tìm nút tiếp tục / về làng / nhận thưởng (Return Home, Claim Reward, Okay, ...)
+        /// trên màn hình kết quả trận đấu.
+        /// </summary>
+        public static bool TryFindContinueButton(IVisionEngine vision, Mat screenshot, out Point center, out double score, out string matchedTemplate)
+        {
+            center = default;
+            score = 0;
+            matchedTemplate = string.Empty;
+
+            if (screenshot == null || screenshot.Empty()) return false;
+
+            double bestScore = 0;
+            Point bestCenter = default;
+            string bestTemplate = string.Empty;
+
+            foreach (string tmpl in ResultContinueTemplates)
+            {
+                Point? found = vision.FindElement(
+                    screenshot,
+                    tmpl,
+                    AutomationThresholds.ResultContinueThreshold,
+                    AutomationRoiConstants.ResultContinueRoi,
+                    out double matchScore);
+
+                if (found.HasValue && matchScore > bestScore)
+                {
+                    bestScore = matchScore;
+                    bestCenter = found.Value;
+                    bestTemplate = tmpl;
+                }
+            }
+
+            if (bestScore >= AutomationThresholds.ResultContinueThreshold)
+            {
+                center = bestCenter;
+                score = bestScore;
+                matchedTemplate = bestTemplate;
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool TryFindContinueButton(IVisionEngine vision, Mat screenshot, out Point center, out double score)
+        {
+            return TryFindContinueButton(vision, screenshot, out center, out score, out _);
+        }
+
         /// <summary>
         /// Kiểm tra xem màn hình hiện tại có nút "End Battle" (Trận đánh đang diễn ra) hay không.
         /// </summary>
