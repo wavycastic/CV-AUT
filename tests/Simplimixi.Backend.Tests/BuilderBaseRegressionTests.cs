@@ -89,12 +89,11 @@ namespace CvAut.Backend.Tests
         }
 
         [Theory]
-        [InlineData(false, 0, false)]
-        [InlineData(false, 12, false)]
-        [InlineData(true, 0, true)]
-        public void ShouldDismissClanGamesPopup_RequiresExplicitCompletion(bool explicitCompletion, int noBarChecks, bool expected)
+        [InlineData(false, false)]
+        [InlineData(true, true)]
+        public void ShouldDismissClanGamesPopup_RequiresExplicitCompletion(bool explicitCompletion, bool expected)
         {
-            Assert.Equal(expected, BattleOutcomeWatcher.ShouldDismissClanGamesPopup(explicitCompletion, noBarChecks));
+            Assert.Equal(expected, BattleOutcomeWatcher.ShouldDismissClanGamesPopup(explicitCompletion));
         }
 
         [Fact]

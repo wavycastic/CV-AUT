@@ -10,14 +10,12 @@ internal sealed class StatsRepository : IStatsRepository
 {
     private readonly IADBHelper _adb;
     private readonly IVisionEngine _vision;
-    private readonly string _templatesPath;
     private static readonly string WritableLogsDirectory = ResolveWritableLogsDirectory();
 
     public StatsRepository(IADBHelper adb, IVisionEngine vision, string templatesPath)
     {
         _adb = adb;
         _vision = vision;
-        _templatesPath = templatesPath;
     }
 
     public void UpdateStats(int villageIdx, int starsGot, (int Gold, int Elixir, int DarkElixir) gained)
@@ -107,9 +105,9 @@ internal sealed class StatsRepository : IStatsRepository
     {
         SaveStatsCrop(screenshot, roi, label);
         if (_vision.TryExtractNumericalMetrics(screenshot, roi, out int value, out double confidence, useRgbThresh: true))
-            if (IsPlausibleResourceValue(value, confidence, minValidValue, label, "rgb")) return value;
+            if (IsPlausibleResourceValue(value, confidence, minValidValue)) return value;
         if (_vision.TryExtractNumericalMetrics(screenshot, roi, out value, out confidence))
-            if (IsPlausibleResourceValue(value, confidence, minValidValue, label, "gray")) return value;
+            if (IsPlausibleResourceValue(value, confidence, minValidValue)) return value;
         return 0;
     }
 
@@ -138,7 +136,7 @@ internal sealed class StatsRepository : IStatsRepository
         catch { }
     }
 
-    private static bool IsPlausibleResourceValue(int value, double confidence, int minValidValue, string label, string mode)
+    private static bool IsPlausibleResourceValue(int value, double confidence, int minValidValue)
     {
         bool plausible = value == 0 || value >= minValidValue;
         if (confidence < 0.62) return false;

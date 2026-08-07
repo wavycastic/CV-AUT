@@ -344,7 +344,7 @@ namespace CvAut
                 bool explicitCompletionDetected = _vision.FindElement(screenshot, @"clan_games\game_complete", 0.50, completeRoi, out _) != null
                     || _vision.FindElement(screenshot, @"ui\game_complete", 0.50, completeRoi, out _) != null
                     || _vision.FindElement(screenshot, @"ui\challenge_complete", 0.50, completeRoi, out _) != null;
-                if (ShouldDismissClanGamesPopup(explicitCompletionDetected, _clanGamesNoCompleteBarChecks))
+                if (ShouldDismissClanGamesPopup(explicitCompletionDetected))
                 {
                     _clanGamesNoCompleteBarChecks = 0;
                     noBarChecks = 0;
@@ -384,7 +384,7 @@ namespace CvAut
             return false;
         }
 
-        internal static bool ShouldDismissClanGamesPopup(bool explicitCompletionDetected, int noBarChecks)
+        internal static bool ShouldDismissClanGamesPopup(bool explicitCompletionDetected)
             => explicitCompletionDetected;
 
         public int ReadDamage() => ReadNumberFromRoi(BuilderBaseAttackLayout.DamageRoi);

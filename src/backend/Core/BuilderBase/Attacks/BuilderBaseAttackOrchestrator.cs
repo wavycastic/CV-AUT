@@ -51,7 +51,7 @@ namespace CvAut
                 return new(false, 0, 0, false);
             }
 
-            if (!_entryFlow.TapFirstVisible(BuilderBaseAttackLayout.OpenAttackTemplates, BuilderBaseAttackLayout.ButtonThreshold, BuilderBaseAttackLayout.HomeAttackButtonRoi, token, out string openTemplate))
+            if (!_entryFlow.TapFirstVisible(BuilderBaseAttackLayout.OpenAttackTemplates, BuilderBaseAttackLayout.ButtonThreshold, BuilderBaseAttackLayout.HomeAttackButtonRoi, token, out _))
             {
                 Console.WriteLine("[BB-ATTACK] phase=open_attack status=fail reason=button_not_found");
                 AttackDebugRecorder.CaptureDebugSnapshot(_adb, "open_attack_button_not_found");
@@ -60,7 +60,7 @@ namespace CvAut
 
             if (Sleep(1800, token)) return new(false, 0, 0, false);
 
-            if (!_entryFlow.TapFirstVisible(BuilderBaseAttackLayout.StartBattleTemplates, BuilderBaseAttackLayout.ButtonThreshold, BuilderBaseAttackLayout.BattleButtonRoi, token, out string startTemplate))
+            if (!_entryFlow.TapFirstVisible(BuilderBaseAttackLayout.StartBattleTemplates, BuilderBaseAttackLayout.ButtonThreshold, BuilderBaseAttackLayout.BattleButtonRoi, token, out _))
             {
                 Console.WriteLine("[BB-ATTACK] phase=start_battle status=fail reason=button_not_found");
                 _entryFlow.CloseAttackPrep(token);

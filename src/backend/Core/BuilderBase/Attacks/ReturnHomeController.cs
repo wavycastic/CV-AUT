@@ -8,14 +8,12 @@ namespace CvAut
     internal sealed class ReturnHomeController
     {
         private readonly IADBHelper _adb;
-        private readonly IVisionEngine _vision;
         private readonly BuilderBaseNavigator _navigator;
         private readonly AttackEntryFlow _entryFlow;
 
         public ReturnHomeController(IADBHelper adb, IVisionEngine vision, BuilderBaseNavigator navigator, AttackEntryFlow entryFlow)
         {
             _adb = adb;
-            _vision = vision;
             _navigator = navigator;
             _entryFlow = entryFlow;
         }
