@@ -50,7 +50,7 @@ internal partial class CVAutomationFramework : IAutomationRunner
     }
 
     private CVAutomationFramework(IConfigService configService, IADBHelper adb, IVisionEngine vision, string templatesPath)
-        : this("", configService, adb, vision, templatesPath,
+        : this(configService, adb, vision, templatesPath,
               new StatsRepository(adb, vision, templatesPath),
               new PopupHandlerService(adb, vision, templatesPath),
               new ZoomService(adb),
@@ -59,7 +59,7 @@ internal partial class CVAutomationFramework : IAutomationRunner
     }
 
     internal CVAutomationFramework(string configPath, IConfigService configService, IADBHelper adb, IVisionEngine vision, string templatesPath)
-        : this(configPath, configService, adb, vision, templatesPath,
+        : this(configService, adb, vision, templatesPath,
               new StatsRepository(adb, vision, templatesPath),
               new PopupHandlerService(adb, vision, templatesPath),
               new ZoomService(adb),
@@ -68,7 +68,6 @@ internal partial class CVAutomationFramework : IAutomationRunner
     }
 
     private CVAutomationFramework(
-        string configPath,
         IConfigService configService,
         IADBHelper adb,
         IVisionEngine vision,
@@ -317,9 +316,6 @@ internal partial class CVAutomationFramework : IAutomationRunner
         string farmMode, BuilderBaseReportSnapshot report, bool trophyRangeEnabled, int minTrophy, int maxTrophy, bool haltOnGoldFull, bool haltOnElixirFull, out string reason)
         => BuilderBaseStopPolicy.ShouldStopBuilderBaseAttacks(farmMode, report, trophyRangeEnabled, minTrophy, maxTrophy, haltOnGoldFull, haltOnElixirFull, out reason);
 
-    private void TryUpgradeWallsFromHome(CancellationToken token, string phase)
-        => _wallRunner.TryUpgradeWallsFromHome(_currentVillageIdx, _cycleCount, maxWait => EnsureHomeBase(maxWait), token, phase, _configService.GetWallUpgradeConfig(_currentVillageIdx).BatchLimit);
-
     private void BotLoop(CancellationToken token)
     {
         _accountLoop.Run(
@@ -337,8 +333,6 @@ internal partial class CVAutomationFramework : IAutomationRunner
 
     private bool EnsureHomeBase(int maxWaitSeconds = 50, bool allowBootRecovery = true)
         => _homeDetector.EnsureHomeBase(InterruptibleSleep, BootRecovery, _cts?.Token ?? CancellationToken.None, maxWaitSeconds, allowBootRecovery);
-
-    private bool DetectHomeBase(out string reason) => _homeDetector.DetectHomeBase(out reason);
 
     public void BootRecovery()
     {
