@@ -31,33 +31,39 @@ namespace CvAut
         /// </summary>
         public static void StartEmulator(string playerPath, string emulatorType = "", string instanceName = "")
         {
+            Process.Start(BuildStartInfo(playerPath, emulatorType, instanceName));
+        }
+
+        internal static ProcessStartInfo BuildStartInfo(string playerPath, string emulatorType = "", string instanceName = "")
+        {
             var startInfo = new ProcessStartInfo
             {
                 FileName = playerPath,
                 UseShellExecute = true
             };
 
+            // UseShellExecute=true ignores ArgumentList entirely (Arguments stays empty),
+            // so instance selectors must go through the Arguments string.
             if (!string.IsNullOrWhiteSpace(instanceName))
             {
                 if (string.Equals(emulatorType, "BlueStacks", StringComparison.OrdinalIgnoreCase))
                 {
-                    startInfo.ArgumentList.Add("--instance");
-                    startInfo.ArgumentList.Add(instanceName);
+                    startInfo.Arguments = "--instance \"" + instanceName + "\"";
                     Console.WriteLine($"[ADB] phase=boot status=pending action=start_emulator type=BlueStacks details=\"instance={instanceName}\"");
                 }
                 else if (string.Equals(emulatorType, "LDPlayer", StringComparison.OrdinalIgnoreCase))
                 {
-                    startInfo.ArgumentList.Add(int.TryParse(instanceName, out int idx) ? $"index={idx}" : $"name={instanceName}");
+                    startInfo.Arguments = int.TryParse(instanceName, out int idx) ? $"index={idx}" : $"name=\"{instanceName}\"";
                     Console.WriteLine($"[ADB] phase=boot status=pending action=start_emulator type=LDPlayer details=\"instance={instanceName}\"");
                 }
                 else if (string.Equals(emulatorType, "MEmu", StringComparison.OrdinalIgnoreCase))
                 {
-                    startInfo.ArgumentList.Add(int.TryParse(instanceName, out int idx) ? $"index={idx}" : $"name={instanceName}");
+                    startInfo.Arguments = int.TryParse(instanceName, out int idx) ? $"index={idx}" : $"name=\"{instanceName}\"";
                     Console.WriteLine($"[ADB] phase=boot status=pending action=start_emulator type=MEmu details=\"instance={instanceName}\"");
                 }
             }
 
-            Process.Start(startInfo);
+            return startInfo;
         }
 
         /// <summary>
